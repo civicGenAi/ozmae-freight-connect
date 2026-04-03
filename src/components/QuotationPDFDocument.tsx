@@ -128,10 +128,12 @@ const styles = StyleSheet.create({
     minHeight: 24,
   },
   tableCell: {
-    padding: 5,
+    padding: 6,
     fontSize: 9,
     borderRightWidth: 1,
     borderRightColor: "#000",
+    flexDirection: "column",
+    justifyContent: "center",
   },
   totalRow: {
     flexDirection: "row",
@@ -199,15 +201,20 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
   const colCount = meta.tableHeaders.length;
   
   const getColWidth = (idx: number) => {
-    if (colCount === 3) {
-      if (idx === 0) return "55%";
+    const total = colCount;
+    if (total === 3) {
+      if (idx === 0) return "50%";
       if (idx === 1) return "25%";
-      return "20%";
-    } else {
-      if (idx === 0) return "40%";
-      if (idx === colCount - 1) return "20%";
-      return `${(40 / (colCount - 2))}%`;
+      return "25%";
     }
+    
+    // Description (idx 0) stays fairly wide, Remarks (last) is also decent.
+    // Others share the middle.
+    if (idx === 0) return "35%";
+    if (idx === total - 1) return "20%";
+    
+    const remaining = 45; // 100 - 35 - 20
+    return `${(remaining / (total - 2))}%`;
   };
 
   const getRowValue = (row: any, colIdx: number) => {

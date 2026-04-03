@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, X, Search, Filter, MoreHorizontal, MessageSquare, ArrowRight, Phone, XCircle } from "lucide-react";
+import { Plus, X, Search, Filter, MoreHorizontal, MessageSquare, Mail, ArrowRight, Phone, XCircle, Pencil } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -25,7 +26,10 @@ export default function Leads() {
   const [declineLead, setDeclineLead] = useState<any>(null);
   const [logInteractionLeadId, setLogInteractionLeadId] = useState<string | null>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [leadToEdit, setLeadToEdit] = useState<any>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: leads, isLoading } = useQuery({
     queryKey: ["leads", activeTab],
@@ -63,6 +67,25 @@ export default function Leads() {
     }
   });
 
+  const updateLeadMutation = useMutation({
+    mutationFn: async (updatedLead: any) => {
+      const { error } = await supabase
+        .from("leads")
+        .update(updatedLead)
+        .eq("id", updatedLead.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      setIsEditModalOpen(false);
+      setSelectedLead(null);
+      toast.success("Lead updated successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to update lead");
+    }
+  });
+
   const filtered = leads?.filter((l: any) => 
     l.customer_name_raw?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     l.id.toLowerCase().includes(searchQuery.toLowerCase())
@@ -78,11 +101,28 @@ export default function Leads() {
       phone: formData.get("phone"),
       origin: formData.get("origin"),
       destination: formData.get("destination"),
-      cargo_type: "general", // Default or add to form
+      cargo_type: "general", 
       cargo_description: formData.get("cargo_details"),
+      rate_usd: parseFloat(formData.get("rate") as string) || 0,
       status: "new",
     };
     createLeadMutation.mutate(data);
+  };
+
+  const handleUpdateLead = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      id: leadToEdit.id,
+      customer_name_raw: formData.get("customer_name"),
+      email: formData.get("email"),
+      phone: formData.get("phone"),
+      origin: formData.get("origin"),
+      destination: formData.get("destination"),
+      cargo_description: formData.get("cargo_details"),
+      rate_usd: parseFloat(formData.get("rate") as string) || 0,
+    };
+    updateLeadMutation.mutate(data);
   };
 
   return (
@@ -217,6 +257,10 @@ export default function Leads() {
               </div>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="rate">Quoted Rate (USD)</Label>
+              <Input id="rate" name="rate" type="number" step="0.01" placeholder="0.00" required />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="cargo_details">Cargo Description</Label>
               <Textarea id="cargo_details" name="cargo_details" placeholder="What is being shipped? Weight, dimensions, hazmat, etc." rows={4} required />
             </div>
@@ -243,7 +287,10 @@ export default function Leads() {
                 <div className="space-y-2">
                   <p className="text-lg font-bold">{selectedLead.customer_name_raw}</p>
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <MessageSquare className="h-3.5 w-3.5" /> {selectedLead.email || "No email"}
+                    <Mail className="h-3.5 w-3.5" /> {selectedLead.email || "No email"}
+                  </p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Phone className="h-3.5 w-3.5" /> {selectedLead.phone || "No phone"}
                   </p>
                 </div>
               </div>
@@ -270,6 +317,14 @@ export default function Leads() {
                 </p>
               </div>
 
+              <div className="space-y-4 pt-2">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Pricing</h4>
+                <div className="p-3 bg-card border rounded shadow-sm">
+                  <p className="text-[10px] text-muted-foreground uppercase">Quoted Rate</p>
+                  <p className="font-bold text-accent">${selectedLead.rate_usd?.toLocaleString() || '0.00'}</p>
+                </div>
+              </div>
+
               <div className="space-y-2 border-t pt-4">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Received Date</span>
@@ -282,8 +337,22 @@ export default function Leads() {
               </div>
 
               <div className="pt-6 grid grid-cols-2 gap-3">
-                <Button className="h-11 border border-input bg-background hover:bg-accent hover:text-accent-foreground">Edit Details</Button>
-                <Button className="bg-accent hover:bg-accent/90 text-accent-foreground h-11">Create Quotation</Button>
+                <Button 
+                  variant="outline"
+                  className="h-11 border-accent text-accent hover:bg-accent/5 font-bold gap-2"
+                  onClick={() => {
+                    setLeadToEdit(selectedLead);
+                    setIsEditModalOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" /> Edit Details
+                </Button>
+                <Button 
+                  className="bg-accent hover:bg-accent/90 text-accent-foreground h-11 font-bold shadow-lg"
+                  onClick={() => navigate('/quotations', { state: { leadId: selectedLead.id } })}
+                >
+                  Create Quotation
+                </Button>
               </div>
               {selectedLead.status !== 'declined' && selectedLead.status !== 'converted' && (
                 <div className="pt-2">
@@ -297,6 +366,57 @@ export default function Leads() {
                 </div>
               )}
             </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Edit Lead Sheet */}
+      <Sheet open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Update Inquiry Info</SheetTitle>
+            <SheetDescription>Modify contact or shipment details for this inquiry.</SheetDescription>
+          </SheetHeader>
+          {leadToEdit && (
+            <form onSubmit={handleUpdateLead} className="space-y-4 py-6">
+              <div className="space-y-2">
+                <Label htmlFor="edit_customer_name">Customer Name</Label>
+                <Input id="edit_customer_name" name="customer_name" defaultValue={leadToEdit.customer_name_raw} required />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_email">Email</Label>
+                  <Input id="edit_email" name="email" type="email" defaultValue={leadToEdit.email} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_phone">Phone</Label>
+                  <Input id="edit_phone" name="phone" defaultValue={leadToEdit.phone} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_origin">Origin</Label>
+                  <Input id="edit_origin" name="origin" defaultValue={leadToEdit.origin} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_destination">Destination</Label>
+                  <Input id="edit_destination" name="destination" defaultValue={leadToEdit.destination} required />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_rate">Quoted Rate (USD)</Label>
+                <Input id="edit_rate" name="rate" type="number" step="0.01" defaultValue={leadToEdit.rate_usd} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_cargo_details">Cargo Description</Label>
+                <Textarea id="edit_cargo_details" name="cargo_details" defaultValue={leadToEdit.cargo_description} rows={4} required />
+              </div>
+              <SheetFooter className="pt-4">
+                <Button type="submit" disabled={updateLeadMutation.isPending} className="w-full bg-[#0a1e3f] hover:bg-[#0a1e3f]/90 text-white">
+                  {updateLeadMutation.isPending ? "Updating..." : "Save Changes"}
+                </Button>
+              </SheetFooter>
+            </form>
           )}
         </SheetContent>
       </Sheet>

@@ -54,7 +54,7 @@ interface QuotationTemplateEditorProps {
   onSave?: (metadata: QuotationMetadata, totalValue: number) => Promise<void>;
   onClose?: () => void;
   isSaving?: boolean;
-  renderActions?: () => React.ReactNode;
+  renderActions?: (meta: QuotationMetadata) => React.ReactNode;
 }
 
 export function QuotationTemplateEditor({ initialData, onSave, onClose, isSaving, renderActions }: QuotationTemplateEditorProps) {
@@ -69,7 +69,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onClose, isSaving
       const newMeta = { ...DEFAULT_METADATA };
       newMeta.leftFields = newMeta.leftFields.map(f => {
         if (f.label === "Date :") return { ...f, value: new Date().toLocaleDateString() };
-        if (f.label === "Customer :") return { ...f, value: initialData.customer?.company_name || "" };
+        if (f.label === "Customer :") return { ...f, value: initialData.customer?.company_name || initialData.customer_name_raw || "" };
         if (f.label === "Destination :") return { ...f, value: initialData.destination || "" };
         return f;
       });
@@ -140,14 +140,20 @@ export function QuotationTemplateEditor({ initialData, onSave, onClose, isSaving
 
   const getColWidthClass = (idx: number, total: number) => {
     if (total === 3) {
-      if (idx === 0) return "w-[55%] shrink-0";
+      if (idx === 0) return "w-[50%] shrink-0";
       if (idx === 1) return "w-[25%] shrink-0";
-      return "w-[20%] shrink-0";
-    } else {
-      if (idx === 0) return "w-[40%] shrink-0";
-      if (idx === total - 1) return "w-[20%] shrink-0";
-      return "flex-1 overflow-hidden shrink-0 min-w-[70px]";
+      return "w-[25%] shrink-0";
     }
+    
+    // Weighted logic to match PDF
+    if (idx === 0) return "w-[35%] shrink-0";
+    if (idx === total - 1) return "w-[20%] shrink-0";
+    
+    const remaining = 45;
+    const perCol = remaining / (total - 2);
+    // Dynamic Tailwind doesn't work well without a JIT safe-list, so we'll use style instead if needed, 
+    // but for 4th and 5th columns, "flex-1" is a good compromise.
+    return "flex-1 shrink-0 overflow-hidden min-w-[60px]";
   };
 
   const getRowValue = (row: any, colIdx: number, totalCols: number) => {
@@ -281,7 +287,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onClose, isSaving
             {renderActions && (
               <>
                 <div className="w-px h-6 bg-gray-300 mx-1" />
-                {renderActions()}
+                {renderActions(meta)}
               </>
             )}
           </div>
@@ -386,13 +392,13 @@ export function QuotationTemplateEditor({ initialData, onSave, onClose, isSaving
                       
                       return (
                         <div key={colIdx} className={cn(
-                          "border-r border-black/80 p-1.5 flex items-center relative", 
+                          "border-r border-black/80 p-1.5 flex flex-col justify-start relative", 
                           getColWidthClass(colIdx, meta.tableHeaders.length), 
                           isRemarks && "border-r-0", 
                           colIdx === 0 && "pl-3",
                           (!isLastRow && !hideBottomBorder) ? "border-b border-black/20" : ""
                         )}>
-                          <EditableInput 
+                          <EditableTextarea 
                             value={getRowValue(row, colIdx, meta.tableHeaders.length)}
                             onChange={(v: string) => updateRowValue(rowIdx, colIdx, meta.tableHeaders.length, v)}
                             className={cn("text-[13px] relative z-10", colIdx > 0 && !isRemarks ? "text-right pr-2" : isRemarks ? "text-center" : "")}

@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Plus, Eye, Search, FileText, Download, Send, CheckCircle, XCircle, ArrowRight, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Eye, Search, FileText, Download, Send, CheckCircle, XCircle, ArrowRight, Trash2, Mail } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -14,7 +15,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DeclineReasonModal } from "@/components/DeclineReasonModal";
-import { QuotationTemplateEditor } from "@/components/QuotationTemplateEditor";
+import { QuotationTemplateEditor, QuotationMetadata } from "@/components/QuotationTemplateEditor";
+import { pdf } from "@react-pdf/renderer";
+import { QuotationPDFDocument } from "@/components/QuotationPDFDocument";
+import ozmaeLogoImg from "@/assets/ozmae-logo.png";
+// @ts-ignore
+import signatureImg from "@/assets/signature.png";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -28,7 +34,11 @@ export default function Quotations() {
   const [declineQuote, setDeclineQuote] = useState<any>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const { data: quotations, isLoading } = useQuery({
     queryKey: ["quotations", activeTab],
@@ -70,9 +80,11 @@ export default function Quotations() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["quotations"] });
       setIsNewModalOpen(false);
+      setViewQuote(data);
+      setIsPreviewOpen(true);
       toast.success("Quotation created successfully");
     },
     onError: (err: any) => toast.error(err.message),
@@ -124,11 +136,47 @@ export default function Quotations() {
     q.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Automation: Handle creation from Lead
+  useEffect(() => {
+    const checkLeadAutomation = async () => {
+      if (location.state?.leadId) {
+        const leadId = location.state.leadId;
+        const { data: lead, error } = await supabase
+          .from("leads")
+          .select("*")
+          .eq("id", leadId)
+          .single();
+        
+        if (error || !lead) return;
+
+        const newQuote = {
+          lead_id: lead.id,
+          customer_id: lead.customer_id,
+          customer_name_raw: lead.customer_name_raw,
+          customer_email: lead.email,
+          customer_phone: lead.phone,
+          origin: lead.origin,
+          destination: lead.destination,
+          cargo_description: lead.cargo_description,
+          base_rate_usd: lead.rate_usd || 0,
+          total_amount_usd: lead.rate_usd || 0,
+          valid_until: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          status: "draft",
+        };
+
+        toast.info(`Automating quotation for ${lead.customer_name_raw}...`);
+        createQuoteMutation.mutate(newQuote);
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    };
+    checkLeadAutomation();
+  }, [location.state?.leadId]);
+
   const handleCreateQuote = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
-      customer_id: formData.get("customer_id"),
+      customer_id: selectedCustomerId || formData.get("customer_id"),
       origin: formData.get("origin"),
       destination: formData.get("destination"),
       cargo_description: formData.get("cargo_description"),
@@ -139,15 +187,88 @@ export default function Quotations() {
     createQuoteMutation.mutate(data);
   };
 
+  const handleDownloadAndEmail = async (meta: QuotationMetadata, quote: any) => {
+    setIsSharing(true);
+    try {
+      // 1. Generate and Download PDF
+      const blob = await pdf(
+        <QuotationPDFDocument 
+          meta={meta} 
+          logoUrl={ozmaeLogoImg} 
+          signatureUrl={signatureImg} 
+        />
+      ).toBlob();
+      
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const quoteRef = quote.id.split('-')[0].toUpperCase();
+      link.download = `Quotation_${quoteRef}_Ozmae_Freight.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // 2. Construct Professional Email
+      const customerEmail = quote.customer?.email || quote.customer_email || "";
+      const subject = encodeURIComponent(`Freight Quotation: ${quoteRef} | Ozmae Freight Solutions`);
+      
+      const body = encodeURIComponent(
+        `Dear ${quote.customer?.company_name || quote.customer_name_raw || 'Valued Customer'},\n\n` +
+        `Thank you for your inquiry and for considering Ozmae Freight Solutions for your logistics requirements.\n\n` +
+        `We have prepared a professional quotation for your shipment, which you will find attached to this email. The document contains a complete breakdown of the rates, terms, and conditions for the requested route.\n\n` +
+        `Please review the attached details and let us know if you have any questions or if you would like to proceed with the shipment. Our operations team is on standby to ensure a seamless execution for you.\n\n` +
+        `We look forward to the opportunity to serve you.\n\n` +
+        `Best regards,\n\n` +
+        `Operations Team\n` +
+        `Ozmae Freight Solutions\n` +
+        `+255 787 240 780 | +255 754 757 670\n` +
+        `www.ozmaelogistics.com`
+      );
+
+      // 3. Open Mail Client
+      window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
+      
+      updateStatusMutation.mutate({ id: quote.id, status: 'sent' });
+      toast.success("Quotation downloaded! Please attach it to the email that just opened.");
+    } catch (err: any) {
+      console.error("Failed to generate and email quotation:", err);
+      toast.error("Failed to generate quotation for email.");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  if (isPreviewOpen && viewQuote) {
+    return (
+      <QuotationTemplateEditor 
+        initialData={viewQuote}
+        isSaving={updateMetadataMutation.isPending}
+        onSave={(meta, total) => updateMetadataMutation.mutateAsync({ id: viewQuote.id, metadata: meta, totalAmount: total })}
+        onClose={() => {
+          setIsPreviewOpen(false);
+          setViewQuote(null);
+        }}
+        renderActions={(currentMeta) => (
+           <div className="flex gap-2">
+             <Button variant="outline" className="text-accent gap-2" disabled={isSharing} onClick={() => handleDownloadAndEmail(currentMeta, viewQuote)}>
+               <Mail className="h-4 w-4" /> {isSharing ? "Preparing..." : "Download & Send Email"}
+             </Button>
+           </div>
+        )}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Quotations">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => setIsPreviewOpen(true)} className="gap-2 bg-card text-foreground border-input shadow-sm">
-            <Eye className="h-4 w-4 text-muted-foreground" /> Preview Template
+      <PageHeader title="Quotations & Rates">
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2">
+            <Download className="h-4 w-4" /> Export All
           </Button>
-          <Button onClick={() => setIsNewModalOpen(true)} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 shadow-sm">
-            <Plus className="h-4 w-4" /> Create Quotation
+          <Button onClick={() => setIsNewModalOpen(true)} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2">
+            <Plus className="h-4 w-4" /> New Quotation
           </Button>
         </div>
       </PageHeader>
@@ -158,11 +279,10 @@ export default function Quotations() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                activeTab === tab 
-                  ? "bg-card text-foreground shadow-sm" 
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={cn(
+                "px-4 py-1.5 text-xs font-semibold rounded-md transition-all",
+                activeTab === tab ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
             >
               {tab}
             </button>
@@ -171,7 +291,7 @@ export default function Quotations() {
         <div className="relative w-full md:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
-            placeholder="Search quotes..." 
+            placeholder="Search quotations..." 
             className="pl-9"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -187,7 +307,7 @@ export default function Quotations() {
               <TableHead>Customer</TableHead>
               <TableHead>Route</TableHead>
               <TableHead>Cargo</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
+              <TableHead>Amount</TableHead>
               <TableHead>Valid Until</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -195,50 +315,28 @@ export default function Quotations() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={8}><div className="h-10 bg-muted/50 animate-pulse rounded" /></TableCell>
-                </TableRow>
-              ))
+              <TableRow><TableCell colSpan={8} className="text-center">Loading...</TableCell></TableRow>
             ) : filtered?.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                  No quotations found.
-                </TableCell>
-              </TableRow>
-            ) : filtered?.map((q: any) => (
-              <TableRow key={q.id} className="group">
-                <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{q.id.split('-')[0]}</TableCell>
-                <TableCell className="font-medium text-foreground">{q.customer?.company_name || 'N/A'}</TableCell>
+              <TableRow><TableCell colSpan={8} className="text-center py-12">No quotations found.</TableCell></TableRow>
+            ) : filtered?.map((quote: any) => (
+              <TableRow key={quote.id}>
+                <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{quote.id.split('-')[0]}</TableCell>
+                <TableCell className="font-medium">{quote.customer?.company_name || "Unknown"}</TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <span>{q.origin}</span>
-                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                    <span>{q.destination}</span>
+                  <div className="flex items-center gap-2 text-xs">
+                    {quote.origin} <ArrowRight className="h-3 w-3" /> {quote.destination}
                   </div>
                 </TableCell>
-                <TableCell className="max-w-[150px] truncate text-xs text-muted-foreground">{q.cargo_description}</TableCell>
-                <TableCell className="text-right font-bold text-foreground">{formatCurrency(q.total_amount_usd || 0)}</TableCell>
-                <TableCell className="text-xs">{q.valid_until ? format(new Date(q.valid_until), "MMM d, yyyy") : "-"}</TableCell>
-                <TableCell><StatusBadge status={q.status} /></TableCell>
+                <TableCell className="text-xs text-muted-foreground truncate max-w-[150px]">{quote.cargo_description}</TableCell>
+                <TableCell className="font-bold">{formatCurrency(quote.total_amount_usd)}</TableCell>
+                <TableCell className="text-xs">{format(new Date(quote.valid_until), "MMM d, yyyy")}</TableCell>
+                <TableCell><StatusBadge status={quote.status} /></TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
-                    <Button 
-                      className="h-8 hover:bg-accent hover:text-accent-foreground bg-transparent text-foreground gap-1.5 text-[10px] font-bold uppercase tracking-wider" 
-                      onClick={() => setViewQuote(q)}
-                    >
-                      <Eye className="h-3.5 w-3.5" /> View / PDF
+                    <Button size="icon" variant="ghost" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}>
+                      <Eye className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => {
-                        if (confirm("Delete this quotation?")) {
-                          deleteQuoteMutation.mutate(q.id);
-                        }
-                      }}
-                      className="h-8 w-8 rounded-full hover:bg-rose-500 hover:text-white transition-all"
-                    >
+                    <Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteQuoteMutation.mutate(quote.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -249,68 +347,17 @@ export default function Quotations() {
         </Table>
       </div>
 
-      {/* Full Screen Quotation Editor */}
-      {viewQuote && (
-        <div className="fixed inset-0 z-50 bg-white">
-          <QuotationTemplateEditor
-            initialData={viewQuote}
-            isSaving={updateMetadataMutation.isPending}
-            onClose={() => setViewQuote(null)}
-            onSave={async (metadata, total) => {
-              await updateMetadataMutation.mutateAsync({ 
-                id: viewQuote.id, 
-                metadata, 
-                totalValue: total 
-              });
-            }}
-            renderActions={() => (
-              <>
-                {viewQuote.status === 'draft' && (
-                  <Button 
-                    variant="outline"
-                    className="h-10 text-primary gap-2"
-                    onClick={() => updateStatusMutation.mutate({ id: viewQuote.id, status: 'sent' })}
-                  >
-                    <Send className="h-4 w-4" /> Mark as Sent
-                  </Button>
-                )}
-                {viewQuote.status === 'sent' && (
-                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline"
-                      className="h-10 text-red-600 border-red-200 hover:bg-red-50"
-                      onClick={() => setDeclineQuote(viewQuote)}
-                    >
-                      <XCircle className="h-4 w-4 mr-2" /> Decline
-                    </Button>
-                    <Button 
-                      className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                      onClick={() => updateStatusMutation.mutate({ id: viewQuote.id, status: 'accepted' })}
-                    >
-                      <CheckCircle className="h-4 w-4" /> Accept
-                    </Button>
-                   </div>
-                )}
-              </>
-            )}
-          />
-        </div>
-      )}
-
-      {/* New Quotation Dialog */}
       <Dialog open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New Quotation</DialogTitle>
-            <DialogDescription>Create a new freight quotation for a customer.</DialogDescription>
+            <DialogDescription>Create a new freight quotation.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateQuote} className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Customer</Label>
-              <Select name="customer_id" required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
+              <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId} required>
+                <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
                 <SelectContent>
                   {customers?.map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
@@ -319,66 +366,21 @@ export default function Quotations() {
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Origin</Label>
-                <Input name="origin" placeholder="Dubai, UAE" required />
-              </div>
-              <div className="space-y-2">
-                <Label>Destination</Label>
-                <Input name="destination" placeholder="Arusha, TZ" required />
-              </div>
+              <div className="space-y-2"><Label>Origin</Label><Input name="origin" required /></div>
+              <div className="space-y-2"><Label>Destination</Label><Input name="destination" required /></div>
             </div>
-            <div className="space-y-2">
-              <Label>Cargo Description</Label>
-              <Input name="cargo_description" placeholder="Electronics, 500kg" required />
-            </div>
+            <div className="space-y-2"><Label>Cargo Description</Label><Input name="cargo_description" required /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Total Amount (USD)</Label>
-                <Input name="amount" type="number" step="0.01" placeholder="2500.00" required />
-              </div>
-              <div className="space-y-2">
-                <Label>Valid Until</Label>
-                <Input name="valid_until" type="date" required />
-              </div>
+              <div className="space-y-2"><Label>Total Amount (USD)</Label><Input name="amount" type="number" step="0.01" required /></div>
+              <div className="space-y-2"><Label>Valid Until</Label><Input name="valid_until" type="date" required /></div>
             </div>
-            <DialogFooter className="pt-4">
+            <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setIsNewModalOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={createQuoteMutation.isPending} className="bg-accent hover:bg-accent/90 text-accent-foreground px-8">
-                {createQuoteMutation.isPending ? "Creating..." : "Generate Quote"}
-              </Button>
+              <Button type="submit" disabled={createQuoteMutation.isPending} className="bg-accent">Generate Quote</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-      
-      {/* Decline Flow Interception */}
-      {declineQuote && (
-        <DeclineReasonModal
-          open={!!declineQuote}
-          onOpenChange={(open) => !open && setDeclineQuote(null)}
-          entityType="quotation"
-          entityId={declineQuote.id}
-          customerId={declineQuote.customer_id}
-          routeOrigin={declineQuote.origin}
-          routeDestination={declineQuote.destination}
-          dealValue={declineQuote.total_amount_usd}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ["quotations"] });
-            setViewQuote({ ...declineQuote, status: 'declined' });
-            setDeclineQuote(null);
-          }}
-        />
-      )}
-
-      {/* Template Preview */}
-      {isPreviewOpen && (
-        <div className="fixed inset-0 z-50 bg-white">
-          <QuotationTemplateEditor
-            onClose={() => setIsPreviewOpen(false)}
-          />
-        </div>
-      )}
     </div>
   );
 }
