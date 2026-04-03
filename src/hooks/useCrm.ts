@@ -75,24 +75,74 @@ export function useCustomerHealth(customerId?: string) {
   return useQuery({
     queryKey: ["customer_health", customerId],
     queryFn: async () => {
-      let query = supabase
-        .from("customer_health")
+      // 1. Fetch formal Customers (with health)
+      let customerQuery = supabase
+        .from("customers")
         .select(`
-          *,
-          customer:customers(*)
+          id,
+          company_name,
+          contact_person,
+          city,
+          health:customer_health(*)
         `)
-        .order("health_score", { ascending: true }); // worst first
+        .order("company_name", { ascending: true });
+
+      // 2. Fetch raw Leads (Prospects) - those not yet converted to customers
+      let leadQuery = supabase
+        .from("leads")
+        .select(`
+          id,
+          customer_name_raw,
+          origin,
+          destination,
+          created_at
+        `)
+        .is("customer_id", null)
+        .order("created_at", { ascending: false });
 
       if (customerId) {
-        query = query.eq("customer_id", customerId);
-        const { data, error } = await query.single();
+        customerQuery = customerQuery.eq("id", customerId);
+        const { data, error } = await customerQuery.single();
         if (error && error.code !== 'PGRST116') throw error;
-        return data as CustomerHealth | null;
+        return data ? { ...data, type: 'customer' } : null;
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as CustomerHealth[];
+      const [customersResult, leadsResult] = await Promise.all([customerQuery, leadQuery]);
+      
+      if (customersResult.error) throw customersResult.error;
+      if (leadsResult.error) throw leadsResult.error;
+
+      // 3. Map Customers
+      const customerEntities = (customersResult.data || []).map(item => ({
+        ...((item as any).health?.[0] || {}), // Flatten health metrics
+        customer: item,
+        customer_id: item.id,
+        type: 'customer',
+        display_name: item.company_name,
+        display_contact: item.contact_person,
+        display_location: item.city || 'Unspecified'
+      }));
+
+      // 4. Map Leads as "Prospects"
+      const prospectEntities = (leadsResult.data || []).map(item => ({
+        health_score: 0,
+        health_label: 'prospect', // Special label for UI
+        customer: {
+          company_name: item.customer_name_raw,
+          contact_person: `${item.origin} ➔ ${item.destination}`,
+          city: 'Inquiry Phase'
+        },
+        customer_id: null,
+        lead_id: item.id,
+        type: 'prospect',
+        display_name: item.customer_name_raw,
+        display_contact: `${item.origin} ➔ ${item.destination}`,
+        display_location: 'New Inquiry',
+        created_at: item.created_at
+      }));
+
+      const combined = [...customerEntities, ...prospectEntities];
+      return combined;
     },
   });
 }
@@ -295,6 +345,7 @@ export function useLogInteraction() {
         const title = nextAction;
         const taskPayload = {
           customer_id: payload.customer_id,
+          lead_id: payload.lead_id,
           interaction_id: data.id,
           title,
           due_date: nextActionDate,

@@ -68,6 +68,36 @@ export default function RateCard() {
     createRateMutation.mutate(data);
   };
 
+   const downloadTemplate = () => {
+    const templateData = [
+      {
+        "Agent Name": "Ozmae Clearing Ltd",
+        "Country": "Tanzania",
+        "Origin": "Dar Es Salaam",
+        "Destination": "Arusha",
+        "Vehicle Type": "truck_20t",
+        "Base Rate": 1200,
+        "Email": "agents@ozmae.com",
+        "Phone": "+255 787 000 000"
+      },
+      {
+        "Agent Name": "Zambia Freight Express",
+        "Country": "Zambia",
+        "Origin": "Lusaka",
+        "Destination": "Copperbelt",
+        "Vehicle Type": "truck_30t",
+        "Base Rate": 2500,
+        "Email": "ops@zambiafreight.zm",
+        "Phone": "+260 977 000 000"
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "Agent_Import_Template.xlsx");
+  };
+
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -75,23 +105,32 @@ export default function RateCard() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const bstr = event.target?.result;
-        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const data = XLSX.utils.sheet_to_json(worksheet);
+        const json = XLSX.utils.sheet_to_json(worksheet);
 
-        const mappedData = data.map((row: any) => ({
-          agent_name: row['Agent Name'] || row['Company'] || 'Imported Agent',
-          country: row['Country'] || 'Unknown',
-          agent_email: row['Email'] || row['Contact Email'] || null,
-          agent_phone: row['Phone'] || row['Contact Phone'] || null,
-          origin: row['Origin'] || 'TBA',
-          destination: row['Destination'] || 'TBA',
-          vehicle_type: row['Vehicle'] || row['Vehicle Type'] || 'TBA',
-          base_rate_usd: parseFloat(row['Rate'] || row['Base Rate'] || row['Amount']) || 0,
-          agent_category: row['Category'] || 'Freight Agent',
-        }));
+        const validVehicleTypes = ['van', 'truck_10t', 'truck_20t', 'truck_30t', 'flatbed', 'trailer'];
+
+        const mappedData = json.map((row: any) => {
+          let vehicleType = (row['Vehicle Type'] || row['Vehicle'] || '').toString().toLowerCase().trim();
+          if (!validVehicleTypes.includes(vehicleType)) {
+            vehicleType = 'truck_20t'; // Default fallback
+          }
+
+          return {
+            agent_name: row['Agent Name'] || row['Company'] || 'Imported Agent',
+            country: row['Country'] || 'Unknown',
+            agent_email: row['Email'] || row['Contact Email'] || null,
+            agent_phone: row['Phone'] || row['Contact Phone'] || null,
+            origin: row['Origin'] || 'TBA',
+            destination: row['Destination'] || 'TBA',
+            vehicle_type: vehicleType,
+            base_rate_usd: parseFloat(row['Rate'] || row['Base Rate'] || row['Amount']) || 0,
+            agent_category: row['Category'] || 'Freight Agent',
+          };
+        });
 
         const { error } = await supabase.from('rate_card').insert(mappedData);
         if (error) throw error;
@@ -102,7 +141,7 @@ export default function RateCard() {
         toast.error(`Import failed: ${error.message}`);
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const countries = ["All", ...Array.from(new Set(rates?.map((r: any) => r.country) || []))];
@@ -123,17 +162,25 @@ export default function RateCard() {
     <div className="space-y-6">
       <PageHeader title="Agent Library & Rates">
         <span className="text-[10px] bg-accent/10 px-2 py-1 rounded font-bold uppercase tracking-widest text-accent mr-4">Global Agent Directory</span>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <input 
-              type="file" 
-              className="absolute inset-0 opacity-0 cursor-pointer z-10" 
-              accept=".xlsx,.xls,.csv"
-              onChange={handleExcelUpload}
-            />
-            <Button variant="outline" className="border-accent/20 hover:border-accent hover:text-accent bg-transparent text-foreground gap-2">
-              <Upload className="h-4 w-4" /> Import Excel
-            </Button>
+         <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-1">
+            <div className="relative">
+              <input 
+                type="file" 
+                className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+                accept=".xlsx,.xls,.csv"
+                onChange={handleExcelUpload}
+              />
+              <Button variant="outline" className="border-accent/20 hover:border-accent hover:text-accent bg-transparent text-foreground gap-2">
+                <Upload className="h-4 w-4" /> Import Excel
+              </Button>
+            </div>
+            <button 
+              onClick={downloadTemplate}
+              className="text-[10px] text-accent hover:underline flex items-center gap-1"
+            >
+              <FileSpreadsheet className="h-2.5 w-2.5" /> Download Template
+            </button>
           </div>
           <Button onClick={() => setIsNewAgentModalOpen(true)} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2">
             <Plus className="h-4 w-4" /> Add Agent / Rate

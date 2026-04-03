@@ -92,7 +92,12 @@ export default function CompanyProfile() {
       setFormData({ ...formData, logo_url: publicUrl });
       toast.success("Logo uploaded temporarily. Save to finalize.");
     } catch (error: any) {
-      toast.error("Logo upload failed");
+      console.error("Logo upload failed:", error);
+      if (error.message?.includes("Bucket not found")) {
+        toast.error("Storage Bucket 'logistic-files' not found. Please apply the setup_logistics_storage migration in Supabase.");
+      } else {
+        toast.error("Logo upload failed. Please verify your connection.");
+      }
     }
   };
 

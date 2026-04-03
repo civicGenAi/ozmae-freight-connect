@@ -9,6 +9,7 @@ import { Phone, PhoneIncoming, MessageCircle, Mail, MailCheck, Users, MapPin, Fi
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useLogInteraction } from "@/hooks/useCrm";
+import { useEffect } from "react";
 
 interface LogInteractionDrawerProps {
   open: boolean;
@@ -56,11 +57,52 @@ export function LogInteractionDrawer({
   const [selectedCustomerId, setSelectedCustomerId] = useState(customerId || "");
   const [interactionType, setInteractionType] = useState("call_outbound");
   const [outcome, setOutcome] = useState("follow_up_required");
+  const [subject, setSubject] = useState("");
 
-  const { data: customers } = useQuery({
-    queryKey: ["customers_list"],
+  // Sync customer selection when prop changes (handles both set and reset)
+  useEffect(() => {
+    setSelectedCustomerId(customerId || "");
+  }, [customerId]);
+
+  // Fetch contextual details to automate the Subject
+  const { data: contextData } = useQuery({
+    queryKey: ["interaction_context", leadId, quotationId],
     queryFn: async () => {
-      const { data } = await supabase.from("customers").select("id, company_name").order("company_name");
+      if (leadId) {
+        const { data } = await supabase.from("leads").select("origin, destination, cargo_description, customer_name_raw").eq("id", leadId).single();
+        return { type: 'lead', details: data };
+      }
+      if (quotationId) {
+        const { data } = await supabase.from("quotations").select("quote_number, origin, destination").eq("id", quotationId).single();
+        return { type: 'quote', details: data };
+      }
+      return null;
+    },
+    enabled: !!leadId || !!quotationId
+  });
+
+  // Automate Subject pre-filling
+  useEffect(() => {
+    if (contextData?.type === 'lead' && contextData.details) {
+      const details = contextData.details as any;
+      setSubject(`Follow-up: ${details.origin} -> ${details.destination} (${details.cargo_description || 'General Cargo'})`);
+    } else if (contextData?.type === 'quote' && contextData.details) {
+      const details = contextData.details as any;
+      setSubject(`Quote Follow-up: ${details.quote_number} (${details.origin} to ${details.destination})`);
+    } else {
+      setSubject("");
+    }
+  }, [contextData]);
+
+  const { data: customers, isLoading: isLoadingCustomers, error: customersError } = useQuery({
+    queryKey: ["customers"],
+    queryFn: async () => {
+
+      const { data, error } = await supabase.from("customers").select("id, company_name").order("company_name");
+      if (error) {
+        console.error("Error fetching customers:", error);
+        throw error;
+      }
       return data || [];
     }
   });
@@ -70,48 +112,70 @@ export function LogInteractionDrawer({
     const formData = new FormData(e.currentTarget);
     
     logMutation.mutate({
-      customer_id: selectedCustomerId,
-      lead_id: leadId || null,
-      quotation_id: quotationId || null,
-      job_order_id: jobOrderId || null,
-      interaction_type: interactionType,
-      subject: formData.get("subject"),
-      summary: formData.get("summary"),
-      outcome: outcome,
-      next_action: formData.get("next_action"),
-      next_action_date: formData.get("next_action_date"),
-      duration_minutes: formData.get("duration_minutes") ? parseInt(formData.get("duration_minutes") as string) : null,
-    }, {
-      onSuccess: () => {
-        onOpenChange(false);
-        if (onSuccess) onSuccess();
-      }
-    });
-  };
+       customer_id: selectedCustomerId === "raw_lead" ? null : selectedCustomerId,
+       lead_id: leadId || null,
+       quotation_id: quotationId || null,
+       job_order_id: jobOrderId || null,
+       interaction_type: interactionType,
+       subject: subject,
+       summary: formData.get("summary"),
+       outcome: outcome,
+       next_action: formData.get("next_action"),
+       next_action_date: formData.get("next_action_date"),
+       duration_minutes: formData.get("duration_minutes") ? parseInt(formData.get("duration_minutes") as string) : null,
+     }, {
+       onSuccess: () => {
+         onOpenChange(false);
+         setSubject(""); // Reset for next time
+         if (onSuccess) onSuccess();
+       }
+     });
+   };
 
   const showDuration = ["call_outbound", "call_inbound", "meeting"].includes(interactionType);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md overflow-y-auto">
+      <SheetContent key={`${leadId}-${customerId}-${quotationId}`} className="sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Log Interaction</SheetTitle>
           <SheetDescription>Record a communication or note for this customer.</SheetDescription>
         </SheetHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 py-6">
-          <div className="space-y-2">
+           <div className="space-y-2">
             <Label>Customer</Label>
-            <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId} required={!customerId}>
+            <Select 
+              value={selectedCustomerId} 
+              onValueChange={setSelectedCustomerId} 
+              required
+            >
               <SelectTrigger disabled={!!customerId} className="bg-muted/30">
-                <SelectValue placeholder="Select a customer" />
+                <SelectValue placeholder={isLoadingCustomers ? "Syncing customers..." : "Choose a customer"} />
               </SelectTrigger>
               <SelectContent>
+                {/* Fallback for Lead: Allow logging even if they aren't a 'Customer' yet */}
+                {contextData?.type === 'lead' && !customerId && (
+                  <SelectItem value="raw_lead" className="font-medium text-accent border-b pb-2 mb-2">
+                    <div className="flex flex-col">
+                      <span>{(contextData.details as any).customer_name_raw || 'Unnamed Lead'}</span>
+                      <span className="text-[10px] text-muted-foreground font-normal italic">Current Lead (Unregistered)</span>
+                    </div>
+                  </SelectItem>
+                )}
+                
+                {customers?.length === 0 && !isLoadingCustomers && !leadId && (
+                  <div className="p-4 text-center text-xs text-muted-foreground">
+                    No registered customers found.
+                  </div>
+                )}
+                
                 {customers?.map(c => (
                   <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {customersError && <p className="text-[10px] text-destructive">Connection issue: Unable to load customer list.</p>}
           </div>
 
           <div className="space-y-2">
@@ -135,7 +199,14 @@ export function LogInteractionDrawer({
 
           <div className="space-y-2">
             <Label htmlFor="subject">Subject</Label>
-            <Input id="subject" name="subject" placeholder="e.g. Follow-up on QTE-2041 pricing" required />
+            <Input 
+              id="subject" 
+              name="subject" 
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="e.g. Follow-up on QTE-2041 pricing" 
+              required 
+            />
           </div>
 
           <div className="space-y-2">

@@ -9,7 +9,7 @@ import { useCustomerHealth } from "@/hooks/useCrm";
 import { LogInteractionDrawer } from "@/components/LogInteractionDrawer";
 import { cn } from "@/lib/utils";
 
-const tabs = ["All", "Excellent", "Good", "At Risk", "Inactive", "Lost"];
+const tabs = ["All", "Prospect", "Excellent", "Good", "At Risk", "Inactive", "Lost"];
 
 const HealthBadge = ({ label }: { label: string }) => {
   const map: Record<string, string> = {
@@ -17,7 +17,8 @@ const HealthBadge = ({ label }: { label: string }) => {
     good: "bg-blue-100 text-blue-800 border-blue-200",
     at_risk: "bg-amber-100 text-amber-800 border-amber-200",
     inactive: "bg-slate-100 text-slate-800 border-slate-200",
-    lost: "bg-rose-100 text-rose-800 border-rose-200"
+    lost: "bg-rose-100 text-rose-800 border-rose-200",
+    prospect: "bg-purple-100 text-purple-800 border-purple-200"
   };
   return (
     <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border", map[label] || map.inactive)}>
@@ -32,27 +33,30 @@ export default function Customers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [interactionDrawerOpen, setInteractionDrawerOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>();
+  const [selectedLeadId, setSelectedLeadId] = useState<string | undefined>();
   
-  const { data: healthData, isLoading } = useCustomerHealth();
+  const { data: healthData, isLoading } = useCustomerHealth() as { data: any[] | undefined, isLoading: boolean };
 
   const filtered = healthData?.filter(h => {
-    const matchesTab = activeTab === "All" || h.health_label === activeTab.toLowerCase().replace(" ", "_");
+    const label = h.health_label || 'inactive';
+    const matchesTab = activeTab === "All" || label === activeTab.toLowerCase().replace(" ", "_");
     const matchesSearch = 
-      h.customer?.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      h.customer?.contact_person?.toLowerCase().includes(searchQuery.toLowerCase());
+      h.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      h.display_contact?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesTab && matchesSearch;
   });
 
-  const openLogInteraction = (e: React.MouseEvent, cid: string) => {
+  const openLogInteraction = (e: React.MouseEvent, cid: string | null, lid?: string) => {
     e.stopPropagation();
-    setSelectedCustomerId(cid);
+    setSelectedCustomerId(cid || undefined);
+    setSelectedLeadId(lid);
     setInteractionDrawerOpen(true);
   };
 
-  const openAddTask = (e: React.MouseEvent, cid: string) => {
+  const openAddTask = (e: React.MouseEvent, cid: string | null, lid?: string) => {
     e.stopPropagation();
-    // Pre-fill next action trick inside drawer
-    setSelectedCustomerId(cid);
+    setSelectedCustomerId(cid || undefined);
+    setSelectedLeadId(lid);
     setInteractionDrawerOpen(true); 
   };
 
@@ -124,40 +128,45 @@ export default function Customers() {
               </TableRow>
             ) : filtered?.map((h) => (
               <TableRow 
-                key={h.id} 
+                key={h.type === 'prospect' ? `l-${h.lead_id}` : `c-${h.customer_id}`} 
                 className="cursor-pointer hover:bg-muted/30 transition-colors group"
-                onClick={() => navigate(`/crm/customers/${h.customer_id}`)}
+                onClick={() => h.type === 'customer' && navigate(`/crm/customers/${h.customer_id}`)}
               >
                 <TableCell>
-                  <p className="font-bold text-foreground text-sm">{h.customer?.company_name}</p>
-                  <p className="text-[10px] text-muted-foreground">{h.customer?.contact_person || 'No contact named'}</p>
+                  <p className="font-bold text-foreground text-sm">{h.display_name}</p>
+                  <p className={cn("text-[10px] flex items-center gap-1", h.type === 'prospect' ? "text-purple-600 font-medium" : "text-muted-foreground")}>
+                    {h.type === 'prospect' && <Plus className="w-2.5 h-2.5" />}
+                    {h.display_contact || 'No contact named'}
+                  </p>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">{h.customer?.city || 'Unspecified'}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{h.display_location}</TableCell>
                 <TableCell>
                   <div className="flex flex-col items-start gap-1">
-                    <HealthBadge label={h.health_label} />
-                    <span className="text-[10px] text-muted-foreground font-mono">{h.health_score}/100</span>
+                    <HealthBadge label={h.health_label || 'inactive'} />
+                    {h.type === 'customer' && (
+                       <span className="text-[10px] text-muted-foreground font-mono">{h.health_score ?? 0}/100</span>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-mono text-xs font-bold">
-                  {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(h.total_revenue_usd)}
+                  {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(h.total_revenue_usd || 0)}
                 </TableCell>
                 <TableCell className="text-center">
                   <p className="text-xs font-medium">{h.days_since_last_activity !== null ? `${h.days_since_last_activity} days ago` : 'Never'}</p>
                   <p className="text-[9px] text-muted-foreground uppercase">{h.last_interaction_date ? new Date(h.last_interaction_date).toLocaleDateString() : ''}</p>
                 </TableCell>
                 <TableCell className="text-center font-bold text-xs">
-                  {h.total_jobs - (h.outstanding_balance_usd > 0 ? 1 : 0)} {/* Approximation placeholder */}
+                  {h.total_jobs || 0}
                 </TableCell>
-                <TableCell className={cn("text-right font-mono text-xs font-bold", h.outstanding_balance_usd > 0 ? "text-rose-600" : "text-emerald-600")}>
-                  {h.outstanding_balance_usd > 0 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(h.outstanding_balance_usd) : 'Paid'}
+                <TableCell className={cn("text-right font-mono text-xs font-bold", (h.outstanding_balance_usd || 0) > 0 ? "text-rose-600" : "text-emerald-600")}>
+                  {(h.outstanding_balance_usd || 0) > 0 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(h.outstanding_balance_usd) : 'Paid'}
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button size="icon" variant="outline" className="h-7 w-7" onClick={(e) => openLogInteraction(e, h.customer_id)} title="Log Interaction">
+                    <Button size="icon" variant="outline" className="h-7 w-7" onClick={(e) => openLogInteraction(e, h.customer_id, h.lead_id)} title="Log Interaction">
                       <Phone className="h-3.5 w-3.5 text-accent" />
                     </Button>
-                    <Button size="icon" variant="outline" className="h-7 w-7" onClick={(e) => openAddTask(e, h.customer_id)} title="Add Task">
+                    <Button size="icon" variant="outline" className="h-7 w-7" onClick={(e) => openAddTask(e, h.customer_id, h.lead_id)} title="Add Task">
                       <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
                     </Button>
                   </div>
@@ -172,6 +181,7 @@ export default function Customers() {
         open={interactionDrawerOpen} 
         onOpenChange={setInteractionDrawerOpen} 
         customerId={selectedCustomerId}
+        leadId={selectedLeadId}
       />
     </div>
   );
