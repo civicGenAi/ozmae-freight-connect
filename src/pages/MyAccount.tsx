@@ -8,13 +8,15 @@ import { toast } from "sonner";
 import {
    User, Shield, Laptop, Building2, KeyRound,
    CheckCircle2, AlertCircle, LogOut, Clock,
-   Globe, Mail, Phone, MapPin, Save, X, Edit2
+   Globe, Mail, Phone, MapPin, Save, X, Edit2, Copy, ChevronDown
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { FileUpload } from "@/components/FileUpload";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { QRCodeSVG } from "qrcode.react";
 
 export default function MyAccount() {
    const [activeTab, setActiveTab] = useState("profile");
@@ -201,10 +203,30 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
    const [newPassword, setNewPassword] = useState("");
    const [confirmPassword, setConfirmPassword] = useState("");
    const [strength, setStrength] = useState(0);
+   const [mfaTotpUri, setMfaTotpUri] = useState<string | null>(null);
    const [mfaSecret, setMfaSecret] = useState<string | null>(null);
    const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
    const [verificationCode, setVerificationCode] = useState("");
    const [isEnrolling, setIsEnrolling] = useState(false);
+   const [isDisabling, setIsDisabling] = useState(false);
+   const [showDisableDialog, setShowDisableDialog] = useState(false);
+   const [showManualKey, setShowManualKey] = useState(false);
+
+   // Live factor state — read from Supabase, not the profiles table
+   const [verifiedFactor, setVerifiedFactor] = useState<{ id: string } | null>(undefined as any);
+   const [loadingFactors, setLoadingFactors] = useState(true);
+
+   const loadFactors = async () => {
+      setLoadingFactors(true);
+      try {
+         const { data } = await supabase.auth.mfa.listFactors();
+         const found = data?.all?.find((f: any) => f.factor_type === 'totp' && f.status === 'verified') ?? null;
+         setVerifiedFactor(found);
+      } catch (_e) { setVerifiedFactor(null); }
+      finally { setLoadingFactors(false); }
+   };
+
+   useEffect(() => { loadFactors(); }, []);
 
    useEffect(() => {
       let s = 0;
@@ -242,17 +264,46 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
    const startMfaEnrollment = async () => {
       try {
          setIsEnrolling(true);
+         // Unenroll ALL existing TOTP factors first (fixes mfa_factor_name_conflict)
+         const { data: existing } = await supabase.auth.mfa.listFactors();
+         for (const f of (existing?.all || [])) {
+            if (f.factor_type === 'totp') {
+               await supabase.auth.mfa.unenroll({ factorId: f.id });
+            }
+         }
+         // Fresh enrollment with unique friendly name
          const { data, error } = await supabase.auth.mfa.enroll({
             factorType: 'totp',
-            issuer: 'Ozmae Freight'
+            issuer: 'Ozmae Freight',
+            friendlyName: `ozmae-${Date.now()}`,
          });
          if (error) throw error;
+         setMfaTotpUri(data.totp.uri);
          setMfaSecret(data.totp.secret);
          setMfaFactorId(data.id);
+         setShowManualKey(false);
       } catch (err: any) {
          toast.error(err.message);
       } finally {
          setIsEnrolling(false);
+      }
+   };
+
+   const disableMfa = async () => {
+      if (!verifiedFactor) return;
+      try {
+         setIsDisabling(true);
+         setShowDisableDialog(false);
+         const { error } = await supabase.auth.mfa.unenroll({ factorId: verifiedFactor.id });
+         if (error) throw error;
+         await supabase.from('profiles').update({ totp_enabled: false }).eq('id', profile.id);
+         await supabase.from('security_logs').insert({ event_type: 'mfa_disabled', details: { factor_id: verifiedFactor.id } });
+         toast.success('Two-factor authentication disabled.');
+         await loadFactors();
+      } catch (err: any) {
+         toast.error(err.message);
+      } finally {
+         setIsDisabling(false);
       }
    };
 
@@ -276,11 +327,13 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
             details: { factor_id: mfaFactorId }
          });
 
-         toast.success("Two-factor authentication enabled!");
+         toast.success("Two-factor authentication is now active!");
+         setMfaTotpUri(null);
          setMfaSecret(null);
          setMfaFactorId(null);
          setVerificationCode("");
-         window.location.reload(); // Refresh to update profile state
+         setShowManualKey(false);
+         await loadFactors();
       } catch (err: any) {
          toast.error(err.message);
       }
@@ -326,36 +379,146 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
                   Add an extra layer of security to your account using TOTP (Google Authenticator, Authy, etc).
                </p>
 
-               {!mfaSecret ? (
-                  <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-dashed">
-                     <span className="text-[10px] font-black uppercase">Status: {profile?.totp_enabled ? "Enabled" : "Disabled"}</span>
-                     <Button
-                        onClick={startMfaEnrollment}
-                        disabled={isEnrolling}
-                        className="h-9 px-4 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[9px] tracking-widest"
-                     >
-                        {profile?.totp_enabled ? "Re-configure" : "Setup 2FA"}
-                     </Button>
-                  </div>
-               ) : (
-                  <div className="p-6 bg-slate-50 border rounded-2xl space-y-4 animate-in fade-in zoom-in-95">
-                     <p className="text-xs font-bold text-center">Scan this secret in your Authenticator app:</p>
-                     <div className="p-3 bg-white border border-dashed text-center font-mono text-sm tracking-wider break-all select-all">
-                        {mfaSecret}
+               {!mfaTotpUri ? (
+                  loadingFactors ? (
+                     <div className="h-16 bg-muted/30 rounded-xl animate-pulse" />
+                  ) : verifiedFactor ? (
+                     <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                           <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                           <div>
+                              <p className="text-xs font-black uppercase text-emerald-800">2FA Active — Your account is protected</p>
+                              <p className="text-[10px] text-emerald-600 mt-0.5">Authenticator app required on every sign-in</p>
+                           </div>
+                        </div>
+                        <div className="flex gap-2">
+                           <Button
+                              onClick={startMfaEnrollment}
+                              disabled={isEnrolling || isDisabling}
+                              variant="outline"
+                              className="flex-1 h-10 font-black uppercase text-[9px] tracking-widest"
+                           >
+                              {isEnrolling ? "Preparing..." : "Switch Authenticator App"}
+                           </Button>
+                           <AlertDialog open={showDisableDialog} onOpenChange={setShowDisableDialog}>
+                              <AlertDialogTrigger asChild>
+                                 <Button
+                                    disabled={isDisabling || isEnrolling}
+                                    variant="outline"
+                                    className="flex-1 h-10 font-black uppercase text-[9px] tracking-widest text-rose-600 border-rose-200 hover:bg-rose-50"
+                                 >
+                                    {isDisabling ? "Disabling..." : "Disable 2FA"}
+                                 </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="max-w-md rounded-2xl p-0 overflow-hidden">
+                                 <div className="bg-rose-50 border-b border-rose-100 p-6 flex flex-col items-center gap-3">
+                                    <div className="h-14 w-14 rounded-2xl bg-white border border-rose-200 shadow-sm flex items-center justify-center">
+                                       <Shield className="h-7 w-7 text-rose-500" />
+                                    </div>
+                                    <AlertDialogTitle className="text-center text-base font-black text-rose-900">Disable Two-Factor Authentication?</AlertDialogTitle>
+                                 </div>
+                                 <div className="p-6 space-y-5">
+                                    <AlertDialogDescription className="text-sm text-center text-muted-foreground leading-relaxed">
+                                       Your account will only be protected by your password.
+                                       <span className="block mt-2 font-bold text-foreground text-xs">Anyone who obtains your password will have full access.</span>
+                                    </AlertDialogDescription>
+                                    <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+                                       <AlertDialogAction
+                                          onClick={disableMfa}
+                                          className="w-full h-11 bg-rose-500 hover:bg-rose-600 text-white font-black uppercase text-[10px] tracking-widest rounded-xl"
+                                       >
+                                          Yes, Remove Protection
+                                       </AlertDialogAction>
+                                       <AlertDialogCancel className="w-full h-11 font-black uppercase text-[10px] tracking-widest rounded-xl border-2">
+                                          Keep 2FA Active
+                                       </AlertDialogCancel>
+                                    </AlertDialogFooter>
+                                 </div>
+                              </AlertDialogContent>
+                           </AlertDialog>
+                        </div>
                      </div>
-                     <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-center block">Enter 6-digit Code</Label>
+                  ) : (
+                     <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                           <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
+                           <div>
+                              <p className="text-xs font-black uppercase text-amber-800">2FA Not Enabled</p>
+                              <p className="text-[10px] text-amber-600 mt-0.5">Your account is protected by password only</p>
+                           </div>
+                        </div>
+                        <Button
+                           onClick={startMfaEnrollment}
+                           disabled={isEnrolling}
+                           className="w-full h-10 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[9px] tracking-widest"
+                        >
+                           {isEnrolling ? "Generating QR Code..." : "Enable Two-Factor Authentication →"}
+                        </Button>
+                     </div>
+                  )
+               ) : (
+                  <div className="rounded-2xl border overflow-hidden animate-in fade-in zoom-in-95">
+                     {/* QR Code Section */}
+                     <div className="bg-white p-6 flex flex-col items-center gap-4 border-b">
+                        <p className="text-xs font-bold text-slate-700 text-center">Scan with Google Authenticator, Authy, or any TOTP app</p>
+                        <div className="p-3 bg-white rounded-xl shadow-md ring-1 ring-slate-200">
+                           <QRCodeSVG
+                              value={mfaTotpUri}
+                              size={180}
+                              bgColor="#ffffff"
+                              fgColor="#0f172a"
+                              level="M"
+                              includeMargin={false}
+                           />
+                        </div>
+                        <p className="text-[10px] text-slate-500 text-center">Point your authenticator app camera at this code</p>
+                     </div>
+
+                     {/* Manual Key Fallback */}
+                     <div className="bg-slate-50 p-4 space-y-2">
+                        <button
+                           type="button"
+                           onClick={() => setShowManualKey(!showManualKey)}
+                           className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold uppercase hover:text-foreground transition-colors w-full"
+                        >
+                           <ChevronDown className={cn("h-3 w-3 transition-transform", showManualKey && "rotate-180")} />
+                           Can't scan? Enter key manually
+                        </button>
+                        {showManualKey && (
+                           <div className="flex items-center gap-2 p-2 bg-white border rounded-lg">
+                              <code className="text-xs font-mono flex-1 break-all text-slate-700 select-all">{mfaSecret}</code>
+                              <button
+                                 type="button"
+                                 onClick={() => { navigator.clipboard.writeText(mfaSecret || ''); toast.success('Key copied!'); }}
+                                 className="shrink-0 p-1.5 rounded hover:bg-slate-100"
+                              >
+                                 <Copy className="h-3.5 w-3.5 text-slate-500" />
+                              </button>
+                           </div>
+                        )}
+                     </div>
+
+                     {/* Verify Section */}
+                     <div className="p-4 space-y-3 bg-white">
+                        <Label className="text-[10px] font-black uppercase text-center block text-muted-foreground">Enter the 6-digit code from your app to confirm</Label>
                         <Input
                            value={verificationCode}
-                           onChange={e => setVerificationCode(e.target.value)}
-                           placeholder="000 000"
-                           className="text-center text-xl tracking-widest font-black h-12"
+                           onChange={e => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                           placeholder="000000"
+                           className="text-center text-2xl tracking-[0.5em] font-black h-14 rounded-xl"
                            maxLength={6}
+                           autoFocus
                         />
-                     </div>
-                     <div className="flex gap-2">
-                        <Button variant="ghost" onClick={() => setMfaSecret(null)} className="flex-1 text-[10px] font-black uppercase">Cancel</Button>
-                        <Button onClick={verifyAndEnableMfa} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase">Verify & Enable</Button>
+                        <div className="flex gap-2 pt-1">
+                           <Button variant="ghost" onClick={() => { setMfaTotpUri(null); setMfaSecret(null); }} className="flex-1 text-[10px] font-black uppercase h-10">Cancel</Button>
+                           <Button
+                              onClick={verifyAndEnableMfa}
+                              disabled={verificationCode.length !== 6}
+                              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase h-10"
+                           >
+                              Verify & Activate 2FA
+                           </Button>
+                        </div>
                      </div>
                   </div>
                )}

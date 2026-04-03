@@ -35,9 +35,10 @@ export default function Login() {
         return;
       }
 
+      // Check account is active
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("is_active, totp_enabled")
+        .select("is_active")
         .eq("id", data.user.id)
         .single();
 
@@ -64,12 +65,10 @@ export default function Login() {
           const ipRes2 = await fetch("https://worldtimeapi.org/api/ip");
           const ipData2 = await ipRes2.json();
           ip = ipData2.client_ip;
-        } catch (e2) {
-          console.error("IP capture failed", e2);
-        }
+        } catch (_e2) { /* silent */ }
       }
 
-      // Log success with IP
+      // Log the sign-in event
       await supabase.from("security_logs").insert({
         user_id: data.user.id,
         event_type: "login_success",
@@ -77,14 +76,19 @@ export default function Login() {
         ip_address: ip
       });
 
-      // Record Session
+      // Record session
       await supabase.from("user_sessions").insert({
         user_id: data.user.id,
         ip_address: ip,
         user_agent: navigator.userAgent
       });
 
-      if (profile.totp_enabled) {
+      // ─── MFA Gate ───────────────────────────────────────────────
+      // Use Supabase's native AAL check — this is always accurate
+      // and works regardless of what's stored in the profiles table.
+      const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aalData?.currentLevel === "aal1" && aalData?.nextLevel === "aal2") {
+        // User has a verified MFA factor → must verify before entering app
         navigate("/verify-2fa");
       } else {
         navigate("/");

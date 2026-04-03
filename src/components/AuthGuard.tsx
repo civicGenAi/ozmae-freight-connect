@@ -6,18 +6,47 @@ import { toast } from "sonner";
 const INACTIVITY_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
 const WARNING_BEFORE = 5 * 60 * 1000; // 5 minutes
 
+// Pages that don't require AAL2 check (the 2FA gate itself)
+const MFA_EXEMPT_PATHS = ["/verify-2fa", "/login", "/reset-password"];
+
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
-  const [lastActivity, setLastActivity] = useState(Date.now());
 
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session && location.pathname !== "/login" && location.pathname !== "/reset-password") {
-        navigate("/login");
+
+      // 1. No session → send to login
+      if (!session) {
+        if (location.pathname !== "/login" && location.pathname !== "/reset-password") {
+          navigate("/login");
+        }
+        setIsLoading(false);
+        return;
       }
+
+      // 2. Session exists → check MFA assurance level
+      // Only enforce on protected pages (not /verify-2fa itself)
+      if (!MFA_EXEMPT_PATHS.includes(location.pathname)) {
+        try {
+          const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+          if (
+            aalData &&
+            aalData.currentLevel === "aal1" &&
+            aalData.nextLevel === "aal2"
+          ) {
+            // User has a verified MFA factor but hasn't completed it for this session
+            navigate("/verify-2fa");
+            setIsLoading(false);
+            return;
+          }
+        } catch (_e) {
+          // Non-critical: if MFA check fails, allow through (Supabase handles this server-side too)
+        }
+      }
+
       setIsLoading(false);
     };
 
@@ -38,7 +67,6 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleActivity = () => {
       const now = Date.now();
-      setLastActivity(now);
       localStorage.setItem("lastActivity", now.toString());
     };
 
