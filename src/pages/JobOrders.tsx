@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { HybridSelect } from "@/components/HybridSelect";
+import { useEffect } from "react";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -26,6 +28,14 @@ export default function JobOrders() {
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const queryClient = useQueryClient();
+
+  // Form State for "New Job"
+  const [selectedEntityId, setSelectedEntityId] = useState<string>("");
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
+  const [driverRef, setDriverRef] = useState<{ id?: string; name?: string }>({});
+  const [vehicleRef, setVehicleRef] = useState<{ id?: string; plate?: string }>({});
+  const [amount, setAmount] = useState("");
 
   const { data: jobOrders, isLoading } = useQuery({
     queryKey: ["job_orders"],
@@ -44,21 +54,41 @@ export default function JobOrders() {
     },
   });
 
-  const { data: dataNeeded } = useQuery({
+   const { data: dataNeeded } = useQuery({
     queryKey: ["job_form_data"],
     queryFn: async () => {
-      const [customers, drivers, vehicles] = await Promise.all([
+      const [customers, leads, drivers, vehicles] = await Promise.all([
         supabase.from("customers").select("id, company_name"),
+        supabase.from("leads").select("id, customer_name_raw, origin, destination").is("customer_id", null),
         supabase.from("drivers").select("id, full_name"),
         supabase.from("vehicles").select("id, plate_number"),
       ]);
       return {
-        customers: customers.data || [],
-        drivers: drivers.data || [],
-        vehicles: vehicles.data || [],
+        customers: (customers.data || []).map(c => ({ value: c.id, label: c.company_name, type: 'customer' })),
+        prospects: (leads.data || []).map(l => ({ 
+          value: l.id, 
+          label: `${l.customer_name_raw} (Prospect)`, 
+          type: 'prospect',
+          origin: l.origin,
+          destination: l.destination,
+          raw_name: l.customer_name_raw
+        })),
+        drivers: (drivers.data || []).map(d => ({ value: d.id, label: d.full_name })),
+        vehicles: (vehicles.data || []).map(v => ({ value: v.id, label: v.plate_number })),
       };
     },
   });
+
+  // Auto-fill route logic
+  useEffect(() => {
+    if (selectedEntityId && dataNeeded) {
+      const prospect = dataNeeded.prospects.find(p => p.value === selectedEntityId);
+      if (prospect) {
+        setOrigin(prospect.origin);
+        setDestination(prospect.destination);
+      }
+    }
+  }, [selectedEntityId, dataNeeded]);
 
   const createJobMutation = useMutation({
     mutationFn: async (newJob: any) => {
@@ -109,20 +139,70 @@ export default function JobOrders() {
     count: jobOrders?.filter((j: any) => j.status?.toLowerCase() === s).length || 0,
   }));
 
-  const handleCreateJob = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreateJob = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data = {
-      customer_id: formData.get("customer_id"),
-      driver_id: formData.get("driver_id"),
-      vehicle_id: formData.get("vehicle_id"),
-      origin: formData.get("origin"),
-      destination: formData.get("destination"),
-      total_amount_usd: parseFloat(formData.get("amount") as string),
-      status: "planning",
-      payment_status: "unpaid",
-    };
-    createJobMutation.mutate(data);
+    
+    try {
+      let finalCustomerId = "";
+      let finalDriverId = driverRef.id || null;
+      let finalVehicleId = vehicleRef.id || null;
+
+      // 1. Handle Prospect Conversion
+      const prospect = dataNeeded?.prospects.find(p => p.value === selectedEntityId);
+      if (prospect) {
+        const { data: newCust, error: custErr } = await supabase
+          .from("customers")
+          .insert([{ company_name: prospect.raw_name }])
+          .select()
+          .single();
+        if (custErr) throw custErr;
+        finalCustomerId = newCust.id;
+        // Optionally update lead to mark as converted
+        await supabase.from("leads").update({ customer_id: newCust.id, status: 'converted' }).eq("id", prospect.value);
+      } else {
+        finalCustomerId = selectedEntityId;
+      }
+
+      // 2. Handle New Driver (Hybrid)
+      if (!finalDriverId && driverRef.name) {
+        const { data: newDriver, error: drvErr } = await supabase
+          .from("drivers")
+          .insert([{ full_name: driverRef.name, status: 'available', phone: 'Added via Job' }])
+          .select()
+          .single();
+        if (drvErr) throw drvErr;
+        finalDriverId = newDriver.id;
+      }
+
+      // 3. Handle New Vehicle (Hybrid)
+      if (!finalVehicleId && vehicleRef.plate) {
+        const { data: newVeh, error: vehErr } = await supabase
+          .from("vehicles")
+          .insert([{ plate_number: vehicleRef.plate, status: 'available' }])
+          .select()
+          .single();
+        if (vehErr) throw vehErr;
+        finalVehicleId = newVeh.id;
+      }
+
+      // 4. Generate Job Number (Mock logic or use DB sequences)
+      const job_number = `JOB-${Math.random().toString(36).substring(7).toUpperCase()}`;
+
+      const data = {
+        job_number,
+        customer_id: finalCustomerId,
+        assigned_driver_id: finalDriverId,
+        assigned_vehicle_id: finalVehicleId,
+        origin,
+        destination,
+        total_amount_usd: parseFloat(amount),
+        status: "planning",
+      };
+      
+      createJobMutation.mutate(data);
+    } catch (err: any) {
+      toast.error(`Auto-registration failed: ${err.message}`);
+    }
   };
 
   return (
@@ -220,63 +300,89 @@ export default function JobOrders() {
           </SheetHeader>
           <form onSubmit={handleCreateJob} className="space-y-4 py-6">
             <div className="space-y-2">
-              <Label>Customer</Label>
-              <Select name="customer_id" required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select customer" />
+              <Label>Business Entity (Customer/Prospect)</Label>
+              <Select value={selectedEntityId} onValueChange={setSelectedEntityId} required>
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Select customer or prospect" />
                 </SelectTrigger>
                 <SelectContent>
                   {dataNeeded?.customers.map((c: any) => (
-                    <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                    <SelectItem key={c.value} value={c.value} className="font-bold">{c.label}</SelectItem>
+                  ))}
+                  {dataNeeded?.prospects.map((p: any) => (
+                    <SelectItem key={p.value} value={p.value} className="text-purple-700 font-medium">{p.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Origin</Label>
-                <Input name="origin" placeholder="Mombasa, KE" required />
+                <Input 
+                  value={origin} 
+                  onChange={(e) => setOrigin(e.target.value)} 
+                  placeholder="Mombasa, KE" 
+                  required 
+                  className="h-11"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Destination</Label>
-                <Input name="destination" placeholder="Kampala, UG" required />
+                <Input 
+                  value={destination} 
+                  onChange={(e) => setDestination(e.target.value)} 
+                  placeholder="Kampala, UG" 
+                  required 
+                  className="h-11"
+                />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Driver</Label>
-                <Select name="driver_id">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Assign driver" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {dataNeeded?.drivers.map((d: any) => (
-                      <SelectItem key={d.id} value={d.id}>{d.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Assigned Personnel</Label>
+                <HybridSelect
+                  options={dataNeeded?.drivers || []}
+                  value={driverRef.id || driverRef.name}
+                  onChange={(val, isNew) => setDriverRef(isNew ? { name: val } : { id: val })}
+                  placeholder="Search/Type Driver Name"
+                  allowCreate
+                  className="h-11"
+                />
               </div>
               <div className="space-y-2">
-                <Label>Vehicle</Label>
-                <Select name="vehicle_id">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Assign vehicle" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {dataNeeded?.vehicles.map((v: any) => (
-                      <SelectItem key={v.id} value={v.id}>{v.plate_number}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Transport Asset</Label>
+                <HybridSelect
+                  options={dataNeeded?.vehicles || []}
+                  value={vehicleRef.id || vehicleRef.plate}
+                  onChange={(val, isNew) => setVehicleRef(isNew ? { plate: val } : { id: val })}
+                  placeholder="Search/Type Plate Number"
+                  allowCreate
+                  className="h-11"
+                />
               </div>
             </div>
+
             <div className="space-y-2">
               <Label>Contract Value (USD)</Label>
-              <Input name="amount" type="number" step="0.01" placeholder="8500.00" required />
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  type="number" 
+                  step="0.01" 
+                  value={amount} 
+                  onChange={(e) => setAmount(e.target.value)} 
+                  placeholder="8500.00" 
+                  required 
+                  className="pl-9 h-11"
+                />
+              </div>
             </div>
-            <SheetFooter className="pt-4">
-              <Button type="submit" disabled={createJobMutation.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-12 text-xs font-black uppercase tracking-widest">
-                {createJobMutation.isPending ? "Creating..." : "Initialize Job Order"}
+
+            <SheetFooter className="pt-6">
+              <Button type="submit" disabled={createJobMutation.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-12 text-xs font-black uppercase tracking-widest shadow-lg shadow-accent/20">
+                {createJobMutation.isPending ? "Configuring Operation..." : "Initialize Job Order"}
               </Button>
             </SheetFooter>
           </form>
