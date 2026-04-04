@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
-import { Plus, X, Search, Filter, MoreHorizontal, MessageSquare, Mail, ArrowRight, Phone, XCircle, Pencil } from "lucide-react";
+import { Plus, Search, Mail, ArrowRight, Phone, Pencil, Info, Globe, Truck, DollarSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -11,14 +16,49 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { LogInteractionDrawer } from "@/components/LogInteractionDrawer";
 import { DeclineReasonModal } from "@/components/DeclineReasonModal";
 import { StringArrayInput } from "@/components/StringArrayInput";
+import { LocationSelect } from "@/components/LocationSelect";
+import { PhoneInput } from "@/components/PhoneInput";
+import { CargoItemsTable } from "@/components/CargoItemsTable";
 import { format } from "date-fns";
 
 const tabs = ["All", "New", "Contacted", "Qualified", "Lost", "Converted"];
+
+// Form Schema
+const leadSchema = z.object({
+  customer_name: z.string().min(2, "Customer name must be at least 2 characters"),
+  contact_person: z.string().optional(),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  phone: z.string().optional(),
+  origin: z.string().min(2, "Please select an origin city/port"),
+  destination: z.string().min(2, "Please select a destination city/port"),
+  commodity: z.string().optional(),
+  chargeable_weight: z.string().optional(),
+  cif_value_usd: z.string().optional().transform(v => v ? parseFloat(v) : null),
+  rate_usd: z.string().min(1, "Quoted rate is required").transform(v => parseFloat(v)),
+  validity: z.string().optional(),
+  cargo_description: z.string().optional(),
+  cargo_items: z.array(z.object({
+    description: z.string().min(1, "Description is required"),
+    unit: z.string().min(1, "Unit is required"),
+    remarks: z.string().optional(),
+  })).min(1, "At least one cargo item is required"),
+  remarks: z.string().optional(),
+});
+
+type LeadFormValues = z.infer<typeof leadSchema>;
 
 export default function Leads() {
   const [activeTab, setActiveTab] = useState("All");
@@ -29,20 +69,63 @@ export default function Leads() {
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [leadToEdit, setLeadToEdit] = useState<any>(null);
+  
+  const [additionalEmails, setAdditionalEmails] = useState<string[]>([]);
+  const [additionalPhones, setAdditionalPhones] = useState<string[]>([]);
+
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [newAdditionalEmails, setNewAdditionalEmails] = useState<string[]>([]);
-  const [newAdditionalPhones, setNewAdditionalPhones] = useState<string[]>([]);
-  const [editAdditionalEmails, setEditAdditionalEmails] = useState<string[]>([]);
-  const [editAdditionalPhones, setEditAdditionalPhones] = useState<string[]>([]);
+  // New Lead Form
+  const newLeadForm = useForm<LeadFormValues>({
+    resolver: zodResolver(leadSchema),
+    defaultValues: {
+      customer_name: "",
+      contact_person: "",
+      email: "",
+      phone: "+255",
+      origin: "",
+      destination: "",
+      commodity: "",
+      chargeable_weight: "",
+      cif_value_usd: undefined,
+      rate_usd: "" as any,
+      validity: "15 Days",
+      cargo_description: "",
+      cargo_items: [{ description: "", unit: "1*40HC", remarks: "" }],
+      remarks: "",
+    }
+  });
+
+  // Edit Lead Form
+  const editLeadForm = useForm<LeadFormValues>({
+    resolver: zodResolver(leadSchema),
+  });
 
   useEffect(() => {
     if (leadToEdit) {
-      setEditAdditionalEmails(leadToEdit.additional_emails || []);
-      setEditAdditionalPhones(leadToEdit.additional_phones || []);
+      editLeadForm.reset({
+        customer_name: leadToEdit.customer_name_raw,
+        contact_person: leadToEdit.contact_person || "",
+        email: leadToEdit.email || "",
+        phone: leadToEdit.phone || "+255",
+        origin: leadToEdit.origin,
+        destination: leadToEdit.destination,
+        commodity: leadToEdit.commodity || "",
+        chargeable_weight: leadToEdit.chargeable_weight || "",
+        cif_value_usd: leadToEdit.cif_value_usd?.toString() || "",
+        rate_usd: leadToEdit.rate_usd?.toString() || "",
+        validity: leadToEdit.validity || "15 Days",
+        cargo_description: leadToEdit.cargo_description || "",
+        cargo_items: leadToEdit.cargo_items?.length > 0 
+          ? leadToEdit.cargo_items 
+          : [{ description: leadToEdit.cargo_description || "", unit: "1*40HC", remarks: "" }],
+        remarks: leadToEdit.remarks || "",
+      });
+      setAdditionalEmails(leadToEdit.additional_emails || []);
+      setAdditionalPhones(leadToEdit.additional_phones || []);
     }
-  }, [leadToEdit]);
+  }, [leadToEdit, editLeadForm]);
 
   const { data: leads, isLoading } = useQuery({
     queryKey: ["leads", activeTab],
@@ -66,15 +149,37 @@ export default function Leads() {
   });
 
   const createLeadMutation = useMutation({
-    mutationFn: async (newLead: any) => {
-      const { error } = await supabase.from("leads").insert([newLead]);
+    mutationFn: async (values: LeadFormValues) => {
+      const data = {
+        lead_number: `L-${Date.now().toString().slice(-4)}`,
+        customer_name_raw: values.customer_name,
+        contact_person: values.contact_person || null,
+        email: values.email || null,
+        phone: values.phone || null,
+        additional_emails: additionalEmails,
+        additional_phones: additionalPhones,
+        origin: values.origin,
+        destination: values.destination,
+        commodity: values.commodity || null,
+        validity: values.validity || null,
+        chargeable_weight: values.chargeable_weight,
+        cif_value_usd: values.cif_value_usd,
+        remarks: values.remarks || null,
+        cargo_type: "general", 
+        cargo_description: values.cargo_items[0].description, // Fallback for old column
+        cargo_items: values.cargo_items,
+        rate_usd: values.rate_usd,
+        status: "new",
+      };
+      const { error } = await supabase.from("leads").insert([data]);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       setIsNewModalOpen(false);
-      setNewAdditionalEmails([]);
-      setNewAdditionalPhones([]);
+      setAdditionalEmails([]);
+      setAdditionalPhones([]);
+      newLeadForm.reset();
       toast.success("New lead created successfully");
     },
     onError: (error: any) => {
@@ -83,11 +188,29 @@ export default function Leads() {
   });
 
   const updateLeadMutation = useMutation({
-    mutationFn: async (updatedLead: any) => {
+    mutationFn: async (values: LeadFormValues) => {
+      const data = {
+        customer_name_raw: values.customer_name,
+        contact_person: values.contact_person || null,
+        email: values.email || null,
+        phone: values.phone || null,
+        additional_emails: additionalEmails,
+        additional_phones: additionalPhones,
+        origin: values.origin,
+        destination: values.destination,
+        commodity: values.commodity || null,
+        validity: values.validity || null,
+        chargeable_weight: values.chargeable_weight,
+        cif_value_usd: values.cif_value_usd,
+        remarks: values.remarks || null,
+        cargo_description: values.cargo_items[0].description, // Fallback for old column
+        cargo_items: values.cargo_items,
+        rate_usd: values.rate_usd,
+      };
       const { error } = await supabase
         .from("leads")
-        .update(updatedLead)
-        .eq("id", updatedLead.id);
+        .update(data)
+        .eq("id", leadToEdit.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -106,61 +229,26 @@ export default function Leads() {
     l.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleCreateLead = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data = {
-      lead_number: `L-${Date.now().toString().slice(-4)}`,
-      customer_name_raw: formData.get("customer_name"),
-      contact_person: formData.get("contact_person") || null,
-      email: formData.get("email") || null,
-      phone: formData.get("phone") || null,
-      additional_emails: newAdditionalEmails,
-      additional_phones: newAdditionalPhones,
-      origin: formData.get("origin"),
-      destination: formData.get("destination"),
-      commodity: formData.get("commodity") || null,
-      validity: formData.get("validity") || null,
-      chargeable_weight: parseFloat(formData.get("chargeable_weight") as string) || null,
-      cif_value_usd: parseFloat(formData.get("cif_value_usd") as string) || null,
-      remarks: formData.get("remarks") || null,
-      cargo_type: "general", 
-      cargo_description: formData.get("cargo_details"),
-      rate_usd: parseFloat(formData.get("rate") as string) || 0,
-      status: "new",
-    };
-    createLeadMutation.mutate(data);
+  const onSubmitNew = (values: LeadFormValues) => {
+    createLeadMutation.mutate(values);
   };
 
-  const handleUpdateLead = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data = {
-      id: leadToEdit.id,
-      customer_name_raw: formData.get("customer_name"),
-      contact_person: formData.get("contact_person") || null,
-      email: formData.get("email") || null,
-      phone: formData.get("phone") || null,
-      additional_emails: editAdditionalEmails,
-      additional_phones: editAdditionalPhones,
-      origin: formData.get("origin"),
-      destination: formData.get("destination"),
-      commodity: formData.get("commodity") || null,
-      validity: formData.get("validity") || null,
-      chargeable_weight: parseFloat(formData.get("chargeable_weight") as string) || null,
-      cif_value_usd: parseFloat(formData.get("cif_value_usd") as string) || null,
-      remarks: formData.get("remarks") || null,
-      cargo_description: formData.get("cargo_details"),
-      rate_usd: parseFloat(formData.get("rate") as string) || 0,
-    };
-    updateLeadMutation.mutate(data);
+  const onSubmitEdit = (values: LeadFormValues) => {
+    updateLeadMutation.mutate(values);
   };
 
   return (
     <div className="space-y-6">
       <PageHeader title="Leads & Inquiries">
-        <Button onClick={() => setIsNewModalOpen(true)} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2">
-          <Plus className="h-4 w-4" /> New Inquiry
+        <Button 
+          onClick={() => {
+            setAdditionalEmails([]);
+            setAdditionalPhones([]);
+            setIsNewModalOpen(true);
+          }} 
+          className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-11 px-6 shadow-lg shadow-accent/20"
+        >
+          <Plus className="h-5 w-5" /> New Inquiry
         </Button>
       </PageHeader>
 
@@ -170,11 +258,12 @@ export default function Leads() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              className={cn(
+                "px-4 py-1.5 text-xs font-semibold rounded-md transition-all",
                 activeTab === tab 
                   ? "bg-card text-foreground shadow-sm" 
                   : "text-muted-foreground hover:text-foreground"
-              }`}
+              )}
             >
               {tab}
             </button>
@@ -184,7 +273,7 @@ export default function Leads() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
             placeholder="Search leads..." 
-            className="pl-9"
+            className="pl-9 h-11"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -213,12 +302,12 @@ export default function Leads() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={7}><div className="h-10 bg-muted/50 animate-pulse rounded" /></TableCell>
+                  <TableCell colSpan={12}><div className="h-12 bg-muted/50 animate-pulse rounded" /></TableCell>
                 </TableRow>
               ))
             ) : filtered?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
                   No leads found.
                 </TableCell>
               </TableRow>
@@ -249,7 +338,7 @@ export default function Leads() {
                   <span className="text-[10px] font-bold text-accent uppercase tracking-tighter">{lead.commodity || "N/A"}</span>
                 </TableCell>
                 <TableCell>
-                  <span className="text-xs font-medium">{lead.chargeable_weight ? `${lead.chargeable_weight} kg` : "N/A"}</span>
+                  <span className="text-xs font-medium">{lead.chargeable_weight || "N/A"}</span>
                 </TableCell>
                 <TableCell>
                   <span className="text-xs font-medium">{lead.cif_value_usd ? `$${lead.cif_value_usd.toLocaleString()}` : "N/A"}</span>
@@ -257,10 +346,24 @@ export default function Leads() {
                 <TableCell>
                   <span className="text-[10px] font-semibold text-muted-foreground">{lead.validity || "15 Days"}</span>
                 </TableCell>
-                <TableCell className="max-w-[200px]">
-                  <span className="text-xs text-muted-foreground truncate block">{lead.cargo_description}</span>
+                <TableCell className="max-w-[240px]">
+                  {lead.cargo_items?.length > 0 ? (
+                    <div className="flex flex-col gap-1">
+                      {lead.cargo_items.slice(0, 2).map((item: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-1.5 overflow-hidden">
+                          <span className="text-[10px] font-bold text-accent bg-accent/5 px-1 rounded shrink-0">{item.unit}</span>
+                          <span className="text-xs text-muted-foreground truncate">{item.description}</span>
+                        </div>
+                      ))}
+                      {lead.cargo_items.length > 2 && (
+                        <span className="text-[9px] text-muted-foreground/60 italic">+{lead.cargo_items.length - 2} more items</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground truncate block">{lead.cargo_description}</span>
+                  )}
                   {lead.remarks && (
-                    <span className="text-[9px] text-accent/70 block truncate italic">Note: {lead.remarks}</span>
+                    <span className="text-[9px] text-accent/70 block truncate italic mt-1">Note: {lead.remarks}</span>
                   )}
                 </TableCell>
                 <TableCell className="text-xs">{format(new Date(lead.created_at), "MMM d, yyyy")}</TableCell>
@@ -268,7 +371,7 @@ export default function Leads() {
                 <TableCell><StatusBadge status={lead.status} /></TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                    <Button size="icon" variant="outline" className="h-8 w-8 hover:text-accent" onClick={() => setLogInteractionLeadId(lead.id)}>
+                    <Button size="icon" variant="outline" className="h-8 w-8 hover:text-accent shadow-sm" onClick={() => setLogInteractionLeadId(lead.id)}>
                       <Phone className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -279,102 +382,33 @@ export default function Leads() {
         </Table>
       </div>
 
-      {/* New Lead Sheet */}
-      <Sheet open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle {...{children: "New Logistics Inquiry"} as any} />
-            <SheetDescription {...{children: "Capture details for a new freight inquiry from a potential customer."} as any} />
-          </SheetHeader>
-          <form onSubmit={handleCreateLead} className="space-y-4 py-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="customer_name">Customer Name</Label>
-                <Input id="customer_name" name="customer_name" placeholder="ABC Logistics Ltd" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contact_person">Contact Person</Label>
-                <Input id="contact_person" name="contact_person" placeholder="John Doe" />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-6 p-4 bg-muted/30 rounded-lg border border-dashed">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Primary Email</Label>
-                  <Input id="email" name="email" type="email" placeholder="contact@example.com" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Additional Emails</Label>
-                  <StringArrayInput values={newAdditionalEmails} onChange={setNewAdditionalEmails} placeholder="Add CC email..." />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Primary Phone</Label>
-                  <Input id="phone" name="phone" placeholder="+255..." />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Additional Phones</Label>
-                  <StringArrayInput values={newAdditionalPhones} onChange={setNewAdditionalPhones} placeholder="Add phone..." />
-                </div>
-              </div>
-            </div>
+      <LeadFormSheet 
+        isOpen={isNewModalOpen}
+        onOpenChange={setIsNewModalOpen}
+        title="New Logistics Inquiry"
+        description="Capture details for a new freight inquiry from a potential customer."
+        form={newLeadForm}
+        onSubmit={onSubmitNew}
+        isPending={createLeadMutation.isPending}
+        additionalEmails={additionalEmails}
+        setAdditionalEmails={setAdditionalEmails}
+        additionalPhones={additionalPhones}
+        setAdditionalPhones={setAdditionalPhones}
+      />
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="origin">Origin</Label>
-                <Input id="origin" name="origin" placeholder="e.g. Dubai, UAE" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="destination">Destination</Label>
-                <Input id="destination" name="destination" placeholder="e.g. Arusha, TZ" required />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="commodity">Commodity</Label>
-                <Input id="commodity" name="commodity" placeholder="e.g. Electronics" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="chargeable_weight">Chg. Weight (kg)</Label>
-                <Input id="chargeable_weight" name="chargeable_weight" type="number" step="0.01" placeholder="0.00" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cif_value_usd">CIF Value (USD)</Label>
-                <Input id="cif_value_usd" name="cif_value_usd" type="number" step="0.01" placeholder="0.00" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="rate">Quoted Rate (USD)</Label>
-                <Input id="rate" name="rate" type="number" step="0.01" placeholder="0.00" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="validity">Validity</Label>
-                <Input id="validity" name="validity" placeholder="e.g. 30 Days" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="cargo_details">Cargo Description</Label>
-              <Textarea id="cargo_details" name="cargo_details" placeholder="What is being shipped? Weight, dimensions, hazmat, etc." rows={2} required />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="remarks">Remarks</Label>
-              <Textarea id="remarks" name="remarks" placeholder="Any special instructions or remarks..." rows={2} />
-            </div>
-            <SheetFooter className="pt-4">
-              <Button type="submit" disabled={createLeadMutation.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-                {createLeadMutation.isPending ? "Creating..." : "Create Lead"}
-              </Button>
-            </SheetFooter>
-          </form>
-        </SheetContent>
-      </Sheet>
+      <LeadFormSheet 
+        isOpen={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        title="Update Inquiry Info"
+        description="Modify contact or shipment details for this inquiry."
+        form={editLeadForm}
+        onSubmit={onSubmitEdit}
+        isPending={updateLeadMutation.isPending}
+        additionalEmails={additionalEmails}
+        setAdditionalEmails={setAdditionalEmails}
+        additionalPhones={additionalPhones}
+        setAdditionalPhones={setAdditionalPhones}
+      />
 
       {/* Details Sheet */}
       <Sheet open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
@@ -473,20 +507,40 @@ export default function Leads() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Cargo & Remarks</h4>
-                <div className="space-y-2">
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Cargo Details</h4>
+                {selectedLead.cargo_items?.length > 0 ? (
+                  <div className="rounded-md border bg-muted/10 overflow-hidden">
+                    <table className="w-full text-[10px] text-left border-collapse">
+                      <thead className="bg-muted/50 font-bold uppercase text-muted-foreground border-b">
+                        <tr>
+                          <th className="px-2 py-1.5 w-16">Unit</th>
+                          <th className="px-2 py-1.5">Description</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {selectedLead.cargo_items.map((item: any, idx: number) => (
+                          <tr key={idx}>
+                            <td className="px-2 py-1.5 font-bold text-accent">{item.unit}</td>
+                            <td className="px-2 py-1.5 text-muted-foreground">{item.description}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
                   <div className="p-3 bg-muted/50 rounded-md border text-xs">
                     <p className="text-[9px] uppercase font-bold text-muted-foreground mb-1">Description</p>
                     <p className="italic text-muted-foreground">"{selectedLead.cargo_description}"</p>
                   </div>
-                  {selectedLead.remarks && (
-                    <div className="p-3 bg-amber-50/50 rounded-md border border-amber-100 text-xs">
-                      <p className="text-[9px] uppercase font-bold text-amber-700 mb-1">Special Remarks</p>
-                      <p className="text-amber-900">{selectedLead.remarks}</p>
-                    </div>
-                  )}
-                </div>
+                )}
+                
+                {selectedLead.remarks && (
+                  <div className="p-3 bg-amber-50/50 rounded-md border border-amber-100 text-xs">
+                    <p className="text-[9px] uppercase font-bold text-amber-700 mb-1">Special Remarks</p>
+                    <p className="text-amber-900">{selectedLead.remarks}</p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2 border-t pt-4">
@@ -500,10 +554,10 @@ export default function Leads() {
                 </div>
               </div>
 
-              <div className="pt-6 grid grid-cols-2 gap-3">
+              <div className="pt-6 grid grid-cols-2 gap-3 pb-8">
                 <Button 
                   variant="outline"
-                  className="h-11 border-accent text-accent hover:bg-accent/5 font-bold gap-2"
+                  className="h-12 border-accent text-accent hover:bg-accent/5 font-bold gap-2"
                   onClick={() => {
                     setLeadToEdit(selectedLead);
                     setIsEditModalOpen(true);
@@ -512,132 +566,20 @@ export default function Leads() {
                   <Pencil className="h-4 w-4" /> Edit Details
                 </Button>
                 <Button 
-                  className="bg-accent hover:bg-accent/90 text-accent-foreground h-11 font-bold shadow-lg"
+                  className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 font-bold shadow-lg"
                   onClick={() => navigate('/quotations', { state: { leadId: selectedLead.id } })}
                 >
                   Create Quotation
                 </Button>
               </div>
-              {selectedLead.status !== 'declined' && selectedLead.status !== 'converted' && (
-                <div className="pt-2">
-                  <Button 
-                    variant="outline" 
-                    className="w-full text-rose-600 hover:bg-rose-50 hover:text-rose-700 border-rose-200"
-                    onClick={() => setDeclineLead(selectedLead)}
-                  >
-                    <XCircle className="h-4 w-4 mr-2" /> Decline Lead
-                  </Button>
-                </div>
-              )}
             </div>
           )}
         </SheetContent>
       </Sheet>
 
-      {/* Edit Lead Sheet */}
-      <Sheet open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Update Inquiry Info</SheetTitle>
-            <SheetDescription>Modify contact or shipment details for this inquiry.</SheetDescription>
-          </SheetHeader>
-          {leadToEdit && (
-            <form onSubmit={handleUpdateLead} className="space-y-4 py-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit_customer_name">Customer Name</Label>
-                  <Input id="edit_customer_name" name="customer_name" defaultValue={leadToEdit.customer_name_raw} required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_contact_person">Contact Person</Label>
-                  <Input id="edit_contact_person" name="contact_person" defaultValue={leadToEdit.contact_person || ""} />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-6 p-4 bg-muted/30 rounded-lg border border-dashed">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit_email">Primary Email</Label>
-                    <Input id="edit_email" name="email" type="email" defaultValue={leadToEdit.email} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Additional Emails</Label>
-                    <StringArrayInput values={editAdditionalEmails} onChange={setEditAdditionalEmails} placeholder="Add CC email..." />
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit_phone">Primary Phone</Label>
-                    <Input id="edit_phone" name="phone" defaultValue={leadToEdit.phone} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Additional Phones</Label>
-                    <StringArrayInput values={editAdditionalPhones} onChange={setEditAdditionalPhones} placeholder="Add phone..." />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit_origin">Origin</Label>
-                  <Input id="edit_origin" name="origin" defaultValue={leadToEdit.origin} required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_destination">Destination</Label>
-                  <Input id="edit_destination" name="destination" defaultValue={leadToEdit.destination} required />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit_commodity">Commodity</Label>
-                  <Input id="edit_commodity" name="commodity" defaultValue={leadToEdit.commodity || ""} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_chargeable_weight">Chg. Weight (kg)</Label>
-                  <Input id="edit_chargeable_weight" name="chargeable_weight" type="number" step="0.01" defaultValue={leadToEdit.chargeable_weight || ""} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_cif_value_usd">CIF Value (USD)</Label>
-                  <Input id="edit_cif_value_usd" name="cif_value_usd" type="number" step="0.01" defaultValue={leadToEdit.cif_value_usd || ""} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit_rate">Quoted Rate (USD)</Label>
-                  <Input id="edit_rate" name="rate" type="number" step="0.01" defaultValue={leadToEdit.rate_usd} required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_validity">Validity</Label>
-                  <Input id="edit_validity" name="validity" defaultValue={leadToEdit.validity || ""} />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit_cargo_details">Cargo Description</Label>
-                <Textarea id="edit_cargo_details" name="cargo_details" defaultValue={leadToEdit.cargo_description} rows={2} required />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit_remarks">Remarks</Label>
-                <Textarea id="edit_remarks" name="remarks" defaultValue={leadToEdit.remarks || ""} rows={2} />
-              </div>
-              <SheetFooter className="pt-4">
-                <Button type="submit" disabled={updateLeadMutation.isPending} className="w-full bg-[#0a1e3f] hover:bg-[#0a1e3f]/90 text-white">
-                  {updateLeadMutation.isPending ? "Updating..." : "Save Changes"}
-                </Button>
-              </SheetFooter>
-            </form>
-          )}
-        </SheetContent>
-      </Sheet>
-
-      <LogInteractionDrawer
-        open={!!logInteractionLeadId}
-        onOpenChange={(open) => !open && setLogInteractionLeadId(null)}
-        leadId={logInteractionLeadId || undefined}
-        customerId={leads?.find((l: any) => l.id === logInteractionLeadId)?.customer_id}
+      <LogInteractionDrawer 
+        leadId={logInteractionLeadId} 
+        onClose={() => setLogInteractionLeadId(null)} 
       />
       
       {declineLead && (
@@ -646,16 +588,297 @@ export default function Leads() {
           onOpenChange={(open) => !open && setDeclineLead(null)}
           entityType="lead"
           entityId={declineLead.id}
-          customerId={declineLead.customer_id}
+          customerId={declineLead.customer_id || ""}
           routeOrigin={declineLead.origin}
           routeDestination={declineLead.destination}
+          dealValue={declineLead.rate_usd}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ["leads"] });
-            setSelectedLead({ ...declineLead, status: 'declined' });
             setDeclineLead(null);
+            setSelectedLead(null);
           }}
         />
       )}
     </div>
+  );
+}
+
+// Sub-component for the grouped form sheet
+interface LeadFormSheetProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  form: any;
+  onSubmit: (values: any) => void;
+  isPending: boolean;
+  additionalEmails: string[];
+  setAdditionalEmails: (emails: string[]) => void;
+  additionalPhones: string[];
+  setAdditionalPhones: (phones: string[]) => void;
+}
+
+function LeadFormSheet({
+  isOpen,
+  onOpenChange,
+  title,
+  description,
+  form,
+  onSubmit,
+  isPending,
+  additionalEmails,
+  setAdditionalEmails,
+  additionalPhones,
+  setAdditionalPhones,
+}: LeadFormSheetProps) {
+  return (
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetContent className="sm:max-w-2xl overflow-y-auto">
+        <SheetHeader className="border-b pb-4 mb-4">
+          <SheetTitle className="text-2xl font-bold flex items-center gap-2">
+            {title === "New Logistics Inquiry" ? <Plus className="h-6 w-6 text-accent" /> : <Pencil className="h-6 w-6 text-accent" />}
+            {title}
+          </SheetTitle>
+          <SheetDescription className="text-sm">
+            {description}
+          </SheetDescription>
+        </SheetHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 py-4 px-2">
+            
+            {/* Section 1: Contact Details */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-accent font-bold uppercase tracking-widest text-[10px]">
+                <div className="bg-accent/10 p-1.5 rounded">
+                  <Info className="h-4 w-4" />
+                </div>
+                Contact Information
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="customer_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Customer / Company Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="ABC Logistics Ltd" {...field} className="h-10" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="contact_person"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contact Person</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Doe" {...field} className="h-10" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="bg-muted/30 p-4 rounded-xl border border-dashed space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Email</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="contact@example.com" {...field} className="h-10" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Phone (Optional)</FormLabel>
+                        <FormControl>
+                          <PhoneInput {...field} placeholder="Phone number..." />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Additional Emails</Label>
+                    <StringArrayInput values={additionalEmails} onChange={setAdditionalEmails} placeholder="Add CC email..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Additional Phones</Label>
+                    <StringArrayInput values={additionalPhones} onChange={setAdditionalPhones} placeholder="Add phone..." />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Shipment Route & Cargo */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-accent font-bold uppercase tracking-widest text-[10px]">
+                <div className="bg-accent/10 p-1.5 rounded">
+                  <Truck className="h-4 w-4" />
+                </div>
+                Shipment & Cargo Details
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="origin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Place of Origin</FormLabel>
+                      <FormControl>
+                        <LocationSelect {...field} placeholder="Select origin..." />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="destination"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Place of Destination</FormLabel>
+                      <FormControl>
+                        <LocationSelect {...field} placeholder="Select destination..." />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="commodity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Commodity</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Electronics, Garments" {...field} className="h-10" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="space-y-3 pt-2">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 px-1">
+                  Cargo Specification <span className="text-destructive">*</span>
+                </Label>
+                <CargoItemsTable control={form.control} name="cargo_items" />
+              </div>
+            </div>
+
+            {/* Section 3: Logistics & Pricing */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-accent font-bold uppercase tracking-widest text-[10px]">
+                <div className="bg-accent/10 p-1.5 rounded">
+                  <DollarSign className="h-4 w-4" />
+                </div>
+                Pricing & Logistics Params
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <FormField
+                  control={form.control}
+                  name="chargeable_weight"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Weight (e.g., 500kg)</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="e.g. 1.2 Tons" {...field} className="h-10" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cif_value_usd"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>CIF (USD)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0.00" {...field} className="h-10" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="rate_usd"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Rate (USD)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="0.00" {...field} className="h-10 font-bold border-accent/30 text-accent" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="validity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Validity</FormLabel>
+                      <FormControl>
+                        <Input placeholder="15 Days" {...field} className="h-10" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="remarks"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Internal Remarks</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Any special notes or instructions..." {...field} rows={2} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <SheetFooter className="pt-8 pb-12">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-12 px-8">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending} className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 px-10 font-bold shadow-lg shadow-accent/20">
+                {isPending ? "Syncing..." : (title === "New Logistics Inquiry" ? "Create Inquiry" : "Update Inquiry")}
+              </Button>
+            </SheetFooter>
+          </form>
+        </Form>
+      </SheetContent>
+    </Sheet>
   );
 }
