@@ -47,7 +47,8 @@ export default function Quotations() {
         .from("quotations")
         .select(`
           *,
-          customer:customers(company_name, email),
+          customer:customers(company_name, email, additional_emails),
+          lead:leads(additional_emails),
           items:quotation_items(*)
         `)
         .order("created_at", { ascending: false });
@@ -149,6 +150,29 @@ export default function Quotations() {
         
         if (error || !lead) return;
 
+        const initialMetadata = {
+          titleText: "FREIGHT QUOTATION",
+          leftFields: [
+            { label: "Date :", value: new Date().toISOString().split('T')[0] },
+            { label: "Customer :", value: lead.customer_name_raw || "" },
+            { label: "Contact Person :", value: lead.contact_person || "" },
+            { label: "Commodity :", value: lead.commodity || "" },
+            { label: "Destination :", value: lead.destination || "" },
+            { label: "Currency :", value: "USD" },
+            { label: "Validity :", value: lead.validity || "15 Days" },
+            { label: "Chargeable weight :", value: lead.chargeable_weight ? `${lead.chargeable_weight} kg` : "" },
+            { label: "CIF VALUE(USD) :", value: lead.cif_value_usd ? `$${lead.cif_value_usd}` : "" },
+          ],
+          tableHeaders: ["DESCRIPTION", "RATE", "REMARKS"],
+          tableRows: [
+            { desc: lead.cargo_description || "Freight Services", amount: lead.rate_usd?.toString() || "0", remarks: lead.remarks || "" }
+          ],
+          totalAmountText: lead.rate_usd?.toString() || "0",
+          footerNotesLeft: "Please notify us upon acceptance.",
+          footerNotesMiddle: "",
+          footerNotesRight: "Thank you for choosing Ozmae Freight."
+        };
+
         const newQuote = {
           lead_id: lead.id,
           customer_id: lead.customer_id,
@@ -162,6 +186,7 @@ export default function Quotations() {
           total_amount_usd: lead.rate_usd || 0,
           valid_until: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           status: "draft",
+          metadata: initialMetadata,
         };
 
         toast.info(`Automating quotation for ${lead.customer_name_raw}...`);
@@ -175,14 +200,41 @@ export default function Quotations() {
   const handleCreateQuote = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const amount = parseFloat(formData.get("amount") as string) || 0;
+    
+    // Build metadata for the PDF
+    const initialMetadata: QuotationMetadata = {
+      titleText: "FREIGHT QUOTATION",
+      leftFields: [
+        { label: "Date :", value: new Date().toISOString().split('T')[0] },
+        { label: "Customer :", value: customers?.find((c: any) => c.id === selectedCustomerId)?.company_name || "" },
+        { label: "Contact Person :", value: formData.get("contact_person") as string || "" },
+        { label: "Commodity :", value: formData.get("commodity") as string || "" },
+        { label: "Destination :", value: formData.get("destination") as string || "" },
+        { label: "Currency :", value: "USD" },
+        { label: "Validity :", value: formData.get("validity") as string || "15 Days" },
+        { label: "Chargeable weight :", value: formData.get("chargeable_weight") ? `${formData.get("chargeable_weight")} kg` : "" },
+        { label: "CIF VALUE(USD) :", value: formData.get("cif_value_usd") ? `$${formData.get("cif_value_usd")}` : "" },
+      ],
+      tableHeaders: ["DESCRIPTION", "RATE", "REMARKS"],
+      tableRows: [
+        { desc: formData.get("cargo_description") as string || "Freight Services", amount: amount.toString(), remarks: formData.get("remarks") as string || "" }
+      ],
+      totalAmountText: amount.toString(),
+      footerNotesLeft: "Please notify us upon acceptance.",
+      footerNotesMiddle: "",
+      footerNotesRight: "Thank you for choosing Ozmae Freight."
+    };
+
     const data = {
       customer_id: selectedCustomerId || formData.get("customer_id"),
       origin: formData.get("origin"),
       destination: formData.get("destination"),
       cargo_description: formData.get("cargo_description"),
-      total_amount_usd: parseFloat(formData.get("amount") as string),
+      total_amount_usd: amount,
       valid_until: formData.get("valid_until"),
       status: "draft",
+      metadata: initialMetadata,
     };
     createQuoteMutation.mutate(data);
   };
@@ -226,8 +278,18 @@ export default function Quotations() {
         `www.ozmaelogistics.com`
       );
 
+      // CC Extraction
+      const ccList = [
+        ...(quote.customer?.additional_emails || []),
+        ...(quote.lead?.additional_emails || [])
+      ].filter(Boolean);
+      
+      // Deduplicate
+      const uniqueCcList = Array.from(new Set(ccList));
+      const ccQuery = uniqueCcList.length > 0 ? `&cc=${uniqueCcList.join(',')}` : '';
+
       // 3. Open Mail Client
-      window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
+      window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}${ccQuery}`;
       
       updateStatusMutation.mutate({ id: quote.id, status: 'sent' });
       toast.success("Quotation downloaded! Please attach it to the email that just opened.");
@@ -299,14 +361,18 @@ export default function Quotations() {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-        <Table>
+      <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+        <Table className="min-w-[1200px]">
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead>Quote #</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Route</TableHead>
-              <TableHead>Cargo</TableHead>
+              <TableHead>Commodity</TableHead>
+              <TableHead>Weight</TableHead>
+              <TableHead>CIF Value</TableHead>
+              <TableHead>Validity</TableHead>
+              <TableHead className="min-w-[150px]">Cargo</TableHead>
               <TableHead>Amount</TableHead>
               <TableHead>Valid Until</TableHead>
               <TableHead>Status</TableHead>
@@ -327,7 +393,32 @@ export default function Quotations() {
                     {quote.origin} <ArrowRight className="h-3 w-3" /> {quote.destination}
                   </div>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground truncate max-w-[150px]">{quote.cargo_description}</TableCell>
+                <TableCell>
+                  <span className="text-[10px] font-bold text-accent uppercase tracking-tighter">
+                    {quote.metadata?.leftFields?.find((f: any) => f.label.includes("Commodity"))?.value || "N/A"}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="text-xs font-medium">
+                    {quote.metadata?.leftFields?.find((f: any) => f.label.toLowerCase().includes("weight"))?.value || "N/A"}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="text-xs font-medium">
+                    {quote.metadata?.leftFields?.find((f: any) => f.label.toLowerCase().includes("cif"))?.value || "N/A"}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
+                    {quote.metadata?.leftFields?.find((f: any) => f.label.includes("Validity"))?.value || "15 Days"}
+                  </span>
+                </TableCell>
+                 <TableCell className="max-w-[200px]">
+                  <span className="text-xs text-muted-foreground truncate block">{quote.cargo_description}</span>
+                  {quote.metadata?.tableRows?.[0]?.remarks && (
+                    <span className="text-[9px] text-accent/70 block truncate italic">Note: {quote.metadata.tableRows[0].remarks}</span>
+                  )}
+                </TableCell>
                 <TableCell className="font-bold">{formatCurrency(quote.total_amount_usd)}</TableCell>
                 <TableCell className="text-xs">{format(new Date(quote.valid_until), "MMM d, yyyy")}</TableCell>
                 <TableCell><StatusBadge status={quote.status} /></TableCell>
@@ -366,13 +457,41 @@ export default function Quotations() {
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="contact_person">Contact Person</Label>
+                <Input id="contact_person" name="contact_person" placeholder="John Doe" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="commodity">Commodity</Label>
+                <Input id="commodity" name="commodity" placeholder="e.g. Electronics" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Origin</Label><Input name="origin" required /></div>
               <div className="space-y-2"><Label>Destination</Label><Input name="destination" required /></div>
             </div>
             <div className="space-y-2"><Label>Cargo Description</Label><Input name="cargo_description" required /></div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="chargeable_weight">Weight (kg)</Label>
+                <Input id="chargeable_weight" name="chargeable_weight" type="number" step="0.01" placeholder="0" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cif_value_usd">CIF (USD)</Label>
+                <Input id="cif_value_usd" name="cif_value_usd" type="number" step="0.01" placeholder="0" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="validity">Validity</Label>
+                <Input id="validity" name="validity" placeholder="15 Days" />
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Total Amount (USD)</Label><Input name="amount" type="number" step="0.01" required /></div>
               <div className="space-y-2"><Label>Valid Until</Label><Input name="valid_until" type="date" required /></div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="remarks">Remarks</Label>
+              <Input id="remarks" name="remarks" placeholder="Notes for the PDF..." />
             </div>
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setIsNewModalOpen(false)}>Cancel</Button>

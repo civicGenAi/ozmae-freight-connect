@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, X, Search, Filter, MoreHorizontal, MessageSquare, Mail, ArrowRight, Phone, XCircle, Pencil } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { LogInteractionDrawer } from "@/components/LogInteractionDrawer";
 import { DeclineReasonModal } from "@/components/DeclineReasonModal";
+import { StringArrayInput } from "@/components/StringArrayInput";
 import { format } from "date-fns";
 
 const tabs = ["All", "New", "Contacted", "Qualified", "Lost", "Converted"];
@@ -30,6 +31,18 @@ export default function Leads() {
   const [leadToEdit, setLeadToEdit] = useState<any>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  const [newAdditionalEmails, setNewAdditionalEmails] = useState<string[]>([]);
+  const [newAdditionalPhones, setNewAdditionalPhones] = useState<string[]>([]);
+  const [editAdditionalEmails, setEditAdditionalEmails] = useState<string[]>([]);
+  const [editAdditionalPhones, setEditAdditionalPhones] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (leadToEdit) {
+      setEditAdditionalEmails(leadToEdit.additional_emails || []);
+      setEditAdditionalPhones(leadToEdit.additional_phones || []);
+    }
+  }, [leadToEdit]);
 
   const { data: leads, isLoading } = useQuery({
     queryKey: ["leads", activeTab],
@@ -60,6 +73,8 @@ export default function Leads() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       setIsNewModalOpen(false);
+      setNewAdditionalEmails([]);
+      setNewAdditionalPhones([]);
       toast.success("New lead created successfully");
     },
     onError: (error: any) => {
@@ -97,10 +112,18 @@ export default function Leads() {
     const data = {
       lead_number: `L-${Date.now().toString().slice(-4)}`,
       customer_name_raw: formData.get("customer_name"),
-      email: formData.get("email"),
-      phone: formData.get("phone"),
+      contact_person: formData.get("contact_person") || null,
+      email: formData.get("email") || null,
+      phone: formData.get("phone") || null,
+      additional_emails: newAdditionalEmails,
+      additional_phones: newAdditionalPhones,
       origin: formData.get("origin"),
       destination: formData.get("destination"),
+      commodity: formData.get("commodity") || null,
+      validity: formData.get("validity") || null,
+      chargeable_weight: parseFloat(formData.get("chargeable_weight") as string) || null,
+      cif_value_usd: parseFloat(formData.get("cif_value_usd") as string) || null,
+      remarks: formData.get("remarks") || null,
       cargo_type: "general", 
       cargo_description: formData.get("cargo_details"),
       rate_usd: parseFloat(formData.get("rate") as string) || 0,
@@ -115,10 +138,18 @@ export default function Leads() {
     const data = {
       id: leadToEdit.id,
       customer_name_raw: formData.get("customer_name"),
-      email: formData.get("email"),
-      phone: formData.get("phone"),
+      contact_person: formData.get("contact_person") || null,
+      email: formData.get("email") || null,
+      phone: formData.get("phone") || null,
+      additional_emails: editAdditionalEmails,
+      additional_phones: editAdditionalPhones,
       origin: formData.get("origin"),
       destination: formData.get("destination"),
+      commodity: formData.get("commodity") || null,
+      validity: formData.get("validity") || null,
+      chargeable_weight: parseFloat(formData.get("chargeable_weight") as string) || null,
+      cif_value_usd: parseFloat(formData.get("cif_value_usd") as string) || null,
+      remarks: formData.get("remarks") || null,
       cargo_description: formData.get("cargo_details"),
       rate_usd: parseFloat(formData.get("rate") as string) || 0,
     };
@@ -160,14 +191,18 @@ export default function Leads() {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-        <Table>
+      <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+        <Table className="min-w-[1200px]">
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-[100px]">Lead ID</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Route</TableHead>
-              <TableHead>Cargo Details</TableHead>
+              <TableHead>Commodity</TableHead>
+              <TableHead>Chg. Weight</TableHead>
+              <TableHead>CIF Value</TableHead>
+              <TableHead>Validity</TableHead>
+              <TableHead className="min-w-[150px]">Cargo Details</TableHead>
               <TableHead>Received</TableHead>
               <TableHead>Assigned</TableHead>
               <TableHead>Status</TableHead>
@@ -197,6 +232,9 @@ export default function Leads() {
                 <TableCell>
                   <div className="flex flex-col">
                     <span className="font-medium text-foreground">{lead.customer_name_raw}</span>
+                    {lead.contact_person && (
+                      <span className="text-[10px] text-accent font-semibold">{lead.contact_person}</span>
+                    )}
                     <span className="text-[10px] text-muted-foreground">{lead.email || "No email"}</span>
                   </div>
                 </TableCell>
@@ -207,7 +245,24 @@ export default function Leads() {
                     <span className="font-medium">{lead.destination}</span>
                   </div>
                 </TableCell>
-                <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">{lead.cargo_description}</TableCell>
+                <TableCell>
+                  <span className="text-[10px] font-bold text-accent uppercase tracking-tighter">{lead.commodity || "N/A"}</span>
+                </TableCell>
+                <TableCell>
+                  <span className="text-xs font-medium">{lead.chargeable_weight ? `${lead.chargeable_weight} kg` : "N/A"}</span>
+                </TableCell>
+                <TableCell>
+                  <span className="text-xs font-medium">{lead.cif_value_usd ? `$${lead.cif_value_usd.toLocaleString()}` : "N/A"}</span>
+                </TableCell>
+                <TableCell>
+                  <span className="text-[10px] font-semibold text-muted-foreground">{lead.validity || "15 Days"}</span>
+                </TableCell>
+                <TableCell className="max-w-[200px]">
+                  <span className="text-xs text-muted-foreground truncate block">{lead.cargo_description}</span>
+                  {lead.remarks && (
+                    <span className="text-[9px] text-accent/70 block truncate italic">Note: {lead.remarks}</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-xs">{format(new Date(lead.created_at), "MMM d, yyyy")}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{lead.assigned_user?.full_name || "Unassigned"}</TableCell>
                 <TableCell><StatusBadge status={lead.status} /></TableCell>
@@ -232,20 +287,40 @@ export default function Leads() {
             <SheetDescription {...{children: "Capture details for a new freight inquiry from a potential customer."} as any} />
           </SheetHeader>
           <form onSubmit={handleCreateLead} className="space-y-4 py-6">
-            <div className="space-y-2">
-              <Label htmlFor="customer_name">Customer Name</Label>
-              <Input id="customer_name" name="customer_name" placeholder="ABC Logistics Ltd" required />
-            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" placeholder="contact@example.com" />
+                <Label htmlFor="customer_name">Customer Name</Label>
+                <Input id="customer_name" name="customer_name" placeholder="ABC Logistics Ltd" required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" name="phone" placeholder="+255..." />
+                <Label htmlFor="contact_person">Contact Person</Label>
+                <Input id="contact_person" name="contact_person" placeholder="John Doe" />
               </div>
             </div>
+            
+            <div className="grid grid-cols-2 gap-6 p-4 bg-muted/30 rounded-lg border border-dashed">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Primary Email</Label>
+                  <Input id="email" name="email" type="email" placeholder="contact@example.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Additional Emails</Label>
+                  <StringArrayInput values={newAdditionalEmails} onChange={setNewAdditionalEmails} placeholder="Add CC email..." />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Primary Phone</Label>
+                  <Input id="phone" name="phone" placeholder="+255..." />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Additional Phones</Label>
+                  <StringArrayInput values={newAdditionalPhones} onChange={setNewAdditionalPhones} placeholder="Add phone..." />
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="origin">Origin</Label>
@@ -256,13 +331,41 @@ export default function Leads() {
                 <Input id="destination" name="destination" placeholder="e.g. Arusha, TZ" required />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="rate">Quoted Rate (USD)</Label>
-              <Input id="rate" name="rate" type="number" step="0.01" placeholder="0.00" required />
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="commodity">Commodity</Label>
+                <Input id="commodity" name="commodity" placeholder="e.g. Electronics" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="chargeable_weight">Chg. Weight (kg)</Label>
+                <Input id="chargeable_weight" name="chargeable_weight" type="number" step="0.01" placeholder="0.00" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cif_value_usd">CIF Value (USD)</Label>
+                <Input id="cif_value_usd" name="cif_value_usd" type="number" step="0.01" placeholder="0.00" />
+              </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="rate">Quoted Rate (USD)</Label>
+                <Input id="rate" name="rate" type="number" step="0.01" placeholder="0.00" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="validity">Validity</Label>
+                <Input id="validity" name="validity" placeholder="e.g. 30 Days" />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="cargo_details">Cargo Description</Label>
-              <Textarea id="cargo_details" name="cargo_details" placeholder="What is being shipped? Weight, dimensions, hazmat, etc." rows={4} required />
+              <Textarea id="cargo_details" name="cargo_details" placeholder="What is being shipped? Weight, dimensions, hazmat, etc." rows={2} required />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="remarks">Remarks</Label>
+              <Textarea id="remarks" name="remarks" placeholder="Any special instructions or remarks..." rows={2} />
             </div>
             <SheetFooter className="pt-4">
               <Button type="submit" disabled={createLeadMutation.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
@@ -284,44 +387,105 @@ export default function Leads() {
             <div className="mt-8 space-y-6">
               <div className="bg-muted/30 p-4 rounded-lg border border-dashed">
                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Customer Information</h4>
-                <div className="space-y-2">
-                  <p className="text-lg font-bold">{selectedLead.customer_name_raw}</p>
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Mail className="h-3.5 w-3.5" /> {selectedLead.email || "No email"}
-                  </p>
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Phone className="h-3.5 w-3.5" /> {selectedLead.phone || "No phone"}
-                  </p>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-lg font-bold leading-tight">{selectedLead.customer_name_raw}</p>
+                    {selectedLead.contact_person && (
+                      <p className="text-xs font-semibold text-accent">{selectedLead.contact_person}</p>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Mail className="h-3.5 w-3.5" /> 
+                      <span>{selectedLead.email || "No primary email"}</span>
+                    </div>
+                    {selectedLead.additional_emails?.length > 0 && (
+                      <div className="pl-5 space-y-1">
+                        {selectedLead.additional_emails.map((email: string, idx: number) => (
+                          <div key={idx} className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
+                            <ArrowRight className="h-2 w-2" /> {email}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5" /> 
+                      <span>{selectedLead.phone || "No primary phone"}</span>
+                    </div>
+                    {selectedLead.additional_phones?.length > 0 && (
+                      <div className="pl-5 space-y-1">
+                        {selectedLead.additional_phones.map((phone: string, idx: number) => (
+                          <div key={idx} className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
+                            <ArrowRight className="h-2 w-2" /> {phone}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Shipment Route</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Shipment Overview</h4>
                 <div className="flex justify-between items-center bg-card rounded p-3 border shadow-sm">
                   <div className="text-center flex-1">
                     <p className="text-[10px] text-muted-foreground uppercase">Origin</p>
-                    <p className="font-bold">{selectedLead.origin}</p>
+                    <p className="font-bold text-sm">{selectedLead.origin}</p>
                   </div>
                   <ArrowRight className="h-4 w-4 text-accent mx-4" />
                   <div className="text-center flex-1">
                     <p className="text-[10px] text-muted-foreground uppercase">Destination</p>
-                    <p className="font-bold">{selectedLead.destination}</p>
+                    <p className="font-bold text-sm">{selectedLead.destination}</p>
+                  </div>
+                </div>
+                
+                {selectedLead.commodity && (
+                  <div className="px-3 py-1.5 bg-accent/5 border border-accent/20 rounded-md flex justify-between items-center">
+                    <span className="text-[10px] font-bold uppercase text-accent">Commodity</span>
+                    <span className="text-xs font-semibold">{selectedLead.commodity}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Logistics & Params</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-2 bg-muted/20 rounded border">
+                    <p className="text-[9px] text-muted-foreground uppercase">Chargeable Weight</p>
+                    <p className="text-xs font-bold">{selectedLead.chargeable_weight ? `${selectedLead.chargeable_weight} kg` : "N/A"}</p>
+                  </div>
+                  <div className="p-2 bg-muted/20 rounded border">
+                    <p className="text-[9px] text-muted-foreground uppercase">CIF Value (USD)</p>
+                    <p className="text-xs font-bold">{selectedLead.cif_value_usd ? `$${selectedLead.cif_value_usd.toLocaleString()}` : "N/A"}</p>
+                  </div>
+                  <div className="p-2 bg-muted/20 rounded border">
+                    <p className="text-[9px] text-muted-foreground uppercase">Validity</p>
+                    <p className="text-xs font-bold">{selectedLead.validity || "N/A"}</p>
+                  </div>
+                  <div className="p-2 bg-accent/5 rounded border border-accent/20">
+                    <p className="text-[9px] text-accent uppercase font-bold">Quoted Rate</p>
+                    <p className="text-xs font-bold text-accent">${selectedLead.rate_usd?.toLocaleString() || '0.00'}</p>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Cargo Details</h4>
-                <p className="text-sm leading-relaxed p-3 bg-muted/50 rounded-md italic">
-                  "{selectedLead.cargo_description}"
-                </p>
-              </div>
-
-              <div className="space-y-4 pt-2">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Pricing</h4>
-                <div className="p-3 bg-card border rounded shadow-sm">
-                  <p className="text-[10px] text-muted-foreground uppercase">Quoted Rate</p>
-                  <p className="font-bold text-accent">${selectedLead.rate_usd?.toLocaleString() || '0.00'}</p>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Cargo & Remarks</h4>
+                <div className="space-y-2">
+                  <div className="p-3 bg-muted/50 rounded-md border text-xs">
+                    <p className="text-[9px] uppercase font-bold text-muted-foreground mb-1">Description</p>
+                    <p className="italic text-muted-foreground">"{selectedLead.cargo_description}"</p>
+                  </div>
+                  {selectedLead.remarks && (
+                    <div className="p-3 bg-amber-50/50 rounded-md border border-amber-100 text-xs">
+                      <p className="text-[9px] uppercase font-bold text-amber-700 mb-1">Special Remarks</p>
+                      <p className="text-amber-900">{selectedLead.remarks}</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -379,20 +543,40 @@ export default function Leads() {
           </SheetHeader>
           {leadToEdit && (
             <form onSubmit={handleUpdateLead} className="space-y-4 py-6">
-              <div className="space-y-2">
-                <Label htmlFor="edit_customer_name">Customer Name</Label>
-                <Input id="edit_customer_name" name="customer_name" defaultValue={leadToEdit.customer_name_raw} required />
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit_email">Email</Label>
-                  <Input id="edit_email" name="email" type="email" defaultValue={leadToEdit.email} />
+                  <Label htmlFor="edit_customer_name">Customer Name</Label>
+                  <Input id="edit_customer_name" name="customer_name" defaultValue={leadToEdit.customer_name_raw} required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit_phone">Phone</Label>
-                  <Input id="edit_phone" name="phone" defaultValue={leadToEdit.phone} />
+                  <Label htmlFor="edit_contact_person">Contact Person</Label>
+                  <Input id="edit_contact_person" name="contact_person" defaultValue={leadToEdit.contact_person || ""} />
                 </div>
               </div>
+              
+              <div className="grid grid-cols-2 gap-6 p-4 bg-muted/30 rounded-lg border border-dashed">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_email">Primary Email</Label>
+                    <Input id="edit_email" name="email" type="email" defaultValue={leadToEdit.email} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Additional Emails</Label>
+                    <StringArrayInput values={editAdditionalEmails} onChange={setEditAdditionalEmails} placeholder="Add CC email..." />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_phone">Primary Phone</Label>
+                    <Input id="edit_phone" name="phone" defaultValue={leadToEdit.phone} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Additional Phones</Label>
+                    <StringArrayInput values={editAdditionalPhones} onChange={setEditAdditionalPhones} placeholder="Add phone..." />
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit_origin">Origin</Label>
@@ -403,13 +587,41 @@ export default function Leads() {
                   <Input id="edit_destination" name="destination" defaultValue={leadToEdit.destination} required />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_rate">Quoted Rate (USD)</Label>
-                <Input id="edit_rate" name="rate" type="number" step="0.01" defaultValue={leadToEdit.rate_usd} required />
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_commodity">Commodity</Label>
+                  <Input id="edit_commodity" name="commodity" defaultValue={leadToEdit.commodity || ""} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_chargeable_weight">Chg. Weight (kg)</Label>
+                  <Input id="edit_chargeable_weight" name="chargeable_weight" type="number" step="0.01" defaultValue={leadToEdit.chargeable_weight || ""} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_cif_value_usd">CIF Value (USD)</Label>
+                  <Input id="edit_cif_value_usd" name="cif_value_usd" type="number" step="0.01" defaultValue={leadToEdit.cif_value_usd || ""} />
+                </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_rate">Quoted Rate (USD)</Label>
+                  <Input id="edit_rate" name="rate" type="number" step="0.01" defaultValue={leadToEdit.rate_usd} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_validity">Validity</Label>
+                  <Input id="edit_validity" name="validity" defaultValue={leadToEdit.validity || ""} />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="edit_cargo_details">Cargo Description</Label>
-                <Textarea id="edit_cargo_details" name="cargo_details" defaultValue={leadToEdit.cargo_description} rows={4} required />
+                <Textarea id="edit_cargo_details" name="cargo_details" defaultValue={leadToEdit.cargo_description} rows={2} required />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit_remarks">Remarks</Label>
+                <Textarea id="edit_remarks" name="remarks" defaultValue={leadToEdit.remarks || ""} rows={2} />
               </div>
               <SheetFooter className="pt-4">
                 <Button type="submit" disabled={updateLeadMutation.isPending} className="w-full bg-[#0a1e3f] hover:bg-[#0a1e3f]/90 text-white">
