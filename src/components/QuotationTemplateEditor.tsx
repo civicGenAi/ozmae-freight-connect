@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Save, Download, Plus, Trash2, Printer, Link2, Unlink, FileText } from "lucide-react";
+import { X, Save, Download, Plus, Trash2, Printer, Link2, Unlink, FileText, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ozmaeLogoImg from "@/assets/ozmae-logo.png";
 // @ts-ignore
@@ -52,12 +52,13 @@ const DEFAULT_METADATA: QuotationMetadata = {
 interface QuotationTemplateEditorProps {
   initialData?: any; // the quotation row
   onSave?: (metadata: QuotationMetadata, totalValue: number) => Promise<void>;
+  onEmail?: (metadata: QuotationMetadata) => void;
   onClose?: () => void;
   isSaving?: boolean;
   renderActions?: (meta: QuotationMetadata) => React.ReactNode;
 }
 
-export function QuotationTemplateEditor({ initialData, onSave, onClose, isSaving, renderActions }: QuotationTemplateEditorProps) {
+export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose, isSaving, renderActions }: QuotationTemplateEditorProps) {
   const [meta, setMeta] = useState<QuotationMetadata>(DEFAULT_METADATA);
   const [printMode, setPrintMode] = useState(false);
   
@@ -135,6 +136,13 @@ export function QuotationTemplateEditor({ initialData, onSave, onClose, isSaving
       // attempt to parse total amount
       const totalNum = parseFloat(meta.totalAmountText.replace(/[^0-9.-]+/g,"")) || 0;
       onSave(meta, totalNum);
+    }
+  };
+
+  const handleDownloadAndEmail = async () => {
+    await handlePrint();
+    if (onEmail) {
+      onEmail(meta);
     }
   };
 
@@ -276,14 +284,21 @@ export function QuotationTemplateEditor({ initialData, onSave, onClose, isSaving
             {onClose && (
               <Button variant="outline" onClick={onClose}><X className="h-4 w-4 mr-2" /> Cancel</Button>
             )}
-            <Button variant="secondary" onClick={handlePrint} className="gap-2 bg-[#0a1e3f] text-white hover:bg-[#0a1e3f]/90">
+            <Button variant="secondary" onClick={handlePrint} className="gap-2 bg-[#0a1e3f] text-white hover:bg-[#0a1e3f]/90 h-10 px-4">
               <FileText className="h-4 w-4" /> Download Professional PDF
             </Button>
             {onSave && (
-              <Button onClick={handleSave} disabled={isSaving} className="bg-[#F26B2A] hover:bg-[#d85e23] gap-2">
+              <Button onClick={handleSave} disabled={isSaving} className="bg-[#F26B2A] hover:bg-[#d85e23] gap-2 h-10 px-4">
                 <Save className="h-4 w-4" /> {isSaving ? "Saving..." : "Save Template"}
               </Button>
             )}
+            <Button 
+              variant="outline" 
+              onClick={handleDownloadAndEmail}
+              className="gap-2 border-[#F26B2A] text-[#F26B2A] hover:bg-[#F26B2A]/5 h-10 px-4"
+            >
+              <Mail className="h-4 w-4" /> Download & Send Email
+            </Button>
             {renderActions && (
               <>
                 <div className="w-px h-6 bg-gray-300 mx-1" />

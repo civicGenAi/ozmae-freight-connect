@@ -27,6 +27,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { LocationSelect } from "@/components/LocationSelect";
+import { LogInteractionDrawer } from "@/components/LogInteractionDrawer";
 import { DeclineReasonModal } from "@/components/DeclineReasonModal";
 import { QuotationTemplateEditor } from "@/components/QuotationTemplateEditor";
 import { CargoItemsTable } from "@/components/CargoItemsTable";
@@ -43,6 +44,7 @@ const quoteSchema = z.object({
   contact_person: z.string().optional(),
   commodity: z.string().optional(),
   origin: z.string().min(2, "Origin is required"),
+  destination: z.string().min(2, "Destination is required"),
   cargo_description: z.string().optional(),
   cargo_items: z.array(z.object({
     description: z.string().min(1, "Description is required"),
@@ -223,6 +225,21 @@ export default function Quotations() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const updateQuoteMutation = useMutation({
+    mutationFn: async ({ id, metadata, totalAmount }: { id: string, metadata: any, totalAmount: number }) => {
+      const { error } = await supabase
+        .from("quotations")
+        .update({ metadata, total_amount_usd: totalAmount })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quotations"] });
+      toast.success("Quotation updated successfully");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const filtered = quotations?.filter((q: any) =>
     q.customer?.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     q.id.toLowerCase().includes(searchQuery.toLowerCase())
@@ -256,7 +273,8 @@ export default function Quotations() {
             className="gap-2 border-accent text-accent hover:bg-accent/5 h-11 px-6 shadow-sm"
             onClick={() => {
               if (quotations && quotations.length > 0) {
-                setSelectedQuote(quotations[0]);
+                setViewQuote(quotations[0]);
+                setIsPreviewOpen(true);
               } else {
                 toast.info("No quotations created yet");
               }
@@ -320,7 +338,7 @@ export default function Quotations() {
             ) : filtered?.length === 0 ? (
               <TableRow><TableCell colSpan={12} className="text-center py-12">No quotations found.</TableCell></TableRow>
             ) : filtered?.map((quote: any) => (
-              <TableRow key={quote.id} className="cursor-pointer hover:bg-muted/30 transition-colors group" onClick={() => setSelectedQuote(quote)}>
+              <TableRow key={quote.id} className="cursor-pointer hover:bg-muted/30 transition-colors group" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}>
                 <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{quote.id.split('-')[0]}</TableCell>
                 <TableCell className="font-medium">{quote.customer?.company_name || "Unknown"}</TableCell>
                 <TableCell>
@@ -359,7 +377,7 @@ export default function Quotations() {
                 <TableCell><StatusBadge status={quote.status} /></TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                    <Button size="icon" variant="ghost" onClick={() => setSelectedQuote(quote)}>
+                    <Button size="icon" variant="ghost" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}>
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteQuoteMutation.mutate(quote.id)}>
@@ -665,6 +683,13 @@ export default function Quotations() {
       {isPreviewOpen && viewQuote && (
         <QuotationTemplateEditor
           initialData={viewQuote}
+          isSaving={updateQuoteMutation.isPending}
+          onSave={async (meta, total) => {
+            await updateQuoteMutation.mutateAsync({ id: viewQuote.id, metadata: meta, totalAmount: total });
+          }}
+          onEmail={() => {
+            setLogInteractionQuoteId(viewQuote.id);
+          }}
           onClose={() => setIsPreviewOpen(false)}
         />
       )}
