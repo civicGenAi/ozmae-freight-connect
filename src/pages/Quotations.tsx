@@ -439,7 +439,7 @@ export default function Quotations() {
       </div>
 
       <Dialog open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Quotation</DialogTitle>
             <DialogDescription>Create a new freight quotation.</DialogDescription>
