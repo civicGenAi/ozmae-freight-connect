@@ -274,12 +274,34 @@ export default function Quotations() {
 
   const deleteQuoteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("quotations").delete().eq("id", id);
+      // 1. Delete child quotation_items first (if table exists)
+      const { error: itemsErr } = await supabase
+        .from("quotation_items")
+        .delete()
+        .eq("quotation_id", id);
+      // Ignore "relation does not exist" errors — table may not exist
+      if (itemsErr && !itemsErr.message.includes("does not exist")) {
+        console.warn("Could not delete quotation_items:", itemsErr.message);
+      }
+
+      // 2. Nullify any lead references so leads are preserved
+      await supabase
+        .from("leads")
+        .update({ quotation_id: null } as any)
+        .eq("quotation_id", id);
+
+      // 3. Delete the quotation itself
+      const { error, count } = await supabase
+        .from("quotations")
+        .delete({ count: "exact" })
+        .eq("id", id);
       if (error) throw error;
+      if (count === 0) throw new Error("Deletion blocked — check database permissions (RLS policy may be missing).");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["quotations"] });
-      toast.success("Quotation deleted");
+      setSelectedQuote(null);
+      toast.success("Quotation deleted successfully");
     },
     onError: (err: any) => toast.error(err.message),
   });
