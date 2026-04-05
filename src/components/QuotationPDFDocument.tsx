@@ -7,29 +7,33 @@ import { QuotationMetadata } from "./QuotationTemplateEditor";
 
 const styles = StyleSheet.create({
   page: {
-    padding: 0,
+    padding: 40,
     backgroundColor: "#FFFFFF",
-    fontFamily: "Helvetica", // standard safe font
-    fontSize: 10,
+    fontFamily: "Helvetica",
+    fontSize: 9.5,
     color: "#333333",
   },
   topBorder: {
-    height: 6,
+    padding: 0,
+    height: 4,
     width: "100%",
     backgroundColor: "#0a1e3f",
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   header: {
-    paddingHorizontal: 40,
-    paddingVertical: 25,
+    paddingVertical: 15,
+    marginBottom: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   logoContainer: {
-    width: "45%",
+    width: "40%",
   },
   logo: {
-    width: 220,
+    width: 200,
     height: "auto",
   },
   headerInfo: {
@@ -37,107 +41,122 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerDivider: {
-    width: 2,
-    height: 70,
-    backgroundColor: "#000",
-    marginRight: 15,
-    borderRadius: 2,
-    opacity: 0.8,
+    width: 1.5,
+    height: 60,
+    backgroundColor: "#0a1e3f",
+    marginRight: 10,
+    opacity: 0.9,
   },
   headerTextContainer: {
     flexDirection: "column",
   },
   companyName: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#404040",
+    fontSize: 16,
+    fontWeight: "heavy",
+    color: "#0a1e3f",
     textTransform: "uppercase",
-    marginBottom: 2,
+    marginBottom: 1,
   },
   contactInfo: {
-    fontSize: 9,
+    fontSize: 8,
     color: "#404040",
-    marginBottom: 1,
+    marginBottom: 0.5,
   },
   titleBar: {
     backgroundColor: "#0a1e3f",
-    paddingVertical: 12,
-    paddingHorizontal: 40,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     textAlign: "center",
     marginBottom: 15,
   },
   titleText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "bold",
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   body: {
-    paddingHorizontal: 40,
     flexDirection: "row",
-    gap: 20,
+    gap: 15,
+    marginBottom: 20,
   },
   leftColumn: {
-    width: "38%",
-    borderWidth: 1,
+    width: "35%",
+    borderWidth: 0.8,
     borderColor: "#000",
+    alignSelf: 'flex-start',
   },
   detailsRow: {
     flexDirection: "row",
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.8,
     borderBottomColor: "#000",
-    minHeight: 24,
+    minHeight: 20,
   },
   detailsLabel: {
     width: "45%",
-    backgroundColor: "#fafafa",
-    padding: 5,
-    borderRightWidth: 1,
+    backgroundColor: "#f5f5f5",
+    padding: 4,
+    borderRightWidth: 0.8,
     borderRightColor: "#000",
     fontWeight: "bold",
-    fontSize: 9,
+    fontSize: 8.5,
+    textTransform: "uppercase",
   },
   detailsValue: {
     width: "55%",
-    padding: 5,
-    fontSize: 9,
+    padding: 4,
+    fontSize: 8.5,
   },
   rightColumn: {
     flex: 1,
   },
   table: {
-    borderWidth: 1,
+    borderWidth: 0.8,
     borderColor: "#000",
   },
   tableHeader: {
     flexDirection: "row",
     borderBottomWidth: 1,
     borderBottomColor: "#000",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#f5f5f5",
   },
   tableHeaderCell: {
-    padding: 6,
+    padding: 5,
     fontWeight: "bold",
-    fontSize: 9,
+    fontSize: 8.5,
     textTransform: "uppercase",
-    borderRightWidth: 1,
+    borderRightWidth: 0.8,
     borderRightColor: "#000",
+    textAlign: 'center',
   },
   tableRow: {
     flexDirection: "row",
-    minHeight: 24,
+    minHeight: 20,
   },
   tableCell: {
-    padding: 6,
-    fontSize: 9,
-    borderRightWidth: 1,
+    paddingVertical: 5,
+    paddingHorizontal: 5,
+    fontSize: 8.5,
+    borderRightWidth: 0.8,
     borderRightColor: "#000",
     flexDirection: "column",
     justifyContent: "center",
   },
+  headerRowBG: {
+    backgroundColor: "#fafafa",
+  },
+  headerText: {
+    fontWeight: "bold",
+    fontSize: 9,
+    color: "#0a1e3f",
+  },
+  itemIndent: {
+    paddingLeft: 14,
+  },
   totalRow: {
     flexDirection: "row",
-    backgroundColor: "#F26B2A",
+    backgroundColor: "#0a1e3f",
     color: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#000",
@@ -145,49 +164,50 @@ const styles = StyleSheet.create({
   totalLabel: {
     padding: 6,
     fontWeight: "bold",
-    fontSize: 10,
+    fontSize: 9,
     textTransform: "uppercase",
-    color: "#FFF",
-    borderRightWidth: 1,
-    borderRightColor: "#000",
+    color: "#FFFFFF",
+    borderRightWidth: 0.8,
+    borderRightColor: "#FFFFFF",
   },
   totalValue: {
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+    padding: 6,
     fontWeight: "bold",
-    fontSize: 10,
+    fontSize: 9.5,
     textAlign: "right",
-    color: "#FFF",
-    borderRightWidth: 1,
-    borderRightColor: "#000",
+    color: "#FFFFFF",
+    borderRightWidth: 0.8,
+    borderRightColor: "#FFFFFF",
   },
   footer: {
-    paddingHorizontal: 40,
     marginTop: "auto",
-    paddingBottom: 40,
+    paddingTop: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: "#999",
     flexDirection: "row",
     justifyContent: "space-between",
   },
   footerColumn: {
-    width: "30%",
+    width: "32%",
   },
   footerText: {
-    fontSize: 9,
-    color: "#666",
-    lineHeight: 1.4,
+    fontSize: 8,
+    color: "#444",
+    lineHeight: 1.3,
+  },
+  footerHeader: {
+    fontSize: 8.5,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    marginBottom: 4,
+    color: "#0a1e3f",
   },
   signatureContainer: {
-    position: "relative",
-    marginTop: 5,
-    marginBottom: 5,
+    paddingVertical: 2,
   },
   signatureImg: {
-    position: "absolute",
-    top: 5,
-    left: 0,
-    width: 120,
-    height: 45,
-    zIndex: 10,
+    width: 100,
+    height: "auto",
   }
 });
 
@@ -200,21 +220,31 @@ interface Props {
 export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => {
   const colCount = meta.tableHeaders.length;
   
+  // Helpers
+  const cleanAmount = (val: any) => {
+    if (!val || val === "-" || val === "—") return 0;
+    // Extract only digits, decimal point, and minus sign
+    const cleaned = String(val).replace(/[^\d.-]/g, '');
+    return parseFloat(cleaned) || 0;
+  };
+
+  const formatAmount = (val: any) => {
+    const num = typeof val === 'number' ? val : cleanAmount(val);
+    if (!num || num === 0) return "—";
+    return `$ ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   const getColWidth = (idx: number) => {
     const total = colCount;
-    if (total === 3) {
-      if (idx === 0) return "50%";
-      if (idx === 1) return "25%";
-      return "25%";
-    }
-    
-    // Description (idx 0) stays fairly wide, Remarks (last) is also decent.
-    // Others share the middle.
-    if (idx === 0) return "35%";
+    // Description (idx 0) takes 45%
+    if (idx === 0) return "48%";
+    // Remarks (last) takes 18%
     if (idx === total - 1) return "20%";
     
-    const remaining = 45; // 100 - 35 - 20
-    return `${(remaining / (total - 2))}%`;
+    // Remaining cols share the middle
+    const remaining = 100 - 48 - 20;
+    const midCount = total - 2;
+    return `${remaining / midCount}%`;
   };
 
   const getRowValue = (row: any, colIdx: number) => {
@@ -224,11 +254,17 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
     return row.extraCols ? (row.extraCols[colIdx - 2] || "") : "";
   };
 
-  const getTotalValue = (colIdx: number) => {
-    if (colIdx === 0) return "TOTAL";
+  const calculateTotal = (colIdx: number) => {
+    if (colIdx === 0) return "TOTAL AMOUNT (USD)";
     if (colIdx === colCount - 1) return "";
-    if (colIdx === 1) return meta.totalAmountText || "0.00";
-    return (meta as any).extraTotalAmounts?.[colIdx - 2] || "";
+    
+    const sum = meta.tableRows.reduce((acc, row) => {
+       if (row.type !== 'item') return acc;
+       const val = getRowValue(row, colIdx);
+       return acc + cleanAmount(val);
+    }, 0);
+
+    return formatAmount(sum);
   };
 
   // Convert raw footer notes to segments if they contain signatures
@@ -291,37 +327,53 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
               </View>
 
               {/* Rows */}
-              {meta.tableRows.map((row, rowIdx) => (
-                <View key={rowIdx} style={styles.tableRow}>
-                  {meta.tableHeaders.map((_, colIdx) => {
-                    const isRemarks = colIdx === colCount - 1;
-                    const hideBottomBorder = isRemarks && row.mergeRemark && rowIdx !== meta.tableRows.length - 1;
-                    
-                    return (
-                      <View key={colIdx} style={[
-                        styles.tableCell, 
-                        { width: getColWidth(colIdx) }, 
-                        isRemarks && { borderRightWidth: 0 },
-                        (rowIdx === meta.tableRows.length - 1 || hideBottomBorder) ? { borderBottomWidth: 0 } : { borderBottomWidth: 1, borderBottomColor: "#eee" }
-                      ]}>
-                        <Text style={[
-                          colIdx > 0 && !isRemarks && { textAlign: 'right' },
-                          isRemarks && { textAlign: 'center' }
+              {meta.tableRows.map((row, rowIdx) => {
+                const isHeaderLine = row.type === 'header';
+                return (
+                  <View key={rowIdx} style={[styles.tableRow, isHeaderLine && styles.headerRowBG]}>
+                    {meta.tableHeaders.map((_, colIdx) => {
+                      const isDesc = colIdx === 0;
+                      const isPricing = colIdx > 0 && colIdx < colCount - 1;
+                      const isRemarks = colIdx === colCount - 1;
+                      const value = getRowValue(row, colIdx);
+
+                      return (
+                        <View key={colIdx} style={[
+                          styles.tableCell, 
+                          { width: getColWidth(colIdx) }, 
+                          isRemarks && { borderRightWidth: 0 },
+                          (rowIdx === meta.tableRows.length - 1) ? { borderBottomWidth: 0 } : { borderBottomWidth: 0.5, borderBottomColor: "#eee" }
                         ]}>
-                          {getRowValue(row, colIdx)}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              ))}
+                          {isPricing ? (
+                             <Text style={[
+                               { textAlign: 'right', fontWeight: 'bold' },
+                               isHeaderLine && { opacity: 0 }
+                             ]}>
+                               {isHeaderLine ? "" : formatAmount(value)}
+                             </Text>
+                          ) : (
+                            <Text style={[
+                              isDesc && isHeaderLine && styles.headerText,
+                              isDesc && !isHeaderLine && styles.itemIndent,
+                              isRemarks && { textAlign: 'center', fontSize: 7.5, color: '#666' },
+                              { width: '100%' }
+                            ]}>
+                              {value}
+                            </Text>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })}
 
               {/* Total Row */}
               <View style={styles.totalRow}>
                 {meta.tableHeaders.map((_, idx) => {
                    const isFirst = idx === 0;
                    const isLast = idx === colCount - 1;
-                   const val = getTotalValue(idx);
+                   const val = calculateTotal(idx);
                    
                    return (
                      <View key={idx} style={[
@@ -338,30 +390,30 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
           </View>
         </View>
 
-        {/* Footer */}
+        {/* Footer Area */}
         <View style={styles.footer}>
-          {/* Footer Left Column with Signature */}
+          {/* Sincerely Zone */}
           <View style={styles.footerColumn}>
-             {/* We manually place signature over the Sincerely block */}
              <Text style={styles.footerText}>Yours Sincerely,</Text>
              
              <View style={styles.signatureContainer}>
                 <Image src={signatureUrl} style={styles.signatureImg} />
-                <View style={{ height: 45 }} /> {/* Placeholder gap */}
              </View>
              
              <Text style={[styles.footerText, { fontWeight: 'bold' }]}>OSMOND MOSHA</Text>
              <Text style={styles.footerText}>DIRECTOR/FOUNDER</Text>
              <Text style={styles.footerText}>Ozmae Freight Solutions</Text>
-             <Text style={styles.footerText}>Tel. +255 787 240 780</Text>
+             <Text style={styles.footerText}>Tel. +255 787 240 780 | +255 754 757 670</Text>
              <Text style={styles.footerText}>Email: info@ozmaelogistics.com</Text>
           </View>
 
           <View style={styles.footerColumn}>
+             <Text style={styles.footerHeader}>NOT INCLUDED</Text>
              <Text style={styles.footerText}>{meta.footerNotesMiddle}</Text>
           </View>
 
           <View style={styles.footerColumn}>
+             <Text style={styles.footerHeader}>Important Documents:</Text>
              <Text style={styles.footerText}>{meta.footerNotesRight}</Text>
           </View>
         </View>

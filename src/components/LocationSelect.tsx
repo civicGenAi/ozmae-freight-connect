@@ -15,6 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useCustomLocations, useSaveCustomLocation } from "@/hooks/useCrm";
 
 // A curated list of major global ports and logistics hubs
 const WORLD_LOCATIONS = [
@@ -87,7 +88,38 @@ export const LocationSelect = React.forwardRef<HTMLButtonElement, LocationSelect
     const [open, setOpen] = React.useState(false);
     const [searchValue, setSearchValue] = React.useState("");
 
-    const selectedLocation = WORLD_LOCATIONS.find((loc) => loc.value === value);
+    const { data: customLocations = [] } = useCustomLocations();
+    const saveLocationMutation = useSaveCustomLocation();
+
+    // Merge static and dynamic locations
+    const allLocations = React.useMemo(() => {
+      const combined = [...WORLD_LOCATIONS];
+      
+      // Only add custom ones that aren't already in static list
+      customLocations.forEach(cust => {
+        if (!combined.find(l => l.value === cust.value)) {
+          combined.push(cust);
+        }
+      });
+      
+      return combined.sort((a, b) => a.label.localeCompare(b.label));
+    }, [customLocations]);
+
+    const selectedLocation = allLocations.find((loc) => loc.value === value);
+
+    const handleSaveCustom = async () => {
+      if (!searchValue.trim()) return;
+      
+      const newLoc = { label: searchValue.trim(), value: searchValue.trim() };
+      
+      // Save to database
+      saveLocationMutation.mutate(newLoc);
+      
+      // Set as current value
+      onChange(newLoc.value);
+      setOpen(false);
+      setSearchValue("");
+    };
 
     return (
       <Popover open={open} onOpenChange={setOpen}>
@@ -124,17 +156,14 @@ export const LocationSelect = React.forwardRef<HTMLButtonElement, LocationSelect
                   variant="outline"
                   size="sm"
                   className="w-full justify-start gap-2 h-8 text-[10px] uppercase font-bold"
-                  onClick={() => {
-                    onChange(searchValue);
-                    setOpen(false);
-                    setSearchValue("");
-                  }}
+                  onClick={handleSaveCustom}
+                  disabled={saveLocationMutation.isPending}
                 >
-                  Use custom location "{searchValue}"
+                  {saveLocationMutation.isPending ? "Saving..." : `Use custom location "${searchValue}"`}
                 </Button>
               </CommandEmpty>
-              <CommandGroup heading="Global Trade Hubs">
-                {WORLD_LOCATIONS.map((location) => (
+              <CommandGroup heading="Locations & Ports">
+                {allLocations.map((location) => (
                   <CommandItem
                     key={location.value}
                     value={location.label}

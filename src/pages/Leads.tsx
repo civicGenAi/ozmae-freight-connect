@@ -46,14 +46,19 @@ const leadSchema = z.object({
   destination: z.string().min(2, "Please select a destination city/port"),
   commodity: z.string().optional(),
   chargeable_weight: z.string().optional(),
-  cif_value_usd: z.string().optional().transform(v => v ? parseFloat(v) : null),
-  rate_usd: z.string().min(1, "Quoted rate is required").transform(v => parseFloat(v)),
+  cif_value_usd: z.string().optional(),
+  rate_usd: z.string().optional().transform(v => v ? parseFloat(v) : null),
   validity: z.string().optional(),
   cargo_description: z.string().optional(),
+  main_unit: z.string().default("1*40'HC"),
+  extra_units: z.array(z.string()).default([]),
   cargo_items: z.array(z.object({
+    type: z.enum(["header", "item"]).default("item"),
     description: z.string().min(1, "Description is required"),
-    unit: z.string().min(1, "Unit is required"),
+    rate_usd: z.string().optional(),
+    extra_rates: z.array(z.string()).optional(),
     remarks: z.string().optional(),
+    indent: z.number().default(0),
   })).min(1, "At least one cargo item is required"),
   remarks: z.string().optional(),
 });
@@ -92,8 +97,9 @@ export default function Leads() {
       rate_usd: "" as any,
       validity: "15 Days",
       cargo_description: "",
-      cargo_items: [{ description: "", unit: "1*40HC", remarks: "" }],
-      remarks: "",
+      main_unit: "1*40'HC",
+      extra_units: [],
+      cargo_items: [{ type: "item", description: "", rate_usd: "", extra_rates: [], remarks: "", indent: 1 }],
     }
   });
 
@@ -117,9 +123,16 @@ export default function Leads() {
         rate_usd: leadToEdit.rate_usd?.toString() || "",
         validity: leadToEdit.validity || "15 Days",
         cargo_description: leadToEdit.cargo_description || "",
-        cargo_items: leadToEdit.cargo_items?.length > 0 
-          ? leadToEdit.cargo_items 
-          : [{ description: leadToEdit.cargo_description || "", unit: "1*40HC", remarks: "" }],
+        main_unit: leadToEdit.cargo_items?.find((it: any) => it.type === 'metadata')?.main_unit || leadToEdit.main_unit || "1*40'HC",
+        extra_units: leadToEdit.cargo_items?.find((it: any) => it.type === 'metadata')?.extra_units || leadToEdit.extra_metadata?.extra_units || [],
+        cargo_items: leadToEdit.cargo_items?.filter((it: any) => it.type !== 'metadata').length > 0 
+          ? leadToEdit.cargo_items
+              .filter((it: any) => it.type !== 'metadata')
+              .map((it: any) => ({
+                ...it,
+                extra_rates: it.extra_rates || []
+              }))
+          : [{ description: leadToEdit.cargo_description || "", type: "item", rate_usd: "", remarks: "", indent: 1, extra_rates: [] }],
         remarks: leadToEdit.remarks || "",
       });
       setAdditionalEmails(leadToEdit.additional_emails || []);
@@ -166,8 +179,11 @@ export default function Leads() {
         cif_value_usd: values.cif_value_usd,
         remarks: values.remarks || null,
         cargo_type: "general", 
-        cargo_description: values.cargo_items[0].description, // Fallback for old column
-        cargo_items: values.cargo_items,
+        cargo_description: values.cargo_items[0]?.description || "", // Fallback for old column
+        cargo_items: [
+          ...values.cargo_items,
+          { type: 'metadata', main_unit: values.main_unit, extra_units: values.extra_units }
+        ],
         rate_usd: values.rate_usd,
         status: "new",
       };
@@ -203,8 +219,11 @@ export default function Leads() {
         chargeable_weight: values.chargeable_weight,
         cif_value_usd: values.cif_value_usd,
         remarks: values.remarks || null,
-        cargo_description: values.cargo_items[0].description, // Fallback for old column
-        cargo_items: values.cargo_items,
+        cargo_description: values.cargo_items[0]?.description || "", // Fallback for old column
+        cargo_items: [
+          ...values.cargo_items,
+          { type: 'metadata', main_unit: values.main_unit, extra_units: values.extra_units }
+        ],
         rate_usd: values.rate_usd,
       };
       const { error } = await supabase
@@ -341,22 +360,22 @@ export default function Leads() {
                   <span className="text-xs font-medium">{lead.chargeable_weight || "N/A"}</span>
                 </TableCell>
                 <TableCell>
-                  <span className="text-xs font-medium">{lead.cif_value_usd ? `$${lead.cif_value_usd.toLocaleString()}` : "N/A"}</span>
+                  <span className="text-xs font-medium">{lead.cif_value_usd || "N/A"}</span>
                 </TableCell>
                 <TableCell>
                   <span className="text-[10px] font-semibold text-muted-foreground">{lead.validity || "15 Days"}</span>
                 </TableCell>
                 <TableCell className="max-w-[240px]">
-                  {lead.cargo_items?.length > 0 ? (
+                  {lead.cargo_items?.filter((it: any) => it.type !== 'metadata').length > 0 ? (
                     <div className="flex flex-col gap-1">
-                      {lead.cargo_items.slice(0, 2).map((item: any, idx: number) => (
+                      {lead.cargo_items.filter((it: any) => it.type !== 'metadata').slice(0, 2).map((item: any, idx: number) => (
                         <div key={idx} className="flex items-center gap-1.5 overflow-hidden">
                           <span className="text-[10px] font-bold text-accent bg-accent/5 px-1 rounded shrink-0">{item.unit}</span>
                           <span className="text-xs text-muted-foreground truncate">{item.description}</span>
                         </div>
                       ))}
-                      {lead.cargo_items.length > 2 && (
-                        <span className="text-[9px] text-muted-foreground/60 italic">+{lead.cargo_items.length - 2} more items</span>
+                      {lead.cargo_items.filter((it: any) => it.type !== 'metadata').length > 2 && (
+                        <span className="text-[9px] text-muted-foreground/60 italic">+{lead.cargo_items.filter((it: any) => it.type !== 'metadata').length - 2} more items</span>
                       )}
                     </div>
                   ) : (
@@ -494,7 +513,7 @@ export default function Leads() {
                   </div>
                   <div className="p-2 bg-muted/20 rounded border">
                     <p className="text-[9px] text-muted-foreground uppercase">CIF Value (USD)</p>
-                    <p className="text-xs font-bold">{selectedLead.cif_value_usd ? `$${selectedLead.cif_value_usd.toLocaleString()}` : "N/A"}</p>
+                    <p className="text-xs font-bold">{selectedLead.cif_value_usd || "N/A"}</p>
                   </div>
                   <div className="p-2 bg-muted/20 rounded border">
                     <p className="text-[9px] text-muted-foreground uppercase">Validity</p>
@@ -502,7 +521,7 @@ export default function Leads() {
                   </div>
                   <div className="p-2 bg-accent/5 rounded border border-accent/20">
                     <p className="text-[9px] text-accent uppercase font-bold">Quoted Rate</p>
-                    <p className="text-xs font-bold text-accent">${selectedLead.rate_usd?.toLocaleString() || '0.00'}</p>
+                    <p className="text-xs font-bold text-accent">{selectedLead.rate_usd ? `$${selectedLead.rate_usd.toLocaleString()}` : "—"}</p>
                   </div>
                 </div>
               </div>
@@ -511,21 +530,57 @@ export default function Leads() {
                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Cargo Details</h4>
                 {selectedLead.cargo_items?.length > 0 ? (
                   <div className="rounded-md border bg-muted/10 overflow-hidden">
-                    <table className="w-full text-[10px] text-left border-collapse">
-                      <thead className="bg-muted/50 font-bold uppercase text-muted-foreground border-b">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead className="bg-muted/50 font-bold uppercase text-[9px] text-muted-foreground border-b">
                         <tr>
-                          <th className="px-2 py-1.5 w-16">Unit</th>
-                          <th className="px-2 py-1.5">Description</th>
+                          <th className="px-3 py-1.5 min-w-[200px]">Description</th>
+                          <th className="px-3 py-1.5 w-32 border-x border-muted/20 text-center">
+                            {selectedLead.cargo_items?.find((it: any) => it.type === 'metadata')?.main_unit || selectedLead.main_unit || "Rate ($)"}
+                          </th>
+                          <th className="px-3 py-1.5">Remarks</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y">
-                        {selectedLead.cargo_items.map((item: any, idx: number) => (
-                          <tr key={idx}>
-                            <td className="px-2 py-1.5 font-bold text-accent">{item.unit}</td>
-                            <td className="px-2 py-1.5 text-muted-foreground">{item.description}</td>
+                      <tbody className="divide-y divide-muted/10">
+                        {selectedLead.cargo_items?.filter((it: any) => it.type !== 'metadata').map((item: any, idx: number) => (
+                          <tr key={idx} className={cn("bg-card/30", item.type === 'header' && "bg-muted/10")}>
+                            <td 
+                              className={cn(
+                                "px-3 py-2 align-top text-[11px] font-medium leading-relaxed",
+                                item.type === "header" && "font-bold text-accent text-[12px]"
+                              )}
+                              style={{ paddingLeft: item.type === "item" ? "24px" : "12px" }}
+                            >
+                              {item.description}
+                            </td>
+                            <td className="px-3 py-2 align-top border-x border-muted/20">
+                              {item.type === "item" ? (
+                                <div className="flex justify-between w-full font-bold text-accent">
+                                  <span className="opacity-40 text-[9px]">$</span>
+                                  <span>{item.rate_usd || "-"}</span>
+                                </div>
+                              ) : (
+                                <div className="text-center text-muted-foreground/30 font-bold">—</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 align-top text-[10px] italic text-muted-foreground">
+                              {item.remarks}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
+                      {/* Sub-total for Lead View */}
+                      <tfoot className="border-t border-muted-foreground/30 bg-muted/20">
+                        <tr className="font-bold">
+                          <td className="px-3 py-1.5 text-[9px] uppercase text-muted-foreground text-right border-r border-muted/20">Sub-Total</td>
+                          <td className="px-3 py-1.5">
+                            <div className="flex justify-between w-full text-accent">
+                              <span className="opacity-40 text-[9px]">$</span>
+                              <span>{selectedLead.rate_usd?.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </td>
+                          <td className="bg-transparent"></td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 ) : (
@@ -567,7 +622,7 @@ export default function Leads() {
                 </Button>
                 <Button 
                   className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 font-bold shadow-lg"
-                  onClick={() => navigate('/quotations', { state: { leadId: selectedLead.id } })}
+                  onClick={() => navigate('/quotations', { state: { leadId: selectedLead.id, directPreview: true } })}
                 >
                   Create Quotation
                 </Button>
@@ -578,8 +633,9 @@ export default function Leads() {
       </Sheet>
 
       <LogInteractionDrawer 
-        leadId={logInteractionLeadId} 
-        onClose={() => setLogInteractionLeadId(null)} 
+        open={!!logInteractionLeadId} 
+        onOpenChange={(open) => !open && setLogInteractionLeadId(null)}
+        leadId={logInteractionLeadId || undefined} 
       />
       
       {declineLead && (
@@ -819,7 +875,7 @@ function LeadFormSheet({
                     <FormItem>
                       <FormLabel>CIF (USD)</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} className="h-10" />
+                        <Input type="text" placeholder="e.g. $10,000" {...field} className="h-10" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

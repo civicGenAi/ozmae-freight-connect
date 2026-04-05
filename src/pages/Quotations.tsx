@@ -33,6 +33,9 @@ import { QuotationTemplateEditor } from "@/components/QuotationTemplateEditor";
 import { CargoItemsTable } from "@/components/CargoItemsTable";
 import { pdf } from "@react-pdf/renderer";
 import { QuotationPDFDocument } from "@/components/QuotationPDFDocument";
+import ozmaeLogoImg from "@/assets/ozmae-logo.png";
+// @ts-ignore
+import signatureImg from "@/assets/signature.png";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -46,15 +49,20 @@ const quoteSchema = z.object({
   origin: z.string().min(2, "Origin is required"),
   destination: z.string().min(2, "Destination is required"),
   cargo_description: z.string().optional(),
+  main_unit: z.string().default("1*40'HC"),
+  extra_units: z.array(z.string()).default([]),
   cargo_items: z.array(z.object({
+    type: z.enum(["header", "item"]).default("item"),
     description: z.string().min(1, "Description is required"),
-    unit: z.string().min(1, "Unit is required"),
+    rate_usd: z.string().optional(),
+    extra_rates: z.array(z.string()).optional(),
     remarks: z.string().optional(),
+    indent: z.number().default(0),
   })).min(1, "At least one cargo item is required"),
   chargeable_weight: z.string().optional(),
-  cif_value_usd: z.string().optional().transform(v => v ? parseFloat(v) : null),
+  cif_value_usd: z.string().optional(),
   validity: z.string().optional(),
-  amount: z.string().min(1, "Quote amount is required").transform(v => parseFloat(v)),
+  amount: z.string().optional().transform(v => v ? parseFloat(v) : null),
   valid_until: z.string().min(1, "Valid until date is required"),
   remarks: z.string().optional(),
 });
@@ -83,7 +91,9 @@ export default function Quotations() {
       origin: "",
       destination: "",
       cargo_description: "",
-      cargo_items: [{ description: "", unit: "1*40HC", remarks: "" }],
+      main_unit: "1*40'HC",
+      extra_units: [],
+      cargo_items: [{ type: "item", description: "", rate_usd: "", extra_rates: [], remarks: "", indent: 1 }],
       validity: "15 Days",
       amount: "" as any,
       valid_until: "",
@@ -112,15 +122,33 @@ export default function Quotations() {
           origin: lead.origin || "",
           destination: lead.destination || "",
           chargeable_weight: lead.chargeable_weight || "",
-          validity: lead.validity || "15 Days",
-          cargo_items: lead.cargo_items?.length > 0 
-            ? lead.cargo_items 
-            : [{ description: lead.cargo_description || "", unit: "1*40HC", remarks: "" }],
+          main_unit: lead.cargo_items?.find((it: any) => it.type === 'metadata')?.main_unit || lead.main_unit || "1*40'HC",
+          extra_units: lead.cargo_items?.find((it: any) => it.type === 'metadata')?.extra_units || lead.extra_metadata?.extra_units || [],
+          cargo_items: lead.cargo_items?.filter((it: any) => it.type !== 'metadata').length > 0
+            ? lead.cargo_items
+                .filter((it: any) => it.type !== 'metadata')
+                .map((it: any) => ({ ...it, extra_rates: it.extra_rates || [] }))
+            : [{ description: lead.cargo_description || "", type: "item", rate_usd: "", remarks: "", extra_rates: [], indent: 1 }],
           remarks: lead.remarks || "",
           amount: lead.rate_usd?.toString() || "" as any,
           valid_until: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         });
-        setIsNewModalOpen(true);
+
+        if (location.state.directPreview) {
+          // Immediately trigger quote creation for a seamless experience
+          // Bypass formal validation if it's a direct preview from a lead
+          setTimeout(() => {
+            const values = form.getValues();
+            // Ensure we have a valid customer name if customer_id is missing
+            createQuoteMutation.mutate({
+               ...values,
+               customer_name_fallback: lead.customer_name_raw
+            } as any);
+          }, 100);
+        } else {
+          setIsNewModalOpen(true);
+        }
+
         // Clear state so it doesn't re-open on refresh
         navigate(location.pathname, { replace: true, state: {} });
       }
@@ -164,40 +192,52 @@ export default function Quotations() {
 
   const createQuoteMutation = useMutation({
     mutationFn: async (values: QuoteFormValues) => {
+      // Ensure numeric fields are correctly handled (default to 0 if empty to satisfy DB constraints)
+      const amountValue = typeof values.amount === 'string' 
+        ? (values.amount === "" ? 0 : parseFloat(values.amount)) 
+        : (values.amount || 0);
+
       const newQuote = {
-        customer_id: values.customer_id,
+        customer_id: values.customer_id || null,
         status: "draft",
-        total_amount_usd: values.amount,
+        total_amount_usd: amountValue,
         valid_until: values.valid_until,
         origin: values.origin,
         destination: values.destination,
         cargo_description: values.cargo_description,
         metadata: {
           titleText: "FREIGHT QUOTATION",
-          tableHeaders: ["DESCRIPTION", "UNIT/QTY", "UNIT RATE", "TOTAL AMOUNT", "REMARKS"],
+          tableHeaders: [
+            "DESCRIPTION", 
+            (values.main_unit || "1*40'HC").toUpperCase(), 
+            ...(values.extra_units || []).map(u => u.toUpperCase()),
+            "REMARKS"
+          ],
           leftFields: [
-            { label: "Customer", value: customers?.find(c => c.id === values.customer_id)?.company_name || "N/A" },
+            { label: "Customer", value: customers?.find(c => c.id === values.customer_id)?.company_name || (values as any).customer_name_fallback || "N/A" },
             { label: "Contact Person", value: values.contact_person || "N/A" },
             { label: "Commodity", value: values.commodity || "General Cargo" },
             { label: "Origin", value: values.origin },
             { label: "Destination", value: values.destination },
             { label: "Chargeable Weight", value: values.chargeable_weight || "N/A" },
-            { label: "CIF Value (USD)", value: values.cif_value_usd ? `$${values.cif_value_usd.toLocaleString()}` : "N/A" },
+            { label: "CIF Value (USD)", value: values.cif_value_usd || "N/A" },
             { label: "Price Validity", value: values.validity || "15 Days" },
           ],
-          tableRows: values.cargo_items.map((item, idx) => ({
+          tableRows: values.cargo_items.map((item) => ({
+            type: item.type,
             desc: item.description,
-            amount: item.unit,
-            extraCols: idx === 0 ? [`$${values.amount.toLocaleString()}`, `$${values.amount.toLocaleString()}`] : ["-", "-"], // Only show total on first row or spread? I'll keep it simple
-            remarks: item.remarks || (idx === 0 ? values.remarks : "")
+            amount: item.rate_usd || "-", 
+            extraCols: item.extra_rates || [],
+            remarks: item.remarks || "",
+            indent: item.indent || 0,
           })),
-          totalAmountText: `$${values.amount.toLocaleString()}`,
-          footerNotesLeft: "1. Rates are subject to space and equipment availability.",
-          footerNotesMiddle: "2. Payment is required before cargo release.",
-          footerNotesRight: "Thank you for choosing Ozmae Logistics."
+          totalAmountText: values.amount ? `$${values.amount.toLocaleString()}` : "—",
+          footerNotesLeft: "Yours Sincerely,",
+          footerNotesMiddle: "• Storage for overstayed shipment\n• Demurrage charges\n• Offloading charges at client premises",
+          footerNotesRight: "• Commercial Invoice\n• Packing List\n• Bill of Lading Copy\n• TPIN Copy"
         },
       };
-      
+
       const { data, error } = await supabase.from("quotations").insert([newQuote]).select().single();
       if (error) throw error;
       return data;
@@ -247,14 +287,20 @@ export default function Quotations() {
 
   const handleDownloadPDF = async (quote: any) => {
     try {
-      const blob = await pdf(<QuotationPDFDocument metadata={quote.metadata} />).toBlob();
+      const blob = await pdf(
+        <QuotationPDFDocument
+          meta={quote.metadata}
+          logoUrl={ozmaeLogoImg}
+          signatureUrl={signatureImg}
+        />
+      ).toBlob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = `Ozmae_Quotation_${quote.id.split('-')[0].toUpperCase()}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success("Downloading PDF...");
+      toast.success("Downloading PDF....");
     } catch (err) {
       toast.error("Failed to generate PDF download");
     }
@@ -268,8 +314,8 @@ export default function Quotations() {
     <div className="space-y-6">
       <PageHeader title="Quotations & Proformas">
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="gap-2 border-accent text-accent hover:bg-accent/5 h-11 px-6 shadow-sm"
             onClick={() => {
               if (quotations && quotations.length > 0) {
@@ -366,13 +412,13 @@ export default function Quotations() {
                     {quote.metadata?.leftFields?.find((f: any) => f.label.includes("Validity"))?.value || "15 Days"}
                   </span>
                 </TableCell>
-                 <TableCell className="max-w-[200px]">
+                <TableCell className="max-w-[200px]">
                   <span className="text-xs text-muted-foreground truncate block">{quote.cargo_description}</span>
                   {quote.metadata?.tableRows?.[0]?.remarks && (
                     <span className="text-[9px] text-accent/70 block truncate italic">Note: {quote.metadata.tableRows[0].remarks}</span>
                   )}
                 </TableCell>
-                <TableCell className="font-bold">{formatCurrency(quote.total_amount_usd)}</TableCell>
+                <TableCell className="font-bold">{quote.total_amount_usd ? formatCurrency(quote.total_amount_usd) : "—"}</TableCell>
                 <TableCell className="text-xs">{format(new Date(quote.valid_until), "MMM d, yyyy")}</TableCell>
                 <TableCell><StatusBadge status={quote.status} /></TableCell>
                 <TableCell className="text-right">
@@ -400,7 +446,7 @@ export default function Quotations() {
             </SheetTitle>
             <SheetDescription>Generate a quick freight quote or proforma without an existing lead.</SheetDescription>
           </SheetHeader>
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
               <FormField
@@ -497,7 +543,7 @@ export default function Quotations() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>CIF (USD)</FormLabel>
-                      <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                      <FormControl><Input type="text" placeholder="e.g. $10,000" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -554,9 +600,9 @@ export default function Quotations() {
 
               <SheetFooter className="pt-8 pb-12">
                 <Button type="button" variant="outline" onClick={() => setIsNewModalOpen(false)} className="h-12 px-8">Cancel</Button>
-                <Button 
-                  type="submit" 
-                  disabled={createQuoteMutation.isPending} 
+                <Button
+                  type="submit"
+                  disabled={createQuoteMutation.isPending}
                   className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 px-10 font-bold shadow-lg shadow-accent/20"
                 >
                   {createQuoteMutation.isPending ? "Generating..." : "Generate Quote"}
@@ -573,7 +619,7 @@ export default function Quotations() {
             <SheetTitle>Quotation Overview</SheetTitle>
             <SheetDescription>Detailed information for Quote #{selectedQuote?.id.split('-')[0].toUpperCase()}</SheetDescription>
           </SheetHeader>
-          
+
           {selectedQuote && (
             <div className="mt-8 space-y-6 pb-20">
               <div className="bg-muted/30 p-4 rounded-lg border border-dashed">
@@ -632,13 +678,13 @@ export default function Quotations() {
                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Financial Summary</h4>
                 <div className="p-3 bg-accent/5 rounded border border-accent/20 flex justify-between items-center">
                   <span className="text-[10px] font-bold uppercase text-accent tracking-wider">Total Amount</span>
-                  <span className="text-xl font-black text-accent">{formatCurrency(selectedQuote.total_amount_usd)}</span>
+                  <span className="text-xl font-black text-accent">{selectedQuote.total_amount_usd ? formatCurrency(selectedQuote.total_amount_usd) : "—"}</span>
                 </div>
               </div>
 
               <div className="pt-6 grid grid-cols-2 gap-3 pb-8">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="h-12 border-accent text-accent hover:bg-accent/5 font-bold gap-2"
                   onClick={() => {
                     setViewQuote(selectedQuote);
@@ -647,21 +693,21 @@ export default function Quotations() {
                 >
                   <Pencil className="h-4 w-4" /> Edit PDF Layout
                 </Button>
-                <Button 
-                   className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 font-bold shadow-lg gap-2"
-                   onClick={() => setLogInteractionQuoteId(selectedQuote.id)}
+                <Button
+                  className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 font-bold shadow-lg gap-2"
+                  onClick={() => setLogInteractionQuoteId(selectedQuote.id)}
                 >
                   <Mail className="h-4 w-4" /> Send via Email
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   className="h-11 border text-muted-foreground font-bold gap-2"
                   onClick={() => handleDownloadPDF(selectedQuote)}
                 >
                   <Download className="h-4 w-4" /> Download PDF
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   className="h-11 border text-red-500 hover:text-red-600 hover:bg-red-50 font-bold gap-2"
                   onClick={() => setDeclineQuote(selectedQuote)}
                 >
@@ -673,7 +719,7 @@ export default function Quotations() {
         </SheetContent>
       </Sheet>
 
-      <LogInteractionDrawer 
+      <LogInteractionDrawer
         open={!!logInteractionQuoteId}
         onOpenChange={(open) => !open && setLogInteractionQuoteId(null)}
         quotationId={logInteractionQuoteId || undefined}
@@ -688,6 +734,12 @@ export default function Quotations() {
             await updateQuoteMutation.mutateAsync({ id: viewQuote.id, metadata: meta, totalAmount: total });
           }}
           onEmail={() => {
+            const customerEmail = viewQuote.customer?.email || "";
+            const quoteRef = viewQuote.id.split("-")[0].toUpperCase();
+            const subject = encodeURIComponent(`Quotation #${quoteRef} - Ozmae Freight Solutions`);
+            const body = encodeURIComponent(`Dear Customer,\n\nPlease find attached the quotation #${quoteRef} for your freight inquiry.\n\nBest regards,\nOzmae Freight Solutions`);
+
+            window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
             setLogInteractionQuoteId(viewQuote.id);
           }}
           onClose={() => setIsPreviewOpen(false)}

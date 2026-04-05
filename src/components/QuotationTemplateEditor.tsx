@@ -13,7 +13,7 @@ export interface QuotationMetadata {
   titleText: string;
   leftFields: { label: string; value: string }[];
   tableHeaders: string[]; // typically ["DESCRIPTION", "30Tons", "REMARKS"]
-  tableRows: { desc: string; amount: string; remarks: string; extraCols?: string[]; mergeRemark?: boolean }[];
+  tableRows: { type: "header" | "item"; desc: string; amount: string; remarks: string; extraCols?: string[]; mergeRemark?: boolean; indent?: number }[];
   totalAmountText: string;
   footerNotesLeft: string;
   footerNotesMiddle: string;
@@ -35,18 +35,18 @@ const DEFAULT_METADATA: QuotationMetadata = {
   ],
   tableHeaders: ["DESCRIPTION", "30Tons", "REMARKS"],
   tableRows: [
-    { desc: "Agency fee", amount: "", remarks: "" },
-    { desc: "Customs Documentation & Verification", amount: "", remarks: "" },
-    { desc: "Port Charges", amount: "", remarks: "" },
-    { desc: "Shipping Line Charges", amount: "", remarks: "" },
-    { desc: "Border Clearance Tanzania/Rwanda", amount: "", remarks: "" },
-    { desc: "Transport from Dar es salaam to Rwanda +permit & escort", amount: "", remarks: "" },
-    { desc: "Duties & Taxes", amount: "", remarks: "" },
+    { type: "item", desc: "Agency fee", amount: "", remarks: "" },
+    { type: "item", desc: "Customs Documentation & Verification", amount: "", remarks: "" },
+    { type: "item", desc: "Port Charges", amount: "", remarks: "" },
+    { type: "item", desc: "Shipping Line Charges", amount: "", remarks: "" },
+    { type: "item", desc: "Border Clearance Tanzania/Rwanda", amount: "", remarks: "" },
+    { type: "item", desc: "Transport from Dar es salaam to Rwanda +permit & escort", amount: "", remarks: "" },
+    { type: "item", desc: "Duties & Taxes", amount: "", remarks: "" },
   ],
   totalAmountText: "",
   footerNotesLeft: "Yours Sincerely,\n\n\n\n\nOSMOND MOSHA\nDIRECTOR/FOUNDER\nOzmae Freight Solutions\nTel. +255 787 240 780 | +255 754 757 670\nEmail: info@ozmaelogistics.com",
-  footerNotesMiddle: "NOT INCLUDED\nStorage for overstayed shipment\nDemurage charges for over satyed shipment\nOffloading Charges at client premises",
-  footerNotesRight: "Important Documents:\nCommercial Invoice\nPacking List\nBill of Landing Copy\nTPIN Copy",
+  footerNotesMiddle: "Storage for overstayed shipment\nDemurage charges for over satyed shipment\nOffloading Charges at client premises",
+  footerNotesRight: "Commercial Invoice\nPacking List\nBill of Landing Copy\nTPIN Copy",
 };
 
 interface QuotationTemplateEditorProps {
@@ -99,7 +99,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
   };
 
   const addRow = () => {
-    setMeta({ ...meta, tableRows: [...meta.tableRows, { desc: "", amount: "", remarks: "" }] });
+    setMeta({ ...meta, tableRows: [...meta.tableRows, { type: "item", desc: "", amount: "", remarks: "" }] });
   };
 
   const removeRow = (index: number) => {
@@ -147,21 +147,32 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
   };
 
   const getColWidthClass = (idx: number, total: number) => {
-    if (total === 3) {
-      if (idx === 0) return "w-[50%] shrink-0";
-      if (idx === 1) return "w-[25%] shrink-0";
-      return "w-[25%] shrink-0";
-    }
-    
-    // Weighted logic to match PDF
-    if (idx === 0) return "w-[35%] shrink-0";
-    if (idx === total - 1) return "w-[20%] shrink-0";
-    
-    const remaining = 45;
-    const perCol = remaining / (total - 2);
-    // Dynamic Tailwind doesn't work well without a JIT safe-list, so we'll use style instead if needed, 
-    // but for 4th and 5th columns, "flex-1" is a good compromise.
-    return "flex-1 shrink-0 overflow-hidden min-w-[60px]";
+    if (idx === 0) return "w-[48%]";
+    if (idx === total - 1) return "w-[20%]";
+    const remaining = 100 - 48 - 20;
+    const midCount = total - 2;
+    return `w-[${remaining / midCount}%]`;
+  };
+
+  const cleanAmount = (val: any) => {
+    if (!val || val === "-" || val === "—") return 0;
+    // Extract only digits, decimal point, and minus sign
+    const cleaned = String(val).replace(/[^\d.-]/g, '');
+    return parseFloat(cleaned) || 0;
+  };
+
+  const formatAmount = (val: any) => {
+    const num = typeof val === 'number' ? val : cleanAmount(val);
+    if (!num || num === 0) return "—";
+    return `$ ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const calculateSum = (colIdx: number, colCount: number) => {
+    return meta.tableRows.reduce((acc, row) => {
+      if (row.type !== 'item') return acc;
+      const val = getRowValue(row, colIdx, colCount);
+      return acc + cleanAmount(val);
+    }, 0);
   };
 
   const getRowValue = (row: any, colIdx: number, totalCols: number) => {
@@ -253,7 +264,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
         type="text" 
         value={value} 
         onChange={(e) => onChange(e.target.value)} 
-        className={cn("bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded px-1 w-full transition-all outline-none", className, isBold && "font-bold")}
+        className={cn("bg-transparent border border-transparent hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded px-1 w-full transition-all outline-none", className, isBold && "font-bold")}
       />
     );
   };
@@ -267,7 +278,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
         value={value} 
         onChange={(e) => onChange(e.target.value)} 
         rows={value.split('\n').length || 1}
-        className={cn("bg-transparent border border-transparent hover:border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded p-1 w-full transition-all outline-none resize-none overflow-hidden", className, isBold && "font-bold")}
+        className={cn("bg-transparent border border-transparent hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded p-1 w-full transition-all outline-none resize-none overflow-hidden", className, isBold && "font-bold")}
       />
     );
   };
@@ -353,10 +364,10 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
           </div>
 
           {/* Body Content - Two Column Layout */}
-          <div className="px-12 py-6 flex gap-8 relative items-start">
+          <div className="px-12 py-6 flex gap-6 relative items-start">
             
             {/* Left Column - Details Matrix */}
-            <div className="w-[38%] border border-black/80 flex flex-col mt-px">
+            <div className="w-[36%] border border-black/80 flex flex-col mt-px">
               {meta.leftFields.map((field, idx) => (
                 <div key={idx} className="flex border-b border-black/80 last:border-b-0 min-h-[32px]">
                   <div className="w-[45%] border-r border-black/80 p-1.5 flex items-center bg-[#fafafa]">
@@ -448,34 +459,23 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
                 ))}
 
                 {/* Total Row */}
-                <div className="flex border-t border-black/80 bg-[#F26B2A] text-white">
+                <div className="flex border-t border-black/80 bg-[#0a1e3f] text-white font-bold">
                   {meta.tableHeaders.map((_, colIdx) => {
                     if (colIdx === 0) {
                       return (
-                        <div key={colIdx} className={cn("border-r border-black/80 p-2 pl-3 flex items-center font-bold", getColWidthClass(colIdx, meta.tableHeaders.length))}>
-                          <span className="text-[13px] uppercase tracking-widest text-white tracking-widest font-black text-shadow-sm">TOTAL</span>
+                        <div key={colIdx} className={cn("border-r border-white/20 p-2 pl-3 flex items-center font-bold", getColWidthClass(colIdx, meta.tableHeaders.length))}>
+                          <span className="text-[13px] uppercase tracking-widest text-white tracking-widest font-black">TOTAL</span>
                         </div>
                       );
                     } else if (colIdx === meta.tableHeaders.length - 1) {
                       return <div key={colIdx} className={cn("p-2", getColWidthClass(colIdx, meta.tableHeaders.length))} />;
                     } else {
-                      const isFirstAmount = colIdx === 1;
-                      const totalVal = isFirstAmount ? meta.totalAmountText : ((meta as any).extraTotalAmounts?.[colIdx - 2] || "");
+                      const sum = calculateSum(colIdx, meta.tableHeaders.length);
+                      const totalVal = formatAmount(sum);
+                      
                       return (
-                        <div key={colIdx} className={cn("border-r border-black/80 p-2 flex items-center justify-end", getColWidthClass(colIdx, meta.tableHeaders.length))}>
-                          <EditableInput 
-                            value={totalVal} 
-                            onChange={(v: string) => {
-                              if (isFirstAmount) {
-                                setMeta({...meta, totalAmountText: v});
-                              } else {
-                                const extraTotals = [...((meta as any).extraTotalAmounts || [])];
-                                extraTotals[colIdx - 2] = v;
-                                setMeta({...meta, extraTotalAmounts: extraTotals} as any);
-                              }
-                            }} 
-                            isBold className="text-[14px] text-right pr-2 text-white placeholder:text-white/70" placeholder="0.00" 
-                          />
+                        <div key={colIdx} className={cn("border-r border-white/20 p-2 flex items-center justify-end text-white font-bold", getColWidthClass(colIdx, meta.tableHeaders.length))}>
+                          <span className="text-[14px] pr-2">{totalVal}</span>
                         </div>
                       );
                     }
@@ -499,18 +499,19 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
           {/* Footer Area */}
           <div className="px-12 pt-16 pb-12 mt-auto grid grid-cols-3 gap-8">
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col items-start pr-4 relative">
-               <EditableTextarea value={meta.footerNotesLeft} onChange={(v: string) => setMeta({ ...meta, footerNotesLeft: v })} className="min-h-[160px] leading-relaxed" />
-               {/* Fixed Signature overlay, scaled to fit transparent padding */}
-               <div className="absolute top-[32px] left-[10px] w-[240px] h-[80px] pointer-events-none mix-blend-multiply opacity-100 flex items-center">
-                 <img src={signatureImg} alt="Signature" className="w-full h-full object-contain object-left scale-[1.5] origin-left" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+               <EditableTextarea value={meta.footerNotesLeft} onChange={(v: string) => setMeta({ ...meta, footerNotesLeft: v })} className="min-h-[160px] leading-relaxed relative z-10" />
+               <div className="absolute top-[28px] left-[0px] w-[220px] h-[70px] pointer-events-none mix-blend-multiply opacity-100 flex items-center">
+                 <img src={signatureImg} alt="Signature" className="w-full h-full object-contain object-left scale-[1.3] origin-left" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                </div>
             </div>
             
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col px-4">
+               <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#0a1e3f] mb-2">NOT INCLUDED</h4>
                <EditableTextarea value={meta.footerNotesMiddle} onChange={(v: string) => setMeta({ ...meta, footerNotesMiddle: v })} isBold={false} className="min-h-[140px] font-medium" />
             </div>
 
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col pl-4">
+               <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#0a1e3f] mb-2">Important Documents:</h4>
                <EditableTextarea value={meta.footerNotesRight} onChange={(v: string) => setMeta({ ...meta, footerNotesRight: v })} isBold={false} className="min-h-[140px] font-medium" />
             </div>
           </div>

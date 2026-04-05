@@ -414,3 +414,48 @@ export function useCompleteTask() {
     }
   });
 }
+
+/**
+ * Hook to fetch all user-defined custom locations for the Origin/Destination fields.
+ */
+export function useCustomLocations() {
+  return useQuery({
+    queryKey: ["custom_locations"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("custom_locations")
+        .select("*")
+        .order("label", { ascending: true });
+
+      if (error) throw error;
+      return data.map(loc => ({ label: loc.label, value: loc.value }));
+    },
+  });
+}
+
+/**
+ * Mutation to save a new custom location to the database so it's remembered for future use.
+ */
+export function useSaveCustomLocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (location: { label: string; value: string }) => {
+      const { data, error } = await supabase
+        .from("custom_locations")
+        .upsert(location, { onConflict: 'label' })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      // Invalidate the locations query so the dropdown updates immediately
+      queryClient.invalidateQueries({ queryKey: ["custom_locations"] });
+    },
+    onError: (err: any) => {
+      console.error("Failed to save custom location", err);
+    }
+  });
+}
