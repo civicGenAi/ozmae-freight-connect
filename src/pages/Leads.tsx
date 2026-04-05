@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Plus, Search, Mail, ArrowRight, Phone, Pencil, Info, Globe, Truck, DollarSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -33,8 +33,11 @@ import { LocationSelect } from "@/components/LocationSelect";
 import { PhoneInput } from "@/components/PhoneInput";
 import { CargoItemsTable } from "@/components/CargoItemsTable";
 import { format } from "date-fns";
+import { CreatableCombobox } from "@/components/CreatableCombobox";
 
 const tabs = ["All", "New", "Contacted", "Qualified", "Lost", "Converted"];
+
+const validityOptions = Array.from({ length: 94 }, (_, i) => `${i + 7} Days`);
 
 // Form Schema
 const leadSchema = z.object({
@@ -93,7 +96,7 @@ export default function Leads() {
       destination: "",
       commodity: "",
       chargeable_weight: "",
-      cif_value_usd: undefined,
+      cif_value_usd: "TBA",
       rate_usd: "" as any,
       validity: "15 Days",
       cargo_description: "",
@@ -160,6 +163,20 @@ export default function Leads() {
       return data;
     },
   });
+
+  const existingCommodities = React.useMemo(() => {
+    if (!leads) return ["General Cargo", "Electronics", "Agricultural", "Vehicles", "Heavy Machinery", "Perishables", "Minerals/Ores"];
+    const unique = new Set<string>();
+    leads.forEach((l: any) => { if (l.commodity) unique.add(l.commodity) });
+    return ["General Cargo", "Electronics", "Agricultural", "Vehicles", "Heavy Machinery", "Perishables", "Minerals/Ores", ...Array.from(unique)];
+  }, [leads]);
+
+  const existingCifValues = React.useMemo(() => {
+    if (!leads) return ["TBA"];
+    const unique = new Set<string>();
+    leads.forEach((l: any) => { if (l.cif_value_usd && l.cif_value_usd !== "TBA") unique.add(l.cif_value_usd) });
+    return ["TBA", ...Array.from(unique)];
+  }, [leads]);
 
   const createLeadMutation = useMutation({
     mutationFn: async (values: LeadFormValues) => {
@@ -413,6 +430,8 @@ export default function Leads() {
         setAdditionalEmails={setAdditionalEmails}
         additionalPhones={additionalPhones}
         setAdditionalPhones={setAdditionalPhones}
+        existingCommodities={existingCommodities}
+        existingCifValues={existingCifValues}
       />
 
       <LeadFormSheet 
@@ -427,6 +446,8 @@ export default function Leads() {
         setAdditionalEmails={setAdditionalEmails}
         additionalPhones={additionalPhones}
         setAdditionalPhones={setAdditionalPhones}
+        existingCommodities={existingCommodities}
+        existingCifValues={existingCifValues}
       />
 
       {/* Details Sheet */}
@@ -672,6 +693,8 @@ interface LeadFormSheetProps {
   setAdditionalEmails: (emails: string[]) => void;
   additionalPhones: string[];
   setAdditionalPhones: (phones: string[]) => void;
+  existingCommodities: string[];
+  existingCifValues: string[];
 }
 
 function LeadFormSheet({
@@ -686,6 +709,8 @@ function LeadFormSheet({
   setAdditionalEmails,
   additionalPhones,
   setAdditionalPhones,
+  existingCommodities,
+  existingCifValues,
 }: LeadFormSheetProps) {
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
@@ -830,7 +855,12 @@ function LeadFormSheet({
                     <FormItem>
                       <FormLabel>Commodity</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. Electronics, Garments" {...field} className="h-10" />
+                        <CreatableCombobox 
+                           options={existingCommodities} 
+                           value={field.value || ""} 
+                           onChange={field.onChange} 
+                           placeholder="Search or add commodity..." 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -875,7 +905,12 @@ function LeadFormSheet({
                     <FormItem>
                       <FormLabel>CIF (USD)</FormLabel>
                       <FormControl>
-                        <Input type="text" placeholder="e.g. $10,000" {...field} className="h-10" />
+                        <CreatableCombobox 
+                           options={existingCifValues} 
+                           value={field.value || "TBA"} 
+                           onChange={field.onChange} 
+                           placeholder="TBA or specific value..." 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -901,7 +936,12 @@ function LeadFormSheet({
                     <FormItem>
                       <FormLabel>Validity</FormLabel>
                       <FormControl>
-                        <Input placeholder="15 Days" {...field} className="h-10" />
+                        <CreatableCombobox 
+                           options={validityOptions} 
+                           value={field.value || "15 Days"} 
+                           onChange={field.onChange} 
+                           placeholder="15 Days" 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -36,11 +36,14 @@ import { QuotationPDFDocument } from "@/components/QuotationPDFDocument";
 import ozmaeLogoImg from "@/assets/ozmae-logo.png";
 // @ts-ignore
 import signatureImg from "@/assets/signature.png";
+import { CreatableCombobox } from "@/components/CreatableCombobox";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const tabs = ["All", "Draft", "Sent", "Accepted", "Declined", "Expired"];
+
+const validityOptions = Array.from({ length: 94 }, (_, i) => `${i + 7} Days`);
 
 const quoteSchema = z.object({
   customer_id: z.string().min(1, "Please select a customer"),
@@ -189,6 +192,22 @@ export default function Quotations() {
       return data;
     },
   });
+
+  const existingCommodities = React.useMemo(() => {
+    const unique = new Set<string>();
+    if (leads) leads.forEach((l: any) => { if (l.commodity) unique.add(l.commodity) });
+    if (quotations) quotations.forEach((q: any) => {
+       const comm = q.metadata?.tableHeaders?.find((h:any) => h.label === "Commodity")?.value;
+       if (comm && typeof comm === "string") unique.add(comm);
+    });
+    return ["General Cargo", "Electronics", "Agricultural", "Vehicles", "Heavy Machinery", "Perishables", "Minerals/Ores", ...Array.from(unique)];
+  }, [leads, quotations]);
+
+  const existingCifValues = React.useMemo(() => {
+    const unique = new Set<string>();
+    if (leads) leads.forEach((l: any) => { if (l.cif_value_usd && l.cif_value_usd !== "TBA") unique.add(l.cif_value_usd) });
+    return ["TBA", ...Array.from(unique)];
+  }, [leads]);
 
   const createQuoteMutation = useMutation({
     mutationFn: async (values: QuoteFormValues) => {
@@ -488,7 +507,14 @@ export default function Quotations() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Commodity</FormLabel>
-                      <FormControl><Input placeholder="e.g. Electronics" {...field} /></FormControl>
+                      <FormControl>
+                        <CreatableCombobox 
+                           options={existingCommodities} 
+                           value={field.value || ""} 
+                           onChange={field.onChange} 
+                           placeholder="Search or add commodity..." 
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -543,7 +569,14 @@ export default function Quotations() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>CIF (USD)</FormLabel>
-                      <FormControl><Input type="text" placeholder="e.g. $10,000" {...field} /></FormControl>
+                      <FormControl>
+                        <CreatableCombobox 
+                           options={existingCifValues} 
+                           value={field.value || "TBA"} 
+                           onChange={field.onChange} 
+                           placeholder="TBA or specific value..." 
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -554,7 +587,14 @@ export default function Quotations() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Validity</FormLabel>
-                      <FormControl><Input placeholder="15 Days" {...field} /></FormControl>
+                      <FormControl>
+                        <CreatableCombobox 
+                           options={validityOptions} 
+                           value={field.value || "15 Days"} 
+                           onChange={field.onChange} 
+                           placeholder="15 Days" 
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
