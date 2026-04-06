@@ -46,6 +46,7 @@ const tabs = ["All", "Draft", "Sent", "Accepted", "Declined", "Expired"];
 const validityOptions = Array.from({ length: 94 }, (_, i) => `${i + 7} Days`);
 
 const quoteSchema = z.object({
+  lead_id: z.string().optional(),
   customer_id: z.string().min(1, "Please select a customer"),
   contact_person: z.string().optional(),
   commodity: z.string().optional(),
@@ -88,6 +89,7 @@ export default function Quotations() {
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteSchema),
     defaultValues: {
+      lead_id: "",
       customer_id: "",
       contact_person: "",
       commodity: "",
@@ -119,6 +121,7 @@ export default function Quotations() {
       const lead = leads.find((l: any) => l.id === location.state.leadId);
       if (lead) {
         form.reset({
+          lead_id: lead.id,
           customer_id: lead.customer_id || "",
           contact_person: lead.contact_person || "",
           commodity: lead.commodity || "",
@@ -134,7 +137,8 @@ export default function Quotations() {
             : [{ description: lead.cargo_description || "", type: "item", rate_usd: "", remarks: "", extra_rates: [], indent: 1 }],
           remarks: lead.remarks || "",
           amount: lead.rate_usd?.toString() || "" as any,
-          valid_until: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          validity: lead.validity || "15 Days",
+          valid_until: new Date(Date.now() + (parseInt(lead.validity || "15") || 15) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         });
 
         if (location.state.directPreview) {
@@ -233,14 +237,20 @@ export default function Quotations() {
             "REMARKS"
           ],
           leftFields: [
-            { label: "Customer", value: customers?.find(c => c.id === values.customer_id)?.company_name || (values as any).customer_name_fallback || "N/A" },
-            { label: "Contact Person", value: values.contact_person || "N/A" },
-            { label: "Commodity", value: values.commodity || "General Cargo" },
-            { label: "Origin", value: values.origin },
-            { label: "Destination", value: values.destination },
-            { label: "Chargeable Weight", value: values.chargeable_weight || "N/A" },
-            { label: "CIF Value (USD)", value: values.cif_value_usd || "N/A" },
-            { label: "Price Validity", value: values.validity || "15 Days" },
+            { 
+              label: "Date :", 
+              value: values.lead_id && leads?.find(l => l.id === values.lead_id)
+                ? format(new Date(leads.find(l => l.id === values.lead_id).created_at), "dd/MM/yyyy")
+                : format(new Date(), "dd/MM/yyyy") 
+            },
+            { label: "Customer :", value: customers?.find(c => c.id === values.customer_id)?.company_name || (values as any).customer_name_fallback || "N/A" },
+            { label: "Contact Person :", value: values.contact_person || "N/A" },
+            { label: "Commodity :", value: values.commodity || "General Cargo" },
+            { label: "Origin :", value: values.origin },
+            { label: "Destination :", value: values.destination },
+            { label: "Chargeable Weight :", value: values.chargeable_weight || "N/A" },
+            { label: "CIF Value (USD) :", value: values.cif_value_usd || "N/A" },
+            { label: "Validity :", value: values.validity || "15 Days" },
           ],
           tableRows: values.cargo_items.map((item) => ({
             type: item.type,
