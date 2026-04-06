@@ -8,12 +8,15 @@ import { toast } from "sonner";
 import {
    User, Shield, Laptop, Building2, KeyRound,
    CheckCircle2, AlertCircle, LogOut, Clock,
-   Globe, Mail, Phone, MapPin, Save, X, Edit2, Copy, ChevronDown
+   Globe, Mail, Phone, MapPin, Save, X, Edit2, Copy, ChevronDown,
+   Lock, ShieldCheck, ShieldAlert
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { FileUpload } from "@/components/FileUpload";
+import { CompanyResources } from "@/components/CompanyResources";
+import { PinGate } from "@/components/PinGate";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
@@ -23,7 +26,7 @@ export default function MyAccount() {
    const queryClient = useQueryClient();
 
    // Profile Query
-   const { data: profile, isLoading: profileLoading } = useQuery({
+   const { data: profile } = useQuery({
       queryKey: ["my_profile"],
       queryFn: async () => {
          const { data: { user } } = await supabase.auth.getUser();
@@ -34,7 +37,7 @@ export default function MyAccount() {
    });
 
    // Company Query
-   const { data: company, isLoading: companyLoading } = useQuery({
+   const { data: company } = useQuery({
       queryKey: ["company_profile"],
       queryFn: async () => {
          const { data } = await supabase.from("company_profile").select("*").maybeSingle();
@@ -84,7 +87,7 @@ export default function MyAccount() {
             </TabsContent>
 
             <TabsContent value="company" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-               <CompanyTab company={company} />
+               <CompanyTab company={company} profile={profile} />
             </TabsContent>
          </Tabs>
       </div>
@@ -129,18 +132,13 @@ function ProfileTab({ profile }: { profile: any }) {
          setUpdating(false);
       }
    };
-   // ... rest of ProfileTab remains similar but with new fields ...
 
    const onAvatarUpload = async (file: File, onProgress: (pct: number) => void) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
       const fileName = `${user.id}-${Date.now()}.${file.name.split('.').pop()}`;
 
-      // Simulate progress if storage API doesn't support it natively in this version
-      const interval = setInterval(() => onProgress(Math.floor(Math.random() * 30)), 100);
-
       const { error } = await supabase.storage.from('avatars').upload(fileName, file);
-      clearInterval(interval);
       onProgress(100);
 
       if (error) throw error;
@@ -212,7 +210,6 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
    const [showDisableDialog, setShowDisableDialog] = useState(false);
    const [showManualKey, setShowManualKey] = useState(false);
 
-   // Live factor state — read from Supabase, not the profiles table
    const [verifiedFactor, setVerifiedFactor] = useState<{ id: string } | null>(undefined as any);
    const [loadingFactors, setLoadingFactors] = useState(true);
 
@@ -264,14 +261,12 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
    const startMfaEnrollment = async () => {
       try {
          setIsEnrolling(true);
-         // Unenroll ALL existing TOTP factors first (fixes mfa_factor_name_conflict)
          const { data: existing } = await supabase.auth.mfa.listFactors();
          for (const f of (existing?.all || [])) {
             if (f.factor_type === 'totp') {
                await supabase.auth.mfa.unenroll({ factorId: f.id });
             }
          }
-         // Fresh enrollment with unique friendly name
          const { data, error } = await supabase.auth.mfa.enroll({
             factorType: 'totp',
             issuer: 'Ozmae Freight',
@@ -458,7 +453,6 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
                   )
                ) : (
                   <div className="rounded-2xl border overflow-hidden animate-in fade-in zoom-in-95">
-                     {/* QR Code Section */}
                      <div className="bg-white p-6 flex flex-col items-center gap-4 border-b">
                         <p className="text-xs font-bold text-slate-700 text-center">Scan with Google Authenticator, Authy, or any TOTP app</p>
                         <div className="p-3 bg-white rounded-xl shadow-md ring-1 ring-slate-200">
@@ -474,7 +468,6 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
                         <p className="text-[10px] text-slate-500 text-center">Point your authenticator app camera at this code</p>
                      </div>
 
-                     {/* Manual Key Fallback */}
                      <div className="bg-slate-50 p-4 space-y-2">
                         <button
                            type="button"
@@ -498,7 +491,6 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
                         )}
                      </div>
 
-                     {/* Verify Section */}
                      <div className="p-4 space-y-3 bg-white">
                         <Label className="text-[10px] font-black uppercase text-center block text-muted-foreground">Enter the 6-digit code from your app to confirm</Label>
                         <Input
@@ -546,14 +538,14 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
                      <div className="flex-1">
                         <p className="text-xs font-bold">
                            {log.event_type === 'login_success' ? 'Sign In Success' :
-                              log.event_type === 'password_change' ? 'Password Updated' :
-                                 log.event_type === 'mfa_enabled' ? '2FA Activated' :
-                                    log.event_type.replace('_', ' ')}
+                            log.event_type === 'password_change' ? 'Password Updated' :
+                            log.event_type === 'mfa_enabled' ? '2FA Activated' :
+                            log.event_type.replace('_', ' ')}
                         </p>
                         <p className="text-[10px] text-slate-400 mt-1 italic">
                            {log.event_type === 'login_success' ? `Authenticated via ${log.details?.method || 'Standard login'}` :
-                              log.event_type === 'password_change' ? 'Changed from Settings' :
-                                 log.details?.details || log.details ? JSON.stringify(log.details) : 'Security update verified'}
+                            log.event_type === 'password_change' ? 'Changed from Settings' :
+                            log.details?.details || log.details ? JSON.stringify(log.details) : 'Security update verified'}
                         </p>
                         <div className="flex justify-between items-center mt-3 text-[9px] text-slate-500 font-black uppercase tracking-tighter">
                            <span>{log.ip_address || "Unknown IP"}</span>
@@ -582,9 +574,6 @@ function SessionsTab() {
       if (error) toast.error(error.message);
       else {
          toast.success("Signed out from all other devices");
-         // Optionally clear our user_sessions table for others
-         const { data: { user } } = await supabase.auth.getUser();
-         if (user) await supabase.from("user_sessions").delete().neq("user_id", user.id); // This is simplified
          refetch();
       }
    };
@@ -615,7 +604,7 @@ function SessionsTab() {
                         <div>
                            <p className="text-sm font-black uppercase tracking-tighter">
                               {sess.user_agent.includes('Chrome') ? 'Chrome Browser' :
-                                 sess.user_agent.includes('Safari') ? 'Safari Browser' : 'Device Session'}
+                               sess.user_agent.includes('Safari') ? 'Safari Browser' : 'Device Session'}
                               {new Date().getTime() - new Date(sess.last_active).getTime() < 60000 && <span className="ml-2 px-1.5 py-0.5 bg-accent text-accent-foreground text-[8px] rounded uppercase">Current</span>}
                            </p>
                            <p className="text-xs text-muted-foreground mt-1">IP: {sess.ip_address} • {sess.user_agent.split(')')[0].split('(')[1]}</p>
@@ -634,8 +623,15 @@ function SessionsTab() {
    );
 }
 
-function CompanyTab({ company }: { company: any }) {
+function CompanyTab({ company, profile }: { company: any, profile: any }) {
    const [editing, setEditing] = useState(false);
+   const [isSettingPin, setIsSettingPin] = useState(false);
+   const [newPin, setNewPin] = useState("");
+   const [pinGateOpen, setPinGateOpen] = useState(false);
+   const [pinGateAction, setPinGateAction] = useState<(() => void) | null>(null);
+   const queryClient = useQueryClient();
+   const isAdmin = profile?.role === "admin";
+
    const [formData, setFormData] = useState({
       company_name: "",
       tin: "",
@@ -715,6 +711,16 @@ function CompanyTab({ company }: { company: any }) {
             )}
          </div>
 
+         {isAdmin && (
+            <div className="p-8 border-b bg-slate-50/50">
+               <CompanyResources 
+                 isAdmin={isAdmin} 
+                 pinEnabled={company?.resource_pin_enabled} 
+                 pinHash={company?.resource_pin_hash} 
+               />
+            </div>
+         )}
+
          <div className="p-8">
             {editing ? (
                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl">
@@ -791,6 +797,139 @@ function CompanyTab({ company }: { company: any }) {
                </div>
             )}
          </div>
+
+         {isAdmin && (
+            <div className="p-8 border-t space-y-8">
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="space-y-1">
+                     <h4 className="text-xs font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
+                        <Lock className="h-4 w-4 text-accent" /> Enhanced Resource Security
+                     </h4>
+                     <p className="text-[10px] text-muted-foreground font-medium">When enabled, a 4-digit security PIN is required to access sensitive resources even for admins.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                     <div className={cn(
+                        "h-10 px-4 rounded-xl flex items-center gap-3 text-[10px] font-black uppercase tracking-widest border-2 transition-all",
+                        company?.resource_pin_enabled ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-slate-50 border-slate-100 text-slate-400"
+                     )}>
+                        {company?.resource_pin_enabled ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
+                        PIN Protection: {company?.resource_pin_enabled ? "ON" : "OFF"}
+                     </div>
+                     <Button 
+                        onClick={async () => {
+                           const toggle = async () => {
+                              const { error } = await supabase.from("company_profile").update({ 
+                                 resource_pin_enabled: !company?.resource_pin_enabled 
+                              }).eq("id", company.id);
+                              if (error) toast.error(error.message);
+                              else {
+                                 toast.success(`PIN protection ${!company?.resource_pin_enabled ? 'enabled' : 'disabled'}`);
+                                 queryClient.invalidateQueries({ queryKey: ["company_profile"] });
+                              }
+                           };
+
+                           if (company?.resource_pin_enabled) {
+                              setPinGateAction(() => toggle);
+                              setPinGateOpen(true);
+                           } else {
+                              if (!company?.resource_pin_hash) {
+                                 // Force setup if enabling for the first time with no pin
+                                 setIsSettingPin(true);
+                                 toast.info("Please set an initial security PIN first.");
+                                 // Find the setup section to scroll? For now toast is enough
+                              } else {
+                                 toggle();
+                              }
+                           }
+                        }}
+                        variant="outline" 
+                        className="h-10 px-6 font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-slate-900 hover:text-white border-2"
+                     >
+                        {company?.resource_pin_enabled ? "Disable" : "Enable"}
+                     </Button>
+                  </div>
+               </div>
+
+               {company?.resource_pin_enabled && (
+                  <div className="bg-white border-2 border-slate-100 p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-2 duration-300">
+                     <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-2xl bg-accent/10 flex items-center justify-center">
+                           <KeyRound className="h-6 w-6 text-accent" />
+                        </div>
+                        <div>
+                           <p className="text-xs font-black uppercase text-slate-900">Security PIN Configuration</p>
+                           <p className="text-[10px] text-slate-500 font-medium">Updating this PIN will invalidate the old one immediately.</p>
+                        </div>
+                     </div>
+
+                     {!isSettingPin ? (
+                        <Button 
+                           variant="secondary" 
+                           onClick={() => {
+                              if (company?.resource_pin_enabled && company?.resource_pin_hash) {
+                                 setPinGateAction(() => () => setIsSettingPin(true));
+                                 setPinGateOpen(true);
+                              } else {
+                                 setIsSettingPin(true);
+                              }
+                           }}
+                           className="h-10 px-8 font-black uppercase text-[10px] tracking-widest rounded-xl"
+                        >
+                           {company?.resource_pin_hash ? "Change PIN" : "Setup Initial PIN"}
+                        </Button>
+                     ) : (
+                        <div className="flex items-center gap-2">
+                           <Input 
+                              type="password" 
+                              placeholder="Enter 4 digits" 
+                              value={newPin}
+                              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0,4))}
+                              maxLength={4}
+                              className="w-32 h-10 text-center tracking-[0.3em] font-black"
+                           />
+                           <Button 
+                              disabled={newPin.length !== 4}
+                              onClick={async () => {
+                                 const encoder = new TextEncoder();
+                                 const data = encoder.encode(newPin);
+                                 const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+                                 const hashArray = Array.from(new Uint8Array(hashBuffer));
+                                 const hash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
+                                 const { error } = await supabase.from("company_profile").update({ 
+                                    resource_pin_hash: hash,
+                                    resource_pin_enabled: true // Auto-enable when first PIN is set
+                                 }).eq("id", company.id);
+
+                                 if (error) toast.error(error.message);
+                                 else {
+                                    toast.success("Security PIN established and protection enabled!");
+                                    setIsSettingPin(false);
+                                    setNewPin("");
+                                    queryClient.invalidateQueries({ queryKey: ["company_profile"] });
+                                 }
+                              }}
+                              className="h-10 bg-slate-900 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest px-6 rounded-xl"
+                           >
+                              Confirm
+                           </Button>
+                           <Button variant="ghost" onClick={() => { setIsSettingPin(false); setNewPin(""); }} className="h-10 px-4 font-black uppercase text-[10px]">Cancel</Button>
+                        </div>
+                     )}
+                  </div>
+               )}
+            </div>
+         )}
+         
+         <PinGate 
+           open={pinGateOpen}
+           onOpenChange={setPinGateOpen}
+           pinHash={company?.resource_pin_hash}
+           onSuccess={() => {
+              if (pinGateAction) pinGateAction();
+              setPinGateAction(null);
+           }}
+         />
       </div>
    );
 }
