@@ -58,6 +58,35 @@ interface QuotationTemplateEditorProps {
   renderActions?: (meta: QuotationMetadata) => React.ReactNode;
 }
 
+// --- Sub-components (Moved outside to prevent re-rendering loss of focus) ---
+const EditableInput = ({ value, onChange, className, isBold = false, printMode = false }: any) => {
+  if (printMode) {
+    return <div className={cn("inline-block break-words whitespace-pre-wrap", className, isBold && "font-bold")}>{value}</div>;
+  }
+  return (
+    <input 
+      type="text" 
+      value={value} 
+      onChange={(e) => onChange(e.target.value)} 
+      className={cn("bg-transparent border border-transparent hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded px-1 w-full transition-all outline-none", className, isBold && "font-bold")}
+    />
+  );
+};
+
+const EditableTextarea = ({ value, onChange, className, isBold = false, printMode = false }: any) => {
+  if (printMode) {
+    return <div className={cn("whitespace-pre-wrap", className, isBold && "font-bold")}>{value}</div>;
+  }
+  return (
+    <textarea 
+      value={value} 
+      onChange={(e) => onChange(e.target.value)} 
+      rows={value.split('\n').length || 1}
+      className={cn("bg-transparent border border-transparent hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded p-1 w-full transition-all outline-none resize-none overflow-hidden", className, isBold && "font-bold")}
+    />
+  );
+};
+
 export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose, isSaving, renderActions }: QuotationTemplateEditorProps) {
   const [meta, setMeta] = useState<QuotationMetadata>(DEFAULT_METADATA);
   const [printMode, setPrintMode] = useState(false);
@@ -254,34 +283,6 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
     } as any);
   };
 
-  // Shared styled components for editable inputs
-  const EditableInput = ({ value, onChange, className, isBold = false }: any) => {
-    if (printMode) {
-      return <div className={cn("inline-block break-words whitespace-pre-wrap", className, isBold && "font-bold")}>{value}</div>;
-    }
-    return (
-      <input 
-        type="text" 
-        value={value} 
-        onChange={(e) => onChange(e.target.value)} 
-        className={cn("bg-transparent border border-transparent hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded px-1 w-full transition-all outline-none", className, isBold && "font-bold")}
-      />
-    );
-  };
-
-  const EditableTextarea = ({ value, onChange, className, isBold = false }: any) => {
-    if (printMode) {
-      return <div className={cn("whitespace-pre-wrap", className, isBold && "font-bold")}>{value}</div>;
-    }
-    return (
-      <textarea 
-        value={value} 
-        onChange={(e) => onChange(e.target.value)} 
-        rows={value.split('\n').length || 1}
-        className={cn("bg-transparent border border-transparent hover:border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded p-1 w-full transition-all outline-none resize-none overflow-hidden", className, isBold && "font-bold")}
-      />
-    );
-  };
 
   return (
     <div className={cn("flex flex-col h-full bg-gray-100", printMode && "bg-white")}>
@@ -371,10 +372,10 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
               {meta.leftFields.map((field, idx) => (
                 <div key={idx} className="flex border-b border-black/80 last:border-b-0 min-h-[32px]">
                   <div className="w-[45%] border-r border-black/80 p-1.5 flex items-center bg-[#fafafa]">
-                    <EditableInput value={field.label} onChange={(v: string) => updateLeftFieldLabel(idx, v)} isBold className="text-[13px]" />
+                    <EditableInput value={field.label} onChange={(v: string) => updateLeftFieldLabel(idx, v)} isBold className="text-[13px]" printMode={printMode} />
                   </div>
                   <div className="w-[55%] p-1.5 flex items-center">
-                     <EditableInput value={field.value} onChange={(v: string) => updateLeftField(idx, v)} className="text-[13px] text-gray-800" />
+                     <EditableInput value={field.value} onChange={(v: string) => updateLeftField(idx, v)} className="text-[13px] text-gray-800" printMode={printMode} />
                   </div>
                 </div>
               ))}
@@ -397,6 +398,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
                           }} 
                           isBold 
                           className={cn("text-[13px] uppercase tracking-wide", colIdx === meta.tableHeaders.length - 1 ? "text-center" : "")} 
+                          printMode={printMode}
                         />
                         {!printMode && meta.tableHeaders.length > 3 && colIdx > 0 && colIdx < meta.tableHeaders.length - 1 && (
                           <button onClick={() => removeColumn(colIdx)} className="absolute -top-1 -right-1 p-0.5 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded bg-white shadow-sm border">
@@ -428,6 +430,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
                             value={getRowValue(row, colIdx, meta.tableHeaders.length)}
                             onChange={(v: string) => updateRowValue(rowIdx, colIdx, meta.tableHeaders.length, v)}
                             className={cn("text-[13px] relative z-10", colIdx > 0 && !isRemarks ? "text-right pr-2" : isRemarks ? "text-center" : "")}
+                            printMode={printMode}
                           />
                           
                           {/* Toggle merge button for remarks column */}
@@ -499,7 +502,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
           {/* Footer Area */}
           <div className="px-12 pt-16 pb-12 mt-auto grid grid-cols-3 gap-8">
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col items-start pr-4 relative">
-               <EditableTextarea value={meta.footerNotesLeft} onChange={(v: string) => setMeta({ ...meta, footerNotesLeft: v })} className="min-h-[160px] leading-relaxed relative z-10" />
+               <EditableTextarea value={meta.footerNotesLeft} onChange={(v: string) => setMeta({ ...meta, footerNotesLeft: v })} className="min-h-[160px] leading-relaxed relative z-10" printMode={printMode} />
                <div className="absolute top-[28px] left-[0px] w-[220px] h-[70px] pointer-events-none mix-blend-multiply opacity-100 flex items-center">
                  <img src={signatureImg} alt="Signature" className="w-full h-full object-contain object-left scale-[1.3] origin-left" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                </div>
@@ -507,12 +510,12 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
             
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col px-4">
                <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#0a1e3f] mb-2">NOT INCLUDED</h4>
-               <EditableTextarea value={meta.footerNotesMiddle} onChange={(v: string) => setMeta({ ...meta, footerNotesMiddle: v })} isBold={false} className="min-h-[140px] font-medium" />
+               <EditableTextarea value={meta.footerNotesMiddle} onChange={(v: string) => setMeta({ ...meta, footerNotesMiddle: v })} isBold={false} className="min-h-[140px] font-medium" printMode={printMode} />
             </div>
 
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col pl-4">
                <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#0a1e3f] mb-2">Important Documents:</h4>
-               <EditableTextarea value={meta.footerNotesRight} onChange={(v: string) => setMeta({ ...meta, footerNotesRight: v })} isBold={false} className="min-h-[140px] font-medium" />
+               <EditableTextarea value={meta.footerNotesRight} onChange={(v: string) => setMeta({ ...meta, footerNotesRight: v })} isBold={false} className="min-h-[140px] font-medium" printMode={printMode} />
             </div>
           </div>
           
