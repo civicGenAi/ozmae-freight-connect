@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Plus, Search, Mail, ArrowRight, Phone, Pencil, Info, Globe, Truck, DollarSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { cleanAmount } from "@/lib/quotationUtils";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,6 @@ const leadSchema = z.object({
   commodity: z.string().optional(),
   chargeable_weight: z.string().optional(),
   cif_value_usd: z.string().optional(),
-  rate_usd: z.string().optional().transform(v => v ? parseFloat(v) : null),
   validity: z.string().optional(),
   cargo_description: z.string().optional(),
   main_unit: z.string().default("1*40'HC"),
@@ -97,7 +97,6 @@ export default function Leads() {
       commodity: "",
       chargeable_weight: "",
       cif_value_usd: "TBA",
-      rate_usd: "" as any,
       validity: "15 Days",
       cargo_description: "",
       main_unit: "1*40'HC",
@@ -123,7 +122,6 @@ export default function Leads() {
         commodity: leadToEdit.commodity || "",
         chargeable_weight: leadToEdit.chargeable_weight || "",
         cif_value_usd: leadToEdit.cif_value_usd?.toString() || "",
-        rate_usd: leadToEdit.rate_usd?.toString() || "",
         validity: leadToEdit.validity || "15 Days",
         cargo_description: leadToEdit.cargo_description || "",
         main_unit: leadToEdit.cargo_items?.find((it: any) => it.type === 'metadata')?.main_unit || leadToEdit.main_unit || "1*40'HC",
@@ -201,7 +199,6 @@ export default function Leads() {
           ...values.cargo_items,
           { type: 'metadata', main_unit: values.main_unit, extra_units: values.extra_units }
         ],
-        rate_usd: values.rate_usd,
         status: "new",
       };
       const { error } = await supabase.from("leads").insert([data]);
@@ -241,7 +238,6 @@ export default function Leads() {
           ...values.cargo_items,
           { type: 'metadata', main_unit: values.main_unit, extra_units: values.extra_units }
         ],
-        rate_usd: values.rate_usd,
       };
       const { error } = await supabase
         .from("leads")
@@ -541,8 +537,13 @@ export default function Leads() {
                     <p className="text-xs font-bold">{selectedLead.validity || "N/A"}</p>
                   </div>
                   <div className="p-2 bg-accent/5 rounded border border-accent/20">
-                    <p className="text-[9px] text-accent uppercase font-bold">Quoted Rate</p>
-                    <p className="text-xs font-bold text-accent">{selectedLead.rate_usd ? `$${selectedLead.rate_usd.toLocaleString()}` : "—"}</p>
+                    <p className="text-[9px] text-accent uppercase font-bold">Calc. Sub-Total</p>
+                    <p className="text-xs font-bold text-accent">
+                      {(() => {
+                        const sum = (selectedLead.cargo_items || []).filter((it: any) => it.type === 'item').reduce((acc: number, it: any) => acc + cleanAmount(it.rate_usd), 0);
+                        return sum > 0 ? `$${sum.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—';
+                      })()}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -589,14 +590,19 @@ export default function Leads() {
                           </tr>
                         ))}
                       </tbody>
-                      {/* Sub-total for Lead View */}
+                      {/* Sub-total — calculated live from cargo_items */}
                       <tfoot className="border-t border-muted-foreground/30 bg-muted/20">
                         <tr className="font-bold">
                           <td className="px-3 py-1.5 text-[9px] uppercase text-muted-foreground text-right border-r border-muted/20">Sub-Total</td>
                           <td className="px-3 py-1.5">
                             <div className="flex justify-between w-full text-accent">
                               <span className="opacity-40 text-[9px]">$</span>
-                              <span>{selectedLead.rate_usd?.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                              <span>
+                                {(() => {
+                                  const sum = (selectedLead.cargo_items || []).filter((it: any) => it.type === 'item').reduce((acc: number, it: any) => acc + cleanAmount(it.rate_usd), 0);
+                                  return sum > 0 ? sum.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '—';
+                                })()}
+                              </span>
                             </div>
                           </td>
                           <td className="bg-transparent"></td>
@@ -668,7 +674,7 @@ export default function Leads() {
           customerId={declineLead.customer_id || ""}
           routeOrigin={declineLead.origin}
           routeDestination={declineLead.destination}
-          dealValue={declineLead.rate_usd}
+          dealValue={(declineLead.cargo_items || []).filter((it: any) => it.type === 'item').reduce((acc: number, it: any) => acc + cleanAmount(it.rate_usd), 0) || undefined}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ["leads"] });
             setDeclineLead(null);
@@ -884,7 +890,7 @@ function LeadFormSheet({
                 Pricing & Logistics Params
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="chargeable_weight"
@@ -916,19 +922,7 @@ function LeadFormSheet({
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="rate_usd"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Rate (USD)</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} className="h-10 font-bold border-accent/30 text-accent" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+
                 <FormField
                   control={form.control}
                   name="validity"

@@ -17,7 +17,9 @@ export interface QuotationMetadata {
   totalAmountText: string;
   footerNotesLeft: string;
   footerNotesMiddle: string;
+  footerNotesMiddleTitle?: string;
   footerNotesRight: string;
+  footerNotesRightTitle?: string;
 }
 
 const DEFAULT_METADATA: QuotationMetadata = {
@@ -46,7 +48,9 @@ const DEFAULT_METADATA: QuotationMetadata = {
   totalAmountText: "",
   footerNotesLeft: "Yours Sincerely,\n\n\n\n\nOSMOND MOSHA\nDIRECTOR/FOUNDER\nOzmae Freight Solutions\nTel. +255 787 240 780 | +255 754 757 670\nEmail: info@ozmaelogistics.com",
   footerNotesMiddle: "Storage for overstayed shipment\nDemurage charges for over satyed shipment\nOffloading Charges at client premises",
+  footerNotesMiddleTitle: "NOT INCLUDED",
   footerNotesRight: "Commercial Invoice\nPacking List\nBill of Landing Copy\nTPIN Copy",
+  footerNotesRightTitle: "Important Documents:",
 };
 
 interface QuotationTemplateEditorProps {
@@ -509,12 +513,28 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
             </div>
             
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col px-4">
-               <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#0a1e3f] mb-2">NOT INCLUDED</h4>
+               <div className="mb-2">
+                 <EditableInput 
+                   value={meta.footerNotesMiddleTitle || "NOT INCLUDED"} 
+                   onChange={(v: string) => setMeta({ ...meta, footerNotesMiddleTitle: v })} 
+                   isBold 
+                   className="text-[11px] uppercase tracking-wider text-[#0a1e3f]" 
+                   printMode={printMode} 
+                 />
+               </div>
                <EditableTextarea value={meta.footerNotesMiddle} onChange={(v: string) => setMeta({ ...meta, footerNotesMiddle: v })} isBold={false} className="min-h-[140px] font-medium" printMode={printMode} />
             </div>
 
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col pl-4">
-               <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#0a1e3f] mb-2">Important Documents:</h4>
+               <div className="mb-2">
+                 <EditableInput 
+                   value={meta.footerNotesRightTitle || "Important Documents:"} 
+                   onChange={(v: string) => setMeta({ ...meta, footerNotesRightTitle: v })} 
+                   isBold 
+                   className="text-[11px] uppercase tracking-wider text-[#0a1e3f]" 
+                   printMode={printMode} 
+                 />
+               </div>
                <EditableTextarea value={meta.footerNotesRight} onChange={(v: string) => setMeta({ ...meta, footerNotesRight: v })} isBold={false} className="min-h-[140px] font-medium" printMode={printMode} />
             </div>
           </div>

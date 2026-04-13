@@ -37,6 +37,8 @@ import ozmaeLogoImg from "@/assets/ozmae-logo.png";
 // @ts-ignore
 import signatureImg from "@/assets/signature.png";
 import { CreatableCombobox } from "@/components/CreatableCombobox";
+import { parseUnitQuantity, cleanAmount } from "@/lib/quotationUtils";
+import { useWatch } from "react-hook-form";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -105,6 +107,24 @@ export default function Quotations() {
       remarks: "",
     }
   });
+
+  const watchedItems = useWatch({ control: form.control, name: "cargo_items" });
+  const watchedMainUnit = useWatch({ control: form.control, name: "main_unit" });
+
+  useEffect(() => {
+    if (watchedItems && watchedMainUnit) {
+      const sum = watchedItems.reduce((acc: number, item: any) => {
+        if (item.type === 'header') return acc;
+        return acc + cleanAmount(item.rate_usd);
+      }, 0);
+      
+      const qty = parseUnitQuantity(watchedMainUnit);
+      const calculatedTotal = sum * qty;
+      
+      // Always sync — even when 0, so erasing a rate clears the total
+      form.setValue("amount", calculatedTotal > 0 ? calculatedTotal.toFixed(2) as any : "" as any, { shouldDirty: false });
+    }
+  }, [watchedItems, watchedMainUnit]); // intentionally exclude form to avoid loop
 
   const { data: leads } = useQuery({
     queryKey: ["leads-all"],
@@ -222,6 +242,7 @@ export default function Quotations() {
 
       const newQuote = {
         customer_id: values.customer_id || null,
+        lead_id: values.lead_id || null,
         status: "draft",
         total_amount_usd: amountValue,
         valid_until: values.valid_until,
@@ -420,13 +441,13 @@ export default function Quotations() {
               <TableHead>Route</TableHead>
               <TableHead>Commodity</TableHead>
               <TableHead>Weight</TableHead>
-              <TableHead>CIF Value</TableHead>
+              <TableHead>CIF Value (USD)</TableHead>
               <TableHead>Validity</TableHead>
               <TableHead className="min-w-[150px]">Cargo</TableHead>
-              <TableHead>Amount</TableHead>
+              <TableHead>Total Amount (USD)</TableHead>
               <TableHead>Valid Until</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -437,7 +458,9 @@ export default function Quotations() {
             ) : filtered?.map((quote: any) => (
               <TableRow key={quote.id} className="cursor-pointer hover:bg-muted/30 transition-colors group" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}>
                 <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{quote.id.split('-')[0]}</TableCell>
-                <TableCell className="font-medium">{quote.customer?.company_name || "Unknown"}</TableCell>
+                <TableCell className="font-medium whitespace-nowrap">
+                  {quote.customer?.company_name || quote.metadata?.leftFields?.find((f: any) => f.label.includes("Customer"))?.value || "Unknown"}
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2 text-xs">
                     {quote.origin} <ArrowRight className="h-3 w-3" /> {quote.destination}
@@ -454,9 +477,22 @@ export default function Quotations() {
                   </span>
                 </TableCell>
                 <TableCell>
-                  <span className="text-xs font-medium">
-                    {quote.metadata?.leftFields?.find((f: any) => f.label.toLowerCase().includes("cif"))?.value || "N/A"}
-                  </span>
+                  <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[8px] font-black uppercase text-muted-foreground opacity-60">Hybrid Edit</span>
+                    <input 
+                      defaultValue={quote.metadata?.leftFields?.find((f: any) => f.label.toLowerCase().includes("cif"))?.value || "N/A"}
+                      onBlur={(e) => {
+                        const newVal = e.target.value;
+                        const meta = { ...quote.metadata };
+                        const idx = meta.leftFields.findIndex((f: any) => f.label.toLowerCase().includes("cif"));
+                        if (idx !== -1) {
+                           meta.leftFields[idx].value = newVal;
+                           updateQuoteMutation.mutate({ id: quote.id, metadata: meta, totalAmount: quote.total_amount_usd });
+                        }
+                      }}
+                      className="bg-transparent border-b border-transparent hover:border-accent/40 focus:border-accent focus:outline-none font-bold text-xs w-24 tabular-nums transition-all"
+                    />
+                  </div>
                 </TableCell>
                 <TableCell>
                   <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
@@ -469,7 +505,24 @@ export default function Quotations() {
                     <span className="text-[9px] text-accent/70 block truncate italic">Note: {quote.metadata.tableRows[0].remarks}</span>
                   )}
                 </TableCell>
-                <TableCell className="font-bold">{quote.total_amount_usd ? formatCurrency(quote.total_amount_usd) : "—"}</TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[8px] font-black uppercase text-accent/60">Primary Amount</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground">$</span>
+                      <input 
+                        type="number"
+                        step="0.01"
+                        defaultValue={quote.total_amount_usd || 0}
+                        onBlur={(e) => {
+                          const newVal = parseFloat(e.target.value) || 0;
+                          updateQuoteMutation.mutate({ id: quote.id, metadata: quote.metadata, totalAmount: newVal });
+                        }}
+                        className="bg-transparent border-b border-transparent hover:border-accent/40 focus:border-accent focus:outline-none font-bold text-sm w-24 tabular-nums transition-all text-accent"
+                      />
+                    </div>
+                  </div>
+                </TableCell>
                 <TableCell className="text-xs">{format(new Date(quote.valid_until), "MMM d, yyyy")}</TableCell>
                 <TableCell><StatusBadge status={quote.status} /></TableCell>
                 <TableCell className="text-right">
@@ -639,8 +692,22 @@ export default function Quotations() {
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Quote Amount (USD)</FormLabel>
-                      <FormControl><Input type="number" step="0.01" {...field} className="font-bold text-accent" /></FormControl>
+                      <FormLabel className="flex items-center gap-2">
+                        Quote Amount (USD)
+                        <span className="text-[9px] font-black uppercase tracking-wider text-accent/70 bg-accent/10 px-1.5 py-0.5 rounded">
+                          Auto-calculated · Edit to override
+                        </span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          {...field}
+                          value={field.value ?? ""}
+                          className="font-bold text-accent text-lg h-12" 
+                          placeholder="Auto-calculated from cargo rates"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

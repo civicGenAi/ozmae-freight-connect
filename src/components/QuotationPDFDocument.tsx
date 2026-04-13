@@ -408,12 +408,12 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
           </View>
 
           <View style={styles.footerColumn}>
-             <Text style={styles.footerHeader}>NOT INCLUDED</Text>
+             <Text style={styles.footerHeader}>{meta.footerNotesMiddleTitle || "NOT INCLUDED"}</Text>
              <Text style={styles.footerText}>{meta.footerNotesMiddle}</Text>
           </View>
 
           <View style={styles.footerColumn}>
-             <Text style={styles.footerHeader}>Important Documents:</Text>
+             <Text style={styles.footerHeader}>{meta.footerNotesRightTitle || "Important Documents:"}</Text>
              <Text style={styles.footerText}>{meta.footerNotesRight}</Text>
           </View>
         </View>

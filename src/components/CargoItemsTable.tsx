@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { calculateMultiplier, cleanAmount } from "@/lib/quotationUtils";
+
 
 interface CargoItemsTableProps {
   control: Control<any>;
@@ -42,14 +44,41 @@ export function CargoItemsTable({ control, name, className }: CargoItemsTablePro
 
   const addColumn = () => {
     const currentExtra = getValues("extra_units") || [];
-    setValue("extra_units", [...currentExtra, "NEW UNIT"]);
+    const newUnitName = "NEW UNIT";
+    const updatedExtra = [...currentExtra, newUnitName];
+    setValue("extra_units", updatedExtra);
     
-    // Also initialize extra_rates for all existing rows
+    // No auto-scale on add since name is unknown — scaling happens on rename below
     fields.forEach((_, idx) => {
       const row = getValues(`${name}.${idx}`);
       const extraRates = [...(row.extra_rates || [])];
       extraRates.push("");
       setValue(`${name}.${idx}.extra_rates`, extraRates);
+    });
+  };
+
+  // Called when user finishes renaming an extra unit column header
+  const onUnitHeaderBlur = (colIdx: number, newUnitName: string) => {
+    const baseUnit = mainUnit || "1*40'HC";
+    const multiplier = calculateMultiplier(baseUnit, newUnitName);
+    
+    if (multiplier <= 0 || multiplier === 1) return; // Nothing to scale
+    
+    fields.forEach((_, rowIdx) => {
+      const row = getValues(`${name}.${rowIdx}`);
+      if (row?.type === 'header') return;
+      
+      const currentExtraRate = row?.extra_rates?.[colIdx];
+      // Only auto-fill if the cell is still empty (don't overwrite user edits)
+      if (currentExtraRate !== undefined && currentExtraRate !== "" && currentExtraRate !== "0" && currentExtraRate !== "0.00") return;
+      
+      const baseRate = cleanAmount(row?.rate_usd);
+      if (baseRate === 0) return;
+      
+      const scaledRate = (baseRate * multiplier).toFixed(2);
+      const updatedExtraRates = [...(row.extra_rates || [])];
+      updatedExtraRates[colIdx] = scaledRate;
+      setValue(`${name}.${rowIdx}.extra_rates`, updatedExtraRates);
     });
   };
 
@@ -126,6 +155,8 @@ export function CargoItemsTable({ control, name, className }: CargoItemsTablePro
                   <input 
                     {...register(`extra_units.${idx}`)}
                     className="w-full bg-transparent text-center focus:outline-none uppercase"
+                    onBlur={(e) => onUnitHeaderBlur(idx, e.target.value)}
+                    title="Rename to auto-scale rates (e.g. 3*40HC)"
                   />
                   <button 
                     onClick={() => removeColumn(idx)}
