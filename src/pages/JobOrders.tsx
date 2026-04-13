@@ -17,11 +17,41 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { HybridSelect } from "@/components/HybridSelect";
 import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const stages = ["planning", "dispatched", "in transit", "at destination", "delivered", "closed"] as const;
+
+const jobSchema = z.object({
+  selectedEntityId: z.string().min(1, "Please select a customer or prospect"),
+  origin: z.string().min(2, "Origin is required"),
+  destination: z.string().min(2, "Destination is required"),
+  driverRef: z.object({
+    id: z.string().optional(),
+    name: z.string().optional(),
+  }).refine(data => data.id || data.name, "Please select or type a driver"),
+  vehicleRef: z.object({
+    id: z.string().optional(),
+    plate: z.string().optional(),
+  }).refine(data => data.id || data.plate, "Please select or type a vehicle"),
+  amount: z.string().min(1, "Value is required"),
+});
+
+type JobFormValues = z.infer<typeof jobSchema>;
 
 export default function JobOrders() {
   const [selectedJob, setSelectedJob] = useState<any>(null);
@@ -29,13 +59,28 @@ export default function JobOrders() {
   const [searchQuery, setSearchQuery] = useState("");
   const queryClient = useQueryClient();
 
-  // Form State for "New Job"
-  const [selectedEntityId, setSelectedEntityId] = useState<string>("");
-  const [origin, setOrigin] = useState("");
-  const [destination, setDestination] = useState("");
-  const [driverRef, setDriverRef] = useState<{ id?: string; name?: string }>({});
-  const [vehicleRef, setVehicleRef] = useState<{ id?: string; plate?: string }>({});
-  const [amount, setAmount] = useState("");
+  const form = useForm<JobFormValues>({
+    resolver: zodResolver(jobSchema),
+    defaultValues: {
+      selectedEntityId: "",
+      origin: "",
+      destination: "",
+      driverRef: {},
+      vehicleRef: {},
+      amount: "",
+    }
+  });
+
+  const { hasDraft, restoreDraft, discardDraft } = useFormDraft({
+    key: "ozmae_job_new",
+    form,
+    enabled: isNewModalOpen
+  });
+
+  const selectedEntityId = form.watch("selectedEntityId");
+  const origin = form.watch("origin");
+  const destination = form.watch("destination");
+  const amount = form.watch("amount");
 
   const { data: jobOrders, isLoading } = useQuery({
     queryKey: ["job_orders"],
@@ -84,11 +129,11 @@ export default function JobOrders() {
     if (selectedEntityId && dataNeeded) {
       const prospect = dataNeeded.prospects.find(p => p.value === selectedEntityId);
       if (prospect) {
-        setOrigin(prospect.origin);
-        setDestination(prospect.destination);
+        form.setValue("origin", prospect.origin);
+        form.setValue("destination", prospect.destination);
       }
     }
-  }, [selectedEntityId, dataNeeded]);
+  }, [selectedEntityId, dataNeeded, form]);
 
   const createJobMutation = useMutation({
     mutationFn: async (newJob: any) => {
@@ -139,11 +184,10 @@ export default function JobOrders() {
     count: jobOrders?.filter((j: any) => j.status?.toLowerCase() === s).length || 0,
   }));
 
-  const handleCreateJob = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
+  const handleCreateJob = async (values: JobFormValues) => {
     try {
       let finalCustomerId = "";
+      const { driverRef, vehicleRef, origin, destination, amount, selectedEntityId } = values;
       let finalDriverId = driverRef.id || null;
       let finalVehicleId = vehicleRef.id || null;
 
@@ -200,6 +244,8 @@ export default function JobOrders() {
       };
       
       createJobMutation.mutate(data);
+      form.reset();
+      discardDraft();
     } catch (err: any) {
       toast.error(`Auto-registration failed: ${err.message}`);
     }
@@ -294,98 +340,174 @@ export default function JobOrders() {
       {/* New Job Sheet */}
       <Sheet open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
         <SheetContent className="sm:max-w-lg overflow-y-auto">
-          <SheetHeader>
-             <SheetTitle>New Operational Job</SheetTitle>
-             <SheetDescription>Initialize a new logistics job within the system.</SheetDescription>
+          <SheetHeader className="border-b pb-4 mb-4">
+            {hasDraft && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-accent/10 border border-accent/20 p-4 rounded-xl mb-6 flex items-center justify-between gap-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center text-accent">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-accent tracking-widest">Unsaved Draft Found</p>
+                    <p className="text-[11px] text-muted-foreground font-medium">Would you like to resume your previous work?</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={discardDraft}
+                    className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
+                  >
+                    Discard
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={restoreDraft}
+                    className="bg-accent text-accent-foreground text-[10px] font-black uppercase tracking-widest px-4 h-8 rounded-lg shadow-lg shadow-accent/20"
+                  >
+                    Restore
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+            <SheetTitle>New Operational Job</SheetTitle>
+            <SheetDescription>Initialize a new logistics job within the system.</SheetDescription>
           </SheetHeader>
-          <form onSubmit={handleCreateJob} className="space-y-4 py-6">
-            <div className="space-y-2">
-              <Label>Business Entity (Customer/Prospect)</Label>
-              <Select value={selectedEntityId} onValueChange={setSelectedEntityId} required>
-                <SelectTrigger className="h-12">
-                  <SelectValue placeholder="Select customer or prospect" />
-                </SelectTrigger>
-                <SelectContent>
-                  {dataNeeded?.customers.map((c: any) => (
-                    <SelectItem key={c.value} value={c.value} className="font-bold">{c.label}</SelectItem>
-                  ))}
-                  {dataNeeded?.prospects.map((p: any) => (
-                    <SelectItem key={p.value} value={p.value} className="text-purple-700 font-medium">{p.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Origin</Label>
-                <Input 
-                  value={origin} 
-                  onChange={(e) => setOrigin(e.target.value)} 
-                  placeholder="Mombasa, KE" 
-                  required 
-                  className="h-11"
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleCreateJob)} className="space-y-4 py-6">
+              <FormField
+                control={form.control}
+                name="selectedEntityId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Business Entity (Customer/Prospect)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-12">
+                          <SelectValue placeholder="Select customer or prospect" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {dataNeeded?.customers.map((c: any) => (
+                          <SelectItem key={c.value} value={c.value} className="font-bold">{c.label}</SelectItem>
+                        ))}
+                        {dataNeeded?.prospects.map((p: any) => (
+                          <SelectItem key={p.value} value={p.value} className="text-purple-700 font-medium">{p.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="origin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Origin</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Mombasa, KE" className="h-11" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="destination"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Destination</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Kampala, UG" className="h-11" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Destination</Label>
-                <Input 
-                  value={destination} 
-                  onChange={(e) => setDestination(e.target.value)} 
-                  placeholder="Kampala, UG" 
-                  required 
-                  className="h-11"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Assigned Personnel</Label>
-                <HybridSelect
-                  options={dataNeeded?.drivers || []}
-                  value={driverRef.id || driverRef.name}
-                  onChange={(val, isNew) => setDriverRef(isNew ? { name: val } : { id: val })}
-                  placeholder="Search/Type Driver Name"
-                  allowCreate
-                  className="h-11"
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="driverRef"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Assigned Personnel</FormLabel>
+                      <FormControl>
+                        <HybridSelect
+                          options={dataNeeded?.drivers || []}
+                          value={field.value.id || field.value.name || ""}
+                          onChange={(val, isNew) => field.onChange(isNew ? { name: val } : { id: val })}
+                          placeholder="Search/Type Driver Name"
+                          allowCreate
+                          className="h-11"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="vehicleRef"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Transport Asset</FormLabel>
+                      <FormControl>
+                        <HybridSelect
+                          options={dataNeeded?.vehicles || []}
+                          value={field.value.id || field.value.plate || ""}
+                          onChange={(val, isNew) => field.onChange(isNew ? { plate: val } : { id: val })}
+                          placeholder="Search/Type Plate Number"
+                          allowCreate
+                          className="h-11"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Transport Asset</Label>
-                <HybridSelect
-                  options={dataNeeded?.vehicles || []}
-                  value={vehicleRef.id || vehicleRef.plate}
-                  onChange={(val, isNew) => setVehicleRef(isNew ? { plate: val } : { id: val })}
-                  placeholder="Search/Type Plate Number"
-                  allowCreate
-                  className="h-11"
-                />
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label>Contract Value (USD)</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  type="number" 
-                  step="0.01" 
-                  value={amount} 
-                  onChange={(e) => setAmount(e.target.value)} 
-                  placeholder="8500.00" 
-                  required 
-                  className="pl-9 h-11"
-                />
-              </div>
-            </div>
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contract Value (USD)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          {...field}
+                          placeholder="8500.00" 
+                          className="pl-9 h-11"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <SheetFooter className="pt-6">
-              <Button type="submit" disabled={createJobMutation.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-12 text-xs font-black uppercase tracking-widest shadow-lg shadow-accent/20">
-                {createJobMutation.isPending ? "Configuring Operation..." : "Initialize Job Order"}
-              </Button>
-            </SheetFooter>
-          </form>
+              <SheetFooter className="pt-6">
+                <Button type="submit" disabled={createJobMutation.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-12 text-xs font-black uppercase tracking-widest shadow-lg shadow-accent/20">
+                  {createJobMutation.isPending ? "Configuring Operation..." : "Initialize Job Order"}
+                </Button>
+              </SheetFooter>
+            </form>
+          </Form>
         </SheetContent>
       </Sheet>
 

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer } from "lucide-react";
+import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer, Clock } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
+import { useFormDraft } from "@/hooks/useFormDraft";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
@@ -15,6 +17,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -109,6 +112,12 @@ export default function Quotations() {
       remarks: "",
       transport_mode: null,
     }
+  });
+
+  const { hasDraft, restoreDraft, discardDraft } = useFormDraft({
+    key: "ozmae_quote_new",
+    form,
+    enabled: isNewModalOpen
   });
 
   const watchedItems = useWatch({ control: form.control, name: "cargo_items" });
@@ -301,6 +310,7 @@ export default function Quotations() {
       queryClient.invalidateQueries({ queryKey: ["quotations"] });
       setIsNewModalOpen(false);
       form.reset();
+      discardDraft();
       setViewQuote(data);
       setIsPreviewOpen(true);
       toast.success("Quotation created successfully");
@@ -572,6 +582,40 @@ export default function Quotations() {
       <Sheet open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
         <SheetContent className="sm:max-w-2xl overflow-y-auto">
           <SheetHeader className="border-b pb-4 mb-4">
+            {hasDraft && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-accent/10 border border-accent/20 p-4 rounded-xl mb-6 flex items-center justify-between gap-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center">
+                    <Clock className="h-4 w-4 text-accent" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-accent tracking-widest">Unsaved Draft Found</p>
+                    <p className="text-[11px] text-muted-foreground font-medium">Would you like to resume your previous work?</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={discardDraft}
+                    className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
+                  >
+                    Discard
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={restoreDraft}
+                    className="bg-accent text-accent-foreground text-[10px] font-black uppercase tracking-widest px-4 h-8 rounded-lg shadow-lg shadow-accent/20"
+                  >
+                    Restore
+                  </Button>
+                </div>
+              </motion.div>
+            )}
             <SheetTitle className="text-2xl font-bold flex items-center gap-2">
               <Plus className="h-6 w-6 text-accent" />
               New Manual Quotation
