@@ -39,6 +39,7 @@ import signatureImg from "@/assets/signature.png";
 import { CreatableCombobox } from "@/components/CreatableCombobox";
 import { parseUnitQuantity, cleanAmount } from "@/lib/quotationUtils";
 import { useWatch } from "react-hook-form";
+import { TransportModeSelector, TransportModeBadge, TransportModeGroupHeader, type TransportMode } from "@/components/TransportModeSelector";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -67,6 +68,7 @@ const quoteSchema = z.object({
   })).min(1, "At least one cargo item is required"),
   chargeable_weight: z.string().optional(),
   cif_value_usd: z.string().optional(),
+  transport_mode: z.enum(["air", "sea", "road"]).optional().nullable(),
   validity: z.string().optional(),
   amount: z.string().optional().transform(v => v ? parseFloat(v) : null),
   valid_until: z.string().min(1, "Valid until date is required"),
@@ -105,6 +107,7 @@ export default function Quotations() {
       amount: "" as any,
       valid_until: "",
       remarks: "",
+      transport_mode: null,
     }
   });
 
@@ -159,6 +162,7 @@ export default function Quotations() {
           amount: lead.rate_usd?.toString() || "" as any,
           validity: lead.validity || "15 Days",
           valid_until: new Date(Date.now() + (parseInt(lead.validity || "15") || 15) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          transport_mode: lead.transport_mode || null,
         });
 
         if (location.state.directPreview) {
@@ -286,6 +290,7 @@ export default function Quotations() {
           footerNotesMiddle: "• Storage for overstayed shipment\n• Demurrage charges\n• Offloading charges at client premises",
           footerNotesRight: "• Commercial Invoice\n• Packing List\n• Bill of Lading Copy\n• TPIN Copy"
         },
+        transport_mode: (values as any).transport_mode || null,
       };
 
       const { data, error } = await supabase.from("quotations").insert([newQuote]).select().single();
@@ -382,6 +387,21 @@ export default function Quotations() {
     createQuoteMutation.mutate(values);
   };
 
+  // Group filtered quotes by transport_mode
+  const TRANSPORT_ORDER: (TransportMode | null)[] = ["air", "sea", "road", null];
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set(["air", "sea", "road", "none"]));
+  const toggleGroup = (key: string) => setExpandedGroups(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
+
+  const groupedQuotes = React.useMemo(() => {
+    const groups: Record<string, any[]> = { air: [], sea: [], road: [], none: [] };
+    (filtered || []).forEach((q: any) => {
+      const key = q.transport_mode || "none";
+      groups[key] = groups[key] || [];
+      groups[key].push(q);
+    });
+    return groups;
+  }, [filtered]);
+
   return (
     <div className="space-y-6">
       <PageHeader title="Quotations & Proformas">
@@ -432,113 +452,121 @@ export default function Quotations() {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
-        <Table className="min-w-[1200px]">
-          <TableHeader className="bg-muted/50">
-            <TableRow>
-              <TableHead className="w-[100px]">Quote #</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Route</TableHead>
-              <TableHead>Commodity</TableHead>
-              <TableHead>Weight</TableHead>
-              <TableHead>CIF Value (USD)</TableHead>
-              <TableHead>Validity</TableHead>
-              <TableHead className="min-w-[150px]">Cargo</TableHead>
-              <TableHead>Total Amount (USD)</TableHead>
-              <TableHead>Valid Until</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={12} className="text-center">Loading...</TableCell></TableRow>
-            ) : filtered?.length === 0 ? (
-              <TableRow><TableCell colSpan={12} className="text-center py-12">No quotations found.</TableCell></TableRow>
-            ) : filtered?.map((quote: any) => (
-              <TableRow key={quote.id} className="cursor-pointer hover:bg-muted/30 transition-colors group" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}>
-                <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{quote.id.split('-')[0]}</TableCell>
-                <TableCell className="font-medium whitespace-nowrap">
-                  {quote.customer?.company_name || quote.metadata?.leftFields?.find((f: any) => f.label.includes("Customer"))?.value || "Unknown"}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2 text-xs">
-                    {quote.origin} <ArrowRight className="h-3 w-3" /> {quote.destination}
+      <div className="space-y-4">
+        {isLoading ? (
+          <div className="bg-card rounded-lg border shadow-sm p-8">
+            {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 bg-muted/50 animate-pulse rounded mb-4" />)}
+          </div>
+        ) : (filtered?.length === 0 ? (
+          <div className="bg-card rounded-lg border shadow-sm p-12 text-center text-muted-foreground text-sm">No quotations found.</div>
+        ) : (
+          TRANSPORT_ORDER.map((mode) => {
+            const key = mode ?? "none";
+            const group = groupedQuotes[key] || [];
+            if (group.length === 0) return null;
+            const isExpanded = expandedGroups.has(key);
+            return (
+              <div key={key} className="space-y-2">
+                <TransportModeGroupHeader mode={mode} count={group.length} expanded={isExpanded} onToggle={() => toggleGroup(key)} />
+                {isExpanded && (
+                  <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+                    <Table className="min-w-[1200px]">
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="w-[100px]">Quote #</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Route</TableHead>
+                          <TableHead>Commodity</TableHead>
+                          <TableHead>Weight</TableHead>
+                          <TableHead>CIF Value (USD)</TableHead>
+                          <TableHead>Validity</TableHead>
+                          <TableHead className="min-w-[150px]">Cargo</TableHead>
+                          <TableHead>Total Amount (USD)</TableHead>
+                          <TableHead>Valid Until</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {group.map((quote: any) => (
+                          <TableRow key={quote.id} className="cursor-pointer hover:bg-muted/30 transition-colors group" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}>
+                            <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{quote.id.split('-')[0]}</TableCell>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              {quote.customer?.company_name || quote.metadata?.leftFields?.find((f: any) => f.label.includes("Customer"))?.value || "Unknown"}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 text-xs">
+                                {quote.origin} <ArrowRight className="h-3 w-3" /> {quote.destination}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-[10px] font-bold text-accent uppercase tracking-tighter">
+                                {quote.metadata?.leftFields?.find((f: any) => f.label.includes("Commodity"))?.value || "N/A"}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs font-medium">
+                                {quote.metadata?.leftFields?.find((f: any) => f.label.toLowerCase().includes("weight"))?.value || "N/A"}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                                <span className="text-[8px] font-black uppercase text-muted-foreground opacity-60">Edit</span>
+                                <input
+                                  defaultValue={quote.metadata?.leftFields?.find((f: any) => f.label.toLowerCase().includes("cif"))?.value || ""}
+                                  onBlur={(e) => {
+                                    const newVal = e.target.value;
+                                    const meta = { ...quote.metadata };
+                                    const idx = meta.leftFields.findIndex((f: any) => f.label.toLowerCase().includes("cif"));
+                                    if (idx !== -1) { meta.leftFields[idx].value = newVal; updateQuoteMutation.mutate({ id: quote.id, metadata: meta, totalAmount: quote.total_amount_usd }); }
+                                  }}
+                                  className="bg-transparent border-b border-transparent hover:border-accent/40 focus:border-accent focus:outline-none font-bold text-xs w-24 tabular-nums transition-all"
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
+                                {quote.metadata?.leftFields?.find((f: any) => f.label.includes("Validity"))?.value || "15 Days"}
+                              </span>
+                            </TableCell>
+                            <TableCell className="max-w-[200px]">
+                              <span className="text-xs text-muted-foreground truncate block">{quote.cargo_description}</span>
+                              {quote.metadata?.tableRows?.[0]?.remarks && (
+                                <span className="text-[9px] text-accent/70 block truncate italic">Note: {quote.metadata.tableRows[0].remarks}</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                                <span className="text-[8px] font-black uppercase text-accent/60">Primary Amount</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-muted-foreground">$</span>
+                                  <input
+                                    type="number" step="0.01"
+                                    defaultValue={quote.total_amount_usd || 0}
+                                    onBlur={(e) => { const newVal = parseFloat(e.target.value) || 0; updateQuoteMutation.mutate({ id: quote.id, metadata: quote.metadata, totalAmount: newVal }); }}
+                                    className="bg-transparent border-b border-transparent hover:border-accent/40 focus:border-accent focus:outline-none font-bold text-sm w-24 tabular-nums transition-all text-accent"
+                                  />
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs">{format(new Date(quote.valid_until), "MMM d, yyyy")}</TableCell>
+                            <TableCell><StatusBadge status={quote.status} /></TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                <Button size="icon" variant="ghost" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}><Eye className="h-4 w-4" /></Button>
+                                <Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteQuoteMutation.mutate(quote.id)}><Trash2 className="h-4 w-4" /></Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
-                </TableCell>
-                <TableCell>
-                  <span className="text-[10px] font-bold text-accent uppercase tracking-tighter">
-                    {quote.metadata?.leftFields?.find((f: any) => f.label.includes("Commodity"))?.value || "N/A"}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <span className="text-xs font-medium">
-                    {quote.metadata?.leftFields?.find((f: any) => f.label.toLowerCase().includes("weight"))?.value || "N/A"}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
-                    <span className="text-[8px] font-black uppercase text-muted-foreground opacity-60">Hybrid Edit</span>
-                    <input 
-                      defaultValue={quote.metadata?.leftFields?.find((f: any) => f.label.toLowerCase().includes("cif"))?.value || "N/A"}
-                      onBlur={(e) => {
-                        const newVal = e.target.value;
-                        const meta = { ...quote.metadata };
-                        const idx = meta.leftFields.findIndex((f: any) => f.label.toLowerCase().includes("cif"));
-                        if (idx !== -1) {
-                           meta.leftFields[idx].value = newVal;
-                           updateQuoteMutation.mutate({ id: quote.id, metadata: meta, totalAmount: quote.total_amount_usd });
-                        }
-                      }}
-                      className="bg-transparent border-b border-transparent hover:border-accent/40 focus:border-accent focus:outline-none font-bold text-xs w-24 tabular-nums transition-all"
-                    />
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
-                    {quote.metadata?.leftFields?.find((f: any) => f.label.includes("Validity"))?.value || "15 Days"}
-                  </span>
-                </TableCell>
-                <TableCell className="max-w-[200px]">
-                  <span className="text-xs text-muted-foreground truncate block">{quote.cargo_description}</span>
-                  {quote.metadata?.tableRows?.[0]?.remarks && (
-                    <span className="text-[9px] text-accent/70 block truncate italic">Note: {quote.metadata.tableRows[0].remarks}</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
-                    <span className="text-[8px] font-black uppercase text-accent/60">Primary Amount</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-muted-foreground">$</span>
-                      <input 
-                        type="number"
-                        step="0.01"
-                        defaultValue={quote.total_amount_usd || 0}
-                        onBlur={(e) => {
-                          const newVal = parseFloat(e.target.value) || 0;
-                          updateQuoteMutation.mutate({ id: quote.id, metadata: quote.metadata, totalAmount: newVal });
-                        }}
-                        className="bg-transparent border-b border-transparent hover:border-accent/40 focus:border-accent focus:outline-none font-bold text-sm w-24 tabular-nums transition-all text-accent"
-                      />
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-xs">{format(new Date(quote.valid_until), "MMM d, yyyy")}</TableCell>
-                <TableCell><StatusBadge status={quote.status} /></TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                    <Button size="icon" variant="ghost" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteQuoteMutation.mutate(quote.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                )}
+              </div>
+            );
+          })
+        ))}
       </div>
 
       <Sheet open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
@@ -553,6 +581,15 @@ export default function Quotations() {
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+
+              {/* Transport Mode Selector */}
+              <div className="p-4 bg-muted/20 rounded-xl border border-dashed">
+                <TransportModeSelector
+                  value={form.watch("transport_mode")}
+                  onChange={(mode) => form.setValue("transport_mode", mode as any)}
+                />
+              </div>
+
               <FormField
                 control={form.control}
                 name="customer_id"

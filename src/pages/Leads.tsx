@@ -35,6 +35,7 @@ import { PhoneInput } from "@/components/PhoneInput";
 import { CargoItemsTable } from "@/components/CargoItemsTable";
 import { format } from "date-fns";
 import { CreatableCombobox } from "@/components/CreatableCombobox";
+import { TransportModeSelector, TransportModeBadge, TransportModeGroupHeader, type TransportMode } from "@/components/TransportModeSelector";
 
 const tabs = ["All", "New", "Contacted", "Qualified", "Lost", "Converted"];
 
@@ -51,6 +52,7 @@ const leadSchema = z.object({
   commodity: z.string().optional(),
   chargeable_weight: z.string().optional(),
   cif_value_usd: z.string().optional(),
+  transport_mode: z.enum(["air", "sea", "road"]).optional().nullable(),
   validity: z.string().optional(),
   cargo_description: z.string().optional(),
   main_unit: z.string().default("1*40'HC"),
@@ -84,6 +86,11 @@ export default function Leads() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  // Transport mode grouping state — kept at top per React hooks rules
+  const TRANSPORT_ORDER: (TransportMode | null)[] = ["air", "sea", "road", null];
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set(["air", "sea", "road", "none"]));
+  const toggleGroup = (key: string) => setExpandedGroups(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
+
   // New Lead Form
   const newLeadForm = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
@@ -97,6 +104,7 @@ export default function Leads() {
       commodity: "",
       chargeable_weight: "",
       cif_value_usd: "TBA",
+      transport_mode: null,
       validity: "15 Days",
       cargo_description: "",
       main_unit: "1*40'HC",
@@ -122,6 +130,7 @@ export default function Leads() {
         commodity: leadToEdit.commodity || "",
         chargeable_weight: leadToEdit.chargeable_weight || "",
         cif_value_usd: leadToEdit.cif_value_usd?.toString() || "",
+        transport_mode: leadToEdit.transport_mode || null,
         validity: leadToEdit.validity || "15 Days",
         cargo_description: leadToEdit.cargo_description || "",
         main_unit: leadToEdit.cargo_items?.find((it: any) => it.type === 'metadata')?.main_unit || leadToEdit.main_unit || "1*40'HC",
@@ -192,6 +201,7 @@ export default function Leads() {
         validity: values.validity || null,
         chargeable_weight: values.chargeable_weight,
         cif_value_usd: values.cif_value_usd,
+        transport_mode: values.transport_mode || null,
         remarks: values.remarks || null,
         cargo_type: "general", 
         cargo_description: values.cargo_items[0]?.description || "", // Fallback for old column
@@ -232,6 +242,7 @@ export default function Leads() {
         validity: values.validity || null,
         chargeable_weight: values.chargeable_weight,
         cif_value_usd: values.cif_value_usd,
+        transport_mode: values.transport_mode || null,
         remarks: values.remarks || null,
         cargo_description: values.cargo_items[0]?.description || "", // Fallback for old column
         cargo_items: [
@@ -260,6 +271,17 @@ export default function Leads() {
     l.customer_name_raw?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     l.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Group filtered leads after filtered is computed
+  const groupedLeads = React.useMemo(() => {
+    const groups: Record<string, any[]> = { air: [], sea: [], road: [], none: [] };
+    (filtered || []).forEach((lead: any) => {
+      const key = lead.transport_mode || "none";
+      groups[key] = groups[key] || [];
+      groups[key].push(lead);
+    });
+    return groups;
+  }, [filtered]);
 
   const onSubmitNew = (values: LeadFormValues) => {
     createLeadMutation.mutate(values);
@@ -312,106 +334,125 @@ export default function Leads() {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
-        <Table className="min-w-[1200px]">
-          <TableHeader className="bg-muted/50">
-            <TableRow>
-              <TableHead className="w-[100px]">Lead ID</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Route</TableHead>
-              <TableHead>Commodity</TableHead>
-              <TableHead>Chg. Weight</TableHead>
-              <TableHead>CIF Value</TableHead>
-              <TableHead>Validity</TableHead>
-              <TableHead className="min-w-[150px]">Cargo Details</TableHead>
-              <TableHead>Received</TableHead>
-              <TableHead>Assigned</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={12}><div className="h-12 bg-muted/50 animate-pulse rounded" /></TableCell>
-                </TableRow>
-              ))
-            ) : filtered?.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
-                  No leads found.
-                </TableCell>
-              </TableRow>
-            ) : filtered?.map((lead: any) => (
-              <TableRow 
-                key={lead.id} 
-                className="cursor-pointer hover:bg-muted/30 transition-colors group" 
-                onClick={() => setSelectedLead(lead)}
-              >
-                <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{lead.id.split('-')[0]}</TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span className="font-medium text-foreground">{lead.customer_name_raw}</span>
-                    {lead.contact_person && (
-                      <span className="text-[10px] text-accent font-semibold">{lead.contact_person}</span>
-                    )}
-                    <span className="text-[10px] text-muted-foreground">{lead.email || "No email"}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-medium">{lead.origin}</span>
-                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                    <span className="font-medium">{lead.destination}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className="text-[10px] font-bold text-accent uppercase tracking-tighter">{lead.commodity || "N/A"}</span>
-                </TableCell>
-                <TableCell>
-                  <span className="text-xs font-medium">{lead.chargeable_weight || "N/A"}</span>
-                </TableCell>
-                <TableCell>
-                  <span className="text-xs font-medium">{lead.cif_value_usd || "N/A"}</span>
-                </TableCell>
-                <TableCell>
-                  <span className="text-[10px] font-semibold text-muted-foreground">{lead.validity || "15 Days"}</span>
-                </TableCell>
-                <TableCell className="max-w-[240px]">
-                  {lead.cargo_items?.filter((it: any) => it.type !== 'metadata').length > 0 ? (
-                    <div className="flex flex-col gap-1">
-                      {lead.cargo_items.filter((it: any) => it.type !== 'metadata').slice(0, 2).map((item: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-1.5 overflow-hidden">
-                          <span className="text-[10px] font-bold text-accent bg-accent/5 px-1 rounded shrink-0">{item.unit}</span>
-                          <span className="text-xs text-muted-foreground truncate">{item.description}</span>
-                        </div>
-                      ))}
-                      {lead.cargo_items.filter((it: any) => it.type !== 'metadata').length > 2 && (
-                        <span className="text-[9px] text-muted-foreground/60 italic">+{lead.cargo_items.filter((it: any) => it.type !== 'metadata').length - 2} more items</span>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground truncate block">{lead.cargo_description}</span>
-                  )}
-                  {lead.remarks && (
-                    <span className="text-[9px] text-accent/70 block truncate italic mt-1">Note: {lead.remarks}</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-xs">{format(new Date(lead.created_at), "MMM d, yyyy")}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{lead.assigned_user?.full_name || "Unassigned"}</TableCell>
-                <TableCell><StatusBadge status={lead.status} /></TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                    <Button size="icon" variant="outline" className="h-8 w-8 hover:text-accent shadow-sm" onClick={() => setLogInteractionLeadId(lead.id)}>
-                      <Phone className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
+      <div className="space-y-4">
+        {isLoading ? (
+          <div className="bg-card rounded-lg border shadow-sm p-8">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-12 bg-muted/50 animate-pulse rounded mb-4" />
             ))}
-          </TableBody>
-        </Table>
+          </div>
+        ) : (filtered?.length === 0 ? (
+          <div className="bg-card rounded-lg border shadow-sm p-12 text-center text-muted-foreground text-sm">
+            No leads found.
+          </div>
+        ) : (
+          TRANSPORT_ORDER.map((mode) => {
+            const key = mode ?? "none";
+            const group = groupedLeads[key] || [];
+            if (group.length === 0) return null;
+            const isExpanded = expandedGroups.has(key);
+            return (
+              <div key={key} className="space-y-2">
+                <TransportModeGroupHeader
+                  mode={mode}
+                  count={group.length}
+                  expanded={isExpanded}
+                  onToggle={() => toggleGroup(key)}
+                />
+                {isExpanded && (
+                  <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+                    <Table className="min-w-[1200px]">
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="w-[100px]">Lead ID</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Route</TableHead>
+                          <TableHead>Commodity</TableHead>
+                          <TableHead>Chg. Weight</TableHead>
+                          <TableHead>CIF Value</TableHead>
+                          <TableHead>Validity</TableHead>
+                          <TableHead className="min-w-[150px]">Cargo Details</TableHead>
+                          <TableHead>Received</TableHead>
+                          <TableHead>Assigned</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {group.map((lead: any) => (
+                          <TableRow
+                            key={lead.id}
+                            className="cursor-pointer hover:bg-muted/30 transition-colors group"
+                            onClick={() => setSelectedLead(lead)}
+                          >
+                            <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{lead.id.split('-')[0]}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium text-foreground">{lead.customer_name_raw}</span>
+                                {lead.contact_person && (
+                                  <span className="text-[10px] text-accent font-semibold">{lead.contact_person}</span>
+                                )}
+                                <span className="text-[10px] text-muted-foreground">{lead.email || "No email"}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className="font-medium">{lead.origin}</span>
+                                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                <span className="font-medium">{lead.destination}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-[10px] font-bold text-accent uppercase tracking-tighter">{lead.commodity || "N/A"}</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs font-medium">{lead.chargeable_weight || "N/A"}</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs font-medium">{lead.cif_value_usd || "N/A"}</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-[10px] font-semibold text-muted-foreground">{lead.validity || "15 Days"}</span>
+                            </TableCell>
+                            <TableCell className="max-w-[240px]">
+                              {lead.cargo_items?.filter((it: any) => it.type !== 'metadata').length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                  {lead.cargo_items.filter((it: any) => it.type !== 'metadata').slice(0, 2).map((item: any, idx: number) => (
+                                    <div key={idx} className="flex items-center gap-1.5 overflow-hidden">
+                                      <span className="text-xs text-muted-foreground truncate">{item.description}</span>
+                                    </div>
+                                  ))}
+                                  {lead.cargo_items.filter((it: any) => it.type !== 'metadata').length > 2 && (
+                                    <span className="text-[9px] text-muted-foreground/60 italic">+{lead.cargo_items.filter((it: any) => it.type !== 'metadata').length - 2} more items</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground truncate block">{lead.cargo_description}</span>
+                              )}
+                              {lead.remarks && (
+                                <span className="text-[9px] text-accent/70 block truncate italic mt-1">Note: {lead.remarks}</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs">{format(new Date(lead.created_at), "MMM d, yyyy")}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{lead.assigned_user?.full_name || "Unassigned"}</TableCell>
+                            <TableCell><StatusBadge status={lead.status} /></TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                <Button size="icon" variant="outline" className="h-8 w-8 hover:text-accent shadow-sm" onClick={() => setLogInteractionLeadId(lead.id)}>
+                                  <Phone className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        ))}
       </div>
 
       <LeadFormSheet 
@@ -501,7 +542,15 @@ export default function Leads() {
 
               <div className="space-y-4">
                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Shipment Overview</h4>
-                <div className="flex justify-between items-center bg-card rounded p-3 border shadow-sm">
+                {/* Transport Mode Badge in detail */}
+              {selectedLead.transport_mode && (
+                <div className="flex items-center gap-2">
+                  <p className="text-[9px] text-muted-foreground uppercase font-bold">Transport Mode</p>
+                  <TransportModeBadge mode={selectedLead.transport_mode} />
+                </div>
+              )}
+
+              <div className="flex justify-between items-center bg-card rounded p-3 border shadow-sm">
                   <div className="text-center flex-1">
                     <p className="text-[10px] text-muted-foreground uppercase">Origin</p>
                     <p className="font-bold text-sm">{selectedLead.origin}</p>
@@ -733,7 +782,15 @@ function LeadFormSheet({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 py-4 px-2">
-            
+
+            {/* Transport Mode Selector — top of form */}
+            <div className="p-4 bg-muted/20 rounded-xl border border-dashed">
+              <TransportModeSelector
+                value={form.watch("transport_mode")}
+                onChange={(mode) => form.setValue("transport_mode", mode as any)}
+              />
+            </div>
+
             {/* Section 1: Contact Details */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-accent font-bold uppercase tracking-widest text-[10px]">
