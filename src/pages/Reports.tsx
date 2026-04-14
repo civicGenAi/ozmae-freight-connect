@@ -34,52 +34,149 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import * as XLSX from 'xlsx';
-import { pdf } from '@react-pdf/renderer';
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
+import { 
+  format, 
+  startOfWeek, 
+  endOfWeek, 
+  eachDayOfInterval, 
+  subDays, 
+  isSameDay, 
+  isSameMonth, 
+  parseISO,
+  eachMonthOfInterval,
+  startOfYear,
+  endOfYear,
+  isSameWeek,
+  eachWeekOfInterval
+} from "date-fns";
 
-// Mock Data for the demonstration
-const weeklyData = [
-  { name: 'Mon', revenue: 4200, jobs: 4 },
-  { name: 'Tue', revenue: 3800, jobs: 3 },
-  { name: 'Wed', revenue: 5100, jobs: 5 },
-  { name: 'Thu', revenue: 4700, jobs: 4 },
-  { name: 'Fri', revenue: 6200, jobs: 6 },
-  { name: 'Sat', revenue: 2100, jobs: 2 },
-  { name: 'Sun', revenue: 1200, jobs: 1 },
-];
-
-const monthlyData = [
-  { name: 'Week 1', revenue: 18500, profit: 4200 },
-  { name: 'Week 2', revenue: 21000, profit: 5100 },
-  { name: 'Week 3', revenue: 17200, profit: 3800 },
-  { name: 'Week 4', revenue: 24500, profit: 6200 },
-];
-
-const yearlyData = [
-  { name: 'Jan', revenue: 65000 },
-  { name: 'Feb', revenue: 59000 },
-  { name: 'Mar', revenue: 82000 },
-  { name: 'Apr', revenue: 74000 },
-  { name: 'May', revenue: 91000 },
-  { name: 'Jun', revenue: 88000 },
-  { name: 'Jul', revenue: 95000 },
-  { name: 'Aug', revenue: 102000 },
-  { name: 'Sep', revenue: 98000 },
-  { name: 'Oct', revenue: 110000 },
-  { name: 'Nov', revenue: 125000 },
-  { name: 'Dec', revenue: 140000 },
-];
-
-const fleetUtilization = [
-  { name: 'Active', value: 70, color: '#10b981' },
-  { name: 'Standby', value: 20, color: '#3b82f6' },
-  { name: 'Maintenance', value: 10, color: '#f59e0b' },
-];
-
-const formatCurrency = (val: number) => `$${val.toLocaleString()}`;
+const formatCurrency = (val: number) => `$${val.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 export default function Reports() {
   const [activeTab, setActiveTab] = useState("monthly");
+
+  // Fetch Invoices
+  const { data: invoices } = useQuery({
+    queryKey: ["reports_invoices"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("invoices").select("total_amount_usd, created_at");
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch Jobs
+  const { data: jobs } = useQuery({
+    queryKey: ["reports_jobs"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("job_orders").select("id, created_at");
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch Drivers
+  const { data: drivers } = useQuery({
+    queryKey: ["reports_drivers"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("drivers").select("status");
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch Vehicles
+  const { data: vehicles } = useQuery({
+    queryKey: ["reports_vehicles"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("vehicles").select("status");
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Aggregation Logic
+  const getWeeklyData = () => {
+    const days = eachDayOfInterval({ start: subDays(new Date(), 6), end: new Date() });
+    return days.map(day => {
+      const dayInvoices = invoices?.filter(inv => isSameDay(parseISO(inv.created_at), day)) || [];
+      return {
+        name: format(day, 'EEE'),
+        revenue: dayInvoices.reduce((acc, inv) => acc + (inv.total_amount_usd || 0), 0),
+        jobs: jobs?.filter(j => isSameDay(parseISO(j.created_at), day)).length || 0
+      };
+    });
+  };
+
+  const getMonthlyData = () => {
+    const weeks = eachWeekOfInterval({ start: subDays(new Date(), 28), end: new Date() });
+    return weeks.map((week, i) => {
+      const weekInvoices = invoices?.filter(inv => isSameWeek(parseISO(inv.created_at), week)) || [];
+      const revenue = weekInvoices.reduce((acc, inv) => acc + (inv.total_amount_usd || 0), 0);
+      return {
+        name: `Week ${i + 1}`,
+        revenue: revenue,
+        profit: revenue * 0.2 // Estimated 20% margin
+      };
+    });
+  };
+
+  const getYearlyData = () => {
+    const months = eachMonthOfInterval({ start: startOfYear(new Date()), end: endOfYear(new Date()) });
+    return months.map(month => {
+      const monthInvoices = invoices?.filter(inv => isSameMonth(parseISO(inv.created_at), month)) || [];
+      return {
+        name: format(month, 'MMM'),
+        revenue: monthInvoices.reduce((acc, inv) => acc + (inv.total_amount_usd || 0), 0)
+      };
+    });
+  };
+
+  const getFleetData = () => {
+    if (!vehicles) return [];
+    const statusMap: any = {
+      'available': { name: 'Standby', color: '#3b82f6' },
+      'on_job': { name: 'Active', color: '#10b981' },
+      'maintenance': { name: 'Maintenance', color: '#f59e0b' },
+      'retired': { name: 'Retired', color: '#ef4444' }
+    };
+    const counts: any = {};
+    vehicles.forEach(v => {
+      counts[v.status] = (counts[v.status] || 0) + 1;
+    });
+    return Object.keys(counts).map(status => ({
+      name: statusMap[status]?.name || status,
+      value: counts[status],
+      color: statusMap[status]?.color || '#cbd5e1'
+    }));
+  };
+
+  const weeklyData = getWeeklyData();
+  const monthlyData = getMonthlyData();
+  const yearlyData = getYearlyData();
+  const fleetUtilization = getFleetData();
+
+  const isLoadingData = !invoices || !jobs || !drivers || !vehicles;
+
+  // KPI Calculations
+  const currentData = activeTab === 'weekly' ? weeklyData : activeTab === 'monthly' ? monthlyData : yearlyData;
+  const totalRevenue = currentData.reduce((acc, d) => acc + d.revenue, 0);
+  const totalJobs = activeTab === 'weekly' ? jobs?.filter(j => isSameWeek(parseISO(j.created_at), new Date())).length : jobs?.length;
+  const activeDriversCount = drivers?.filter(d => d.status === 'on_duty').length || 0;
+
+  if (isLoadingData) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center gap-4">
+           <div className="h-12 w-12 border-4 border-accent border-t-transparent animate-spin rounded-full" />
+           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Intelligence...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleExportExcel = () => {
     const data = activeTab === "weekly" ? weeklyData : activeTab === "monthly" ? monthlyData : yearlyData;
@@ -135,32 +232,32 @@ export default function Reports() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
            <KPICard 
-             label="Gross Revenue" 
-             value={activeTab === 'weekly' ? "$27,300" : activeTab === 'monthly' ? "$81,200" : "$1.24M"} 
-             trend="+12.5%" 
-             isUp={true} 
-             icon={DollarSign}
+              label="Gross Revenue" 
+              value={formatCurrency(totalRevenue)} 
+              trend="+12.5%" 
+              isUp={true} 
+              icon={DollarSign}
            />
            <KPICard 
-             label="Net Profit" 
-             value={activeTab === 'weekly' ? "$6,100" : activeTab === 'monthly' ? "$19,200" : "$285K"} 
-             trend="+8.2%" 
-             isUp={true} 
-             icon={TrendingUp}
+              label="Est. Net Profit" 
+              value={formatCurrency(totalRevenue * 0.2)} 
+              trend="+8.2%" 
+              isUp={true} 
+              icon={TrendingUp}
            />
            <KPICard 
-             label="Job Volume" 
-             value={activeTab === 'weekly' ? "24" : activeTab === 'monthly' ? "96" : "1,142"} 
-             trend="-2.1%" 
-             isUp={false} 
-             icon={Truck}
+              label="Job Volume" 
+              value={totalJobs?.toString() || "0"} 
+              trend="-2.1%" 
+              isUp={false} 
+              icon={Truck}
            />
            <KPICard 
-             label="Active Drivers" 
-             value="42" 
-             trend="+4" 
-             isUp={true} 
-             icon={Users}
+              label="Active Drivers" 
+              value={activeDriversCount.toString()} 
+              trend="+4" 
+              isUp={true} 
+              icon={Users}
            />
         </div>
 
