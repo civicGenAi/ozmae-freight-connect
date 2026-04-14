@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,9 +36,10 @@ import { StringArrayInput } from "@/components/StringArrayInput";
 import { LocationSelect } from "@/components/LocationSelect";
 import { PhoneInput } from "@/components/PhoneInput";
 import { CargoItemsTable } from "@/components/CargoItemsTable";
-import { format } from "date-fns";
-import { CreatableCombobox } from "@/components/CreatableCombobox";
 import { TransportModeSelector, TransportModeBadge, TransportModeGroupHeader, type TransportMode } from "@/components/TransportModeSelector";
+import { Pagination } from "@/components/Pagination";
+
+const PAGE_SIZE = 15;
 
 const tabs = ["All", "New", "Contacted", "Qualified", "Lost", "Converted"];
 
@@ -81,6 +83,7 @@ export default function Leads() {
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [leadToEdit, setLeadToEdit] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   
   const [additionalEmails, setAdditionalEmails] = useState<string[]>([]);
   const [additionalPhones, setAdditionalPhones] = useState<string[]>([]);
@@ -127,6 +130,10 @@ export default function Leads() {
   });
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  useEffect(() => {
     if (leadToEdit) {
       editLeadForm.reset({
         customer_name: leadToEdit.customer_name_raw,
@@ -158,26 +165,33 @@ export default function Leads() {
     }
   }, [leadToEdit, editLeadForm]);
 
-  const { data: leads, isLoading } = useQuery({
-    queryKey: ["leads", activeTab],
+  const { data: leadData, isLoading } = useQuery({
+    queryKey: ["leads", activeTab, currentPage],
     queryFn: async () => {
+      const from = (currentPage - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
       let query = supabase
         .from("leads")
         .select(`
           *,
           assigned_user:profiles!leads_assigned_to_fkey(full_name)
-        `)
-        .order("created_at", { ascending: false });
+        `, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       if (activeTab !== "All") {
         query = query.eq("status", activeTab.toLowerCase());
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
-      return data;
+      return { leads: data, totalCount: count || 0 };
     },
   });
+
+  const leads = leadData?.leads || [];
+  const totalCount = leadData?.totalCount || 0;
 
   const existingCommodities = React.useMemo(() => {
     if (!leads) return ["General Cargo", "Electronics", "Agricultural", "Vehicles", "Heavy Machinery", "Perishables", "Minerals/Ores"];
@@ -462,6 +476,13 @@ export default function Leads() {
             );
           })
         ))}
+        <Pagination 
+          currentPage={currentPage}
+          totalCount={totalCount}
+          pageSize={PAGE_SIZE}
+          onPageChange={setCurrentPage}
+          className="mt-6 border-t pt-4"
+        />
       </div>
 
       <LeadFormSheet 

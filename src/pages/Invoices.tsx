@@ -16,19 +16,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { InvoicePDF } from "@/components/InvoicePDF";
 import { CheckCircle2 } from "lucide-react";
-
-const formatCurrency = (amount: number) =>
+const formatCurrency = (amount: number) => 
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+import { Pagination } from "@/components/Pagination";
+
+const PAGE_SIZE = 15;
 
 export default function Invoices() {
   const [viewInvoice, setViewInvoice] = useState<any>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const queryClient = useQueryClient();
 
-  const { data: invoices, isLoading } = useQuery({
-    queryKey: ["invoices"],
+  const { data: invoiceData, isLoading } = useQuery({
+    queryKey: ["invoices", currentPage],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const from = (currentPage - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error, count } = await supabase
         .from("invoices")
         .select(`
           id,
@@ -44,12 +50,16 @@ export default function Invoices() {
           deposit_due_date,
           created_at,
           job:job_orders(id, origin, destination, customer:customers(company_name))
-        `)
-        .order("created_at", { ascending: false });
+        `, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to);
       if (error) throw error;
-      return data;
+      return { invoices: data, totalCount: count || 0 };
     },
   });
+
+  const invoices = invoiceData?.invoices || [];
+  const totalCount = invoiceData?.totalCount || 0;
 
   const { data: jobs } = useQuery({
     queryKey: ["open_jobs"],
@@ -230,6 +240,13 @@ export default function Invoices() {
             ))}
           </TableBody>
         </Table>
+        <Pagination 
+          currentPage={currentPage}
+          totalCount={totalCount}
+          pageSize={PAGE_SIZE}
+          onPageChange={setCurrentPage}
+          className="mt-2 border-t pt-4"
+        />
       </div>
 
       {/* New Invoice Dialog */}

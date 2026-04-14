@@ -515,7 +515,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col px-4">
                <div className="mb-2">
                  <EditableInput 
-                   value={meta.footerNotesMiddleTitle || "NOT INCLUDED"} 
+                   value={meta.footerNotesMiddleTitle} 
                    onChange={(v: string) => setMeta({ ...meta, footerNotesMiddleTitle: v })} 
                    isBold 
                    className="text-[11px] uppercase tracking-wider text-[#0a1e3f]" 
@@ -528,7 +528,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
             <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col pl-4">
                <div className="mb-2">
                  <EditableInput 
-                   value={meta.footerNotesRightTitle || "Important Documents:"} 
+                   value={meta.footerNotesRightTitle} 
                    onChange={(v: string) => setMeta({ ...meta, footerNotesRightTitle: v })} 
                    isBold 
                    className="text-[11px] uppercase tracking-wider text-[#0a1e3f]" 

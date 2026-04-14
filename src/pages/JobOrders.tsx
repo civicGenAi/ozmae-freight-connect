@@ -30,6 +30,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Pagination } from "@/components/Pagination";
+
+const PAGE_SIZE = 15;
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -69,6 +72,7 @@ export default function JobOrders() {
   const [isEditing, setIsEditing] = useState(false);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const queryClient = useQueryClient();
 
   const form = useForm<JobFormValues>({
@@ -94,10 +98,13 @@ export default function JobOrders() {
   const destination = form.watch("destination");
   const amount = form.watch("amount");
 
-  const { data: jobOrders, isLoading, error: fetchError } = useQuery({
-    queryKey: ["job_orders"],
+  const { data: jobData, isLoading, error: fetchError } = useQuery({
+    queryKey: ["job_orders", currentPage],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const from = (currentPage - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error, count } = await supabase
         .from("job_orders")
         .select(`
           id,
@@ -115,17 +122,21 @@ export default function JobOrders() {
           driver:drivers!job_orders_assigned_driver_id_fkey(full_name),
           vehicle:vehicles!job_orders_assigned_vehicle_id_fkey(plate_number),
           quotation:quotations(total_amount_usd)
-        `)
-        .order("created_at", { ascending: false });
+        `, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       if (error) {
         toast.error(`Database error: ${error.message}`);
         throw error;
       }
-      return data;
+      return { jobs: data, totalCount: count || 0 };
     },
     retry: 1
   });
+
+  const jobOrders = jobData?.jobs || [];
+  const totalCount = jobData?.totalCount || 0;
 
   const { data: dataNeeded } = useQuery({
     queryKey: ["job_form_data"],
@@ -493,6 +504,13 @@ export default function JobOrders() {
             ))}
           </TableBody>
         </Table>
+        <Pagination 
+          currentPage={currentPage}
+          totalCount={totalCount}
+          pageSize={PAGE_SIZE}
+          onPageChange={setCurrentPage}
+          className="bg-card/50 border-t"
+        />
       </div>
 
       {/* New Job Sheet */}

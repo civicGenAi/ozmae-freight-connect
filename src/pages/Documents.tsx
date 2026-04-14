@@ -42,6 +42,9 @@ import { PickupPDF } from "@/components/PickupPDF";
 import { DeliveryNotePDF } from "@/components/DeliveryNotePDF";
 import { InvoicePDF } from "@/components/InvoicePDF";
 import { QuotationPDFDocument } from "@/components/QuotationPDFDocument";
+import { Pagination } from "@/components/Pagination";
+
+const PAGE_SIZE = 15;
 
 const docTypes = [
   { key: "quotation_pdf", label: "Quotation PDF", icon: FileText },
@@ -59,17 +62,22 @@ export default function Documents() {
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [templateDetails, setTemplateDetails] = useState<any>({});
   const [previewDoc, setPreviewDoc] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
-  const { data: jobGroups, isLoading } = useQuery({
-    queryKey: ["document_groups"],
+  const { data: jobGroupsData, isLoading } = useQuery({
+    queryKey: ["document_groups", currentPage],
     queryFn: async () => {
-      const { data: jobs, error: jobsError } = await supabase
+      const from = (currentPage - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data: jobs, error: jobsError, count } = await supabase
         .from("job_orders")
-        .select("id, quotation_id, customer:customers(company_name), origin, destination")
-        .order("created_at", { ascending: false });
+        .select("id, quotation_id, customer:customers(company_name), origin, destination", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to);
       
       if (jobsError) throw jobsError;
 
@@ -79,14 +87,19 @@ export default function Documents() {
       
       if (docsError) throw docsError;
 
-      return jobs.map((job: any) => ({
+      const mappedJobs = jobs.map((job: any) => ({
         ...job,
         docs: docs.filter(d => d.job_order_id === job.id),
         lastUpdated: docs.filter(d => d.job_order_id === job.id).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.created_at,
         quotation_id: job.quotation_id // Ensure this is returned
       }));
+
+      return { jobs: mappedJobs, totalCount: count || 0 };
     },
   });
+
+  const jobGroups = jobGroupsData?.jobs || [];
+  const totalCount = jobGroupsData?.totalCount || 0;
 
   const uploadMutation = useMutation({
     mutationFn: async ({ file, jobId, category }: { file: File | Blob; jobId: string; category: string }) => {
@@ -292,24 +305,21 @@ export default function Documents() {
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-20 text-muted-foreground italic">No jobs available in the system.</TableCell>
               </TableRow>
-            ) : jobGroups?.map((job: any) => {
-              const isExpanded = expanded === job.id;
-              const docCount = job.docs.length;
-              return (
+            ) : jobGroups?.map((job: any) => (
                 <Fragment key={job.id}>
                   <TableRow 
                     className={cn(
                       "cursor-pointer transition-colors group",
-                      isExpanded ? "bg-accent/5" : "hover:bg-muted/30"
+                      expanded === job.id ? "bg-accent/5" : "hover:bg-muted/30"
                     )} 
                     onClick={() => toggleExpand(job.id)}
                   >
                     <TableCell>
                       <div className={cn(
                         "h-6 w-6 rounded-lg flex items-center justify-center transition-all",
-                        isExpanded ? "bg-accent text-accent-foreground" : "group-hover:bg-accent/10"
+                        expanded === job.id ? "bg-accent text-accent-foreground" : "group-hover:bg-accent/10"
                       )}>
-                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        {expanded === job.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-[10px] font-black uppercase text-accent">
@@ -322,9 +332,9 @@ export default function Documents() {
                     <TableCell>
                        <div className="flex items-center gap-2">
                           <div className="h-1.5 w-12 bg-muted rounded-full overflow-hidden">
-                             <div className="h-full bg-accent transition-all" style={{ width: `${(docCount / 4) * 100}%` }} />
+                             <div className="h-full bg-accent transition-all" style={{ width: `${((job.docs?.length || 0) / 4) * 100}%` }} />
                           </div>
-                          <span className="text-[10px] font-black text-muted-foreground">{docCount}/4</span>
+                          <span className="text-[10px] font-black text-muted-foreground">{job.docs?.length || 0}/4</span>
                        </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
@@ -337,19 +347,19 @@ export default function Documents() {
                         className="h-8 gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent hover:bg-accent/10" 
                         onClick={(e) => {
                           e.stopPropagation();
-                          triggerUpload(job.id, "quotation"); // Default or show menu
+                          triggerUpload(job.id, "quotation");
                         }}
                       >
                         <Upload className="h-3 w-3" /> Quick Upload
                       </Button>
                     </TableCell>
                   </TableRow>
-                  {isExpanded && (
+                  {expanded === job.id && (
                     <TableRow className="bg-muted/10 border-t-0">
                       <TableCell colSpan={7} className="px-12 py-8">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                           {docTypes.map((dt) => {
-                            const doc = job.docs.find((d: any) => d.document_type === dt.key);
+                            const doc = job.docs?.find((d: any) => d.document_type === dt.key);
                             const isThisUploading = uploading?.jobId === job.id && uploading?.category === dt.key;
                             
                             return (
@@ -383,7 +393,7 @@ export default function Documents() {
                                     </button>
                                   </div>
                                 ) : null}
-
+                                
                                 <div className={cn(
                                   "h-14 w-14 rounded-2xl flex items-center justify-center mb-3 shadow-inner transition-transform group-hover:scale-110",
                                   doc ? "bg-success/10 text-success" : "bg-muted/50 text-muted-foreground"
@@ -403,53 +413,52 @@ export default function Documents() {
                                   doc ? "text-foreground" : "text-muted-foreground"
                                 )}>{dt.label}</span>
                                 
-                                {isThisUploading && (
+                                {isThisUploading ? (
                                    <div className="w-full mt-4 max-w-[80px]">
                                       <Progress value={uploadProgress} className="h-1 bg-slate-100" />
                                    </div>
-                                )}
-
-                                {!doc && !isThisUploading && (
-                                   <div className="flex gap-2 mt-4">
-                                      {/* Smart Actions */}
-                                      <div className="flex bg-slate-100 rounded-lg p-0.5 border">
-                                          <button 
-                                            title="External Upload"
-                                            onClick={() => triggerUpload(job.id, dt.key)}
-                                            className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-500 hover:text-accent transition-all"
-                                          >
-                                            <Upload className="h-3 w-3" />
-                                          </button>
-                                          {(dt.key === "quotation_pdf" || dt.key === "invoice_pdf") && (
-                                            <button 
-                                              title="Pull from System"
-                                              onClick={() => pullFromSystem(job, dt.key === "quotation_pdf" ? "quotation" : "invoice")}
-                                              className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-500 hover:text-accent transition-all"
-                                            >
-                                              <FileSearch className="h-3 w-3" />
-                                            </button>
-                                          )}
-                                          {(dt.key === "pickup_confirmation" || dt.key === "delivery_note") && (
-                                            <button 
-                                              title="Generate Template"
-                                              onClick={() => {
-                                                setSelectedJob(job);
-                                                setTemplateType(dt.key === "pickup_confirmation" ? "pickup" : "delivery");
-                                                setTemplateDetails({
-                                                  driver_name: "",
-                                                  vehicle_plate: "",
-                                                  quantity: "1 Unit",
-                                                  pickup_datetime: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-                                                  consignee_name: job.customer?.company_name
-                                                });
-                                                setIsTemplateModalOpen(true);
-                                              }}
-                                              className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-500 hover:text-accent transition-all animate-pulse"
-                                            >
-                                              <Wand2 className="h-3 w-3" />
-                                            </button>
-                                          )}
-                                      </div>
+                                ) : !doc && (
+                                   <div className="flex gap-2 mt-4 scale-90">
+                                      <button 
+                                        title="Upload Locally"
+                                        onClick={() => {
+                                          setSelectedJob(job);
+                                          setUploading({ jobId: job.id, category: dt.key });
+                                          fileInputRef.current?.click();
+                                        }}
+                                        className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-500 hover:text-accent transition-all"
+                                      >
+                                        <Upload className="h-3 w-3" />
+                                      </button>
+                                      {(dt.key === "quotation_pdf" || dt.key === "invoice_pdf") && (
+                                        <button 
+                                          title="Pull from System"
+                                          onClick={() => pullFromSystem(job, dt.key === "quotation_pdf" ? "quotation" : "invoice")}
+                                          className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-500 hover:text-accent transition-all"
+                                        >
+                                          <FileSearch className="h-3 w-3" />
+                                        </button>
+                                      )}
+                                      {(dt.key === "pickup_confirmation" || dt.key === "delivery_note") && (
+                                        <button 
+                                          title="Generate Template"
+                                          onClick={() => {
+                                            setSelectedJob(job);
+                                            setTemplateType(dt.key === "pickup_confirmation" ? "pickup" : "delivery");
+                                            setTemplateDetails({
+                                              driver_name: "",
+                                              vehicle_plate: "",
+                                              cargo_description: "",
+                                              pickup_date: format(new Date(), "yyyy-MM-dd"),
+                                              delivery_date: format(new Date(), "yyyy-MM-dd"),
+                                            });
+                                            setIsTemplateModalOpen(true);
+                                          }}
+                                          className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-500 hover:text-accent transition-all"
+                                        >
+                                          <Wand2 className="h-3 w-3" />
+                                        </button>
+                                      )}
                                    </div>
                                 )}
                               </div>
@@ -460,10 +469,17 @@ export default function Documents() {
                     </TableRow>
                   )}
                 </Fragment>
-              );
-            })}
+              ))
+            }
           </TableBody>
         </Table>
+        <Pagination 
+          currentPage={currentPage}
+          totalCount={totalCount}
+          pageSize={PAGE_SIZE}
+          onPageChange={setCurrentPage}
+          className="bg-card/50 border-t"
+        />
       </div>
 
       {/* Template Details Modal */}
