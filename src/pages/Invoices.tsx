@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Eye, Download, DollarSign, User, Calendar, Building2, Receipt, MapPin, Trash2 } from "lucide-react";
+import { Plus, Eye, Download, DollarSign, User, Calendar, Building2, Receipt, MapPin, Trash2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -13,6 +13,9 @@ import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import { InvoicePDF } from "@/components/InvoicePDF";
+import { CheckCircle2 } from "lucide-react";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -28,8 +31,19 @@ export default function Invoices() {
       const { data, error } = await supabase
         .from("invoices")
         .select(`
-          *,
-          job:job_orders(id, origin, destination)
+          id,
+          invoice_number,
+          job_order_id,
+          customer_id,
+          subtotal_usd,
+          total_amount_usd,
+          deposit_amount_usd,
+          balance_amount_usd,
+          deposit_status,
+          balance_status,
+          deposit_due_date,
+          created_at,
+          job:job_orders(id, origin, destination, customer:customers(company_name))
         `)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -42,7 +56,13 @@ export default function Invoices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("job_orders")
-        .select("id, origin, destination")
+        .select(`
+          id, 
+          origin, 
+          destination, 
+          customer_id,
+          customer:customers(company_name)
+        `)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -51,7 +71,10 @@ export default function Invoices() {
 
   const createInvoiceMutation = useMutation({
     mutationFn: async (newInvoice: any) => {
-      const { error } = await supabase.from("invoices").insert([newInvoice]);
+      const { error } = await supabase
+        .from("invoices")
+        .insert([newInvoice])
+        .select("id, total_amount_usd");
       if (error) throw error;
     },
     onSuccess: () => {
@@ -78,7 +101,11 @@ export default function Invoices() {
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase
         .from("invoices")
-        .update({ deposit_status: status, balance_status: status })
+        .update({ 
+          deposit_status: status, 
+          balance_status: status,
+          updated_at: new Date().toISOString()
+        })
         .eq("id", id);
       if (error) throw error;
     },
@@ -88,21 +115,31 @@ export default function Invoices() {
     },
   });
 
-  const handleCreateInvoice = (e: React.FormEvent<HTMLFormElement>) => {
-     e.preventDefault();
-     const formData = new FormData(e.currentTarget);
-     const total = parseFloat(formData.get("total_amount") as string);
-     const data = {
-        customer_name: formData.get("customer_name"),
-        job_id: formData.get("job_id"),
-        total_amount: total,
-        deposit_amount: total * 0.6,
-        balance_amount: total * 0.4,
-        deposit_status: "pending",
-        balance_status: "pending",
-        due_date: formData.get("due_date"),
-     };
-     createInvoiceMutation.mutate(data);
+  const handleCreateInvoice = async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const formData = new FormData(e.currentTarget);
+      const jobId = formData.get("job_id") as string;
+      const total = parseFloat(formData.get("total_amount") as string);
+      
+      const selectedJob = jobs?.find(j => j.id === jobId);
+      if (!selectedJob) return toast.error("Please select a valid job");
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const data = {
+         job_order_id: jobId,
+         customer_id: selectedJob.customer_id,
+         subtotal_usd: total,
+         total_amount_usd: total,
+         deposit_amount_usd: total * 0.6,
+         balance_amount_usd: total * 0.4,
+         deposit_status: "pending",
+         balance_status: "pending",
+         deposit_due_date: formData.get("due_date"),
+         balance_due_date: formData.get("due_date"), 
+         created_by: user?.id,
+      };
+      createInvoiceMutation.mutate(data);
   };
 
   return (
@@ -148,8 +185,8 @@ export default function Invoices() {
                     <span className="text-[10px] text-muted-foreground italic">{inv.job?.origin} → {inv.job?.destination}</span>
                   </div>
                 </TableCell>
-                <TableCell className="font-medium text-foreground">{inv.customer_name}</TableCell>
-                <TableCell className="text-right font-black text-foreground">{formatCurrency(inv.total_amount)}</TableCell>
+                <TableCell className="font-medium text-foreground">{inv.job?.customer?.company_name || 'N/A'}</TableCell>
+                <TableCell className="text-right font-black text-foreground">{formatCurrency(inv.total_amount_usd)}</TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1.5">
                      <div className="flex items-center justify-between gap-4">
@@ -163,7 +200,7 @@ export default function Invoices() {
                   </div>
                 </TableCell>
                 <TableCell className="text-xs font-medium text-muted-foreground">
-                  {format(new Date(inv.due_date), "MMM d, yyyy")}
+                  {inv.deposit_due_date ? format(new Date(inv.deposit_due_date), "MMM d, yyyy") : 'N/A'}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
@@ -204,10 +241,6 @@ export default function Invoices() {
            </DialogHeader>
            <form onSubmit={handleCreateInvoice} className="space-y-4 py-4">
               <div className="space-y-2">
-                 <Label>Customer Name</Label>
-                 <Input name="customer_name" placeholder="ABC Logistics" required />
-              </div>
-              <div className="space-y-2">
                  <Label>Operational Job</Label>
                  <Select name="job_id" required>
                     <SelectTrigger>
@@ -244,122 +277,140 @@ export default function Invoices() {
 
       {/* View Invoice Dialog */}
       <Dialog open={!!viewInvoice} onOpenChange={() => setViewInvoice(null)}>
-        <DialogContent className="max-w-3xl max-h-[95vh] p-0 overflow-hidden bg-white border-0 shadow-2xl">
-          <DialogHeader className="bg-slate-900 p-8 text-white">
-             <div className="flex justify-between items-center w-full">
-                <div className="flex items-center gap-3">
-                   <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center text-accent-foreground shadow-lg rotate-3">
-                      <Receipt className="h-6 w-6" />
-                   </div>
-                   <div>
-                      <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Tax Invoice</DialogTitle>
-                      <DialogDescription className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-1">Official Payment Request</DialogDescription>
-                   </div>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-white border-0 shadow-2xl flex flex-col">
+          <DialogHeader className="bg-slate-900 px-8 py-6 text-white shrink-0">
+             <div className="flex justify-between items-start w-full">
+                <div className="space-y-1">
+                   <DialogTitle className="text-3xl font-black tracking-tighter uppercase italic">Ozmae Freight</DialogTitle>
+                   <DialogDescription className="text-slate-400 font-bold text-[10px] tracking-widest uppercase">Standard Tax Invoice</DialogDescription>
                 </div>
                 <div className="text-right">
-                   <p className="text-accent font-black text-xl leading-none">INV-{viewInvoice?.id.split('-')[0].toUpperCase()}</p>
-                   <p className="text-[10px] font-bold text-slate-400 mt-2">DATED: {viewInvoice && format(new Date(viewInvoice.created_at), "MMMM dd, yyyy")}</p>
+                   <div className="bg-accent/10 px-3 py-1 rounded border border-accent/20 mb-2">
+                      <p className="text-accent font-black text-lg leading-none">{viewInvoice?.invoice_number}</p>
+                   </div>
+                   <p className="text-[10px] uppercase font-bold text-slate-400">Issued On: {viewInvoice && format(new Date(viewInvoice.created_at), "MMM dd, yyyy")}</p>
                 </div>
              </div>
           </DialogHeader>
 
           {viewInvoice && (
-            <div className="p-8 space-y-8 overflow-y-auto max-h-[calc(95vh-140px)]">
-              <div className="grid grid-cols-2 gap-12">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-primary font-black uppercase text-[10px] tracking-widest border-b border-dashed pb-2">
-                     <Building2 className="h-4 w-4" /> Company Details
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="font-black text-slate-900">Ozmae Freight Solutions Ltd</p>
-                    <p className="text-xs text-muted-foreground">Plot 14, Nyerere Road</p>
-                    <p className="text-xs text-muted-foreground">Dar es Salaam, Tanzania</p>
-                    <p className="text-xs font-bold text-slate-700 mt-2">TIN: 123-456-789</p>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-accent font-black uppercase text-[10px] tracking-widest border-b border-dashed pb-2">
-                     <User className="h-4 w-4" /> Billed To
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="font-black text-slate-900">{viewInvoice.customer_name}</p>
-                    <p className="text-xs text-muted-foreground">Registered Logistics Partner</p>
-                    <p className="text-xs font-bold text-accent mt-2 flex items-center gap-1">
-                       <Calendar className="h-3 w-3" /> DUE BY {format(new Date(viewInvoice.due_date), "MMM dd, yyyy")}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border-2 border-slate-100 overflow-hidden bg-slate-50/30">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-900 text-white">
-                    <tr>
-                      <th className="text-left px-6 py-4 font-bold uppercase text-[10px] tracking-widest">Service Description</th>
-                      <th className="text-center px-6 py-4 font-bold uppercase text-[10px] tracking-widest">Qty</th>
-                      <th className="text-right px-6 py-4 font-bold uppercase text-[10px] tracking-widest">Unit Price</th>
-                      <th className="text-right px-6 py-4 font-bold uppercase text-[10px] tracking-widest">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b bg-white">
-                      <td className="px-6 py-6">
-                        <div className="space-y-1">
-                           <p className="font-black text-slate-900">Heavy Cargo Transport Service</p>
-                           <p className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
-                              <MapPin className="h-3 w-3" /> Operational Job Reference: #{viewInvoice.job?.id.split('-')[0]}
-                           </p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-6 text-center font-bold">1</td>
-                      <td className="px-6 py-6 text-right font-medium">{formatCurrency(viewInvoice.total_amount)}</td>
-                      <td className="px-6 py-6 text-right font-black text-primary">{formatCurrency(viewInvoice.total_amount)}</td>
-                    </tr>
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-slate-900/5">
-                      <td colSpan={3} className="px-6 py-4 text-right font-bold text-slate-600">Subtotal</td>
-                      <td className="px-6 py-4 text-right font-black">{formatCurrency(viewInvoice.total_amount)}</td>
-                    </tr>
-                    <tr className="bg-slate-900/10">
-                      <td colSpan={3} className="px-6 py-4 text-right font-bold text-slate-600">VAT (0%)</td>
-                      <td className="px-6 py-4 text-right font-black">$0.00</td>
-                    </tr>
-                    <tr className="bg-accent text-accent-foreground">
-                      <td colSpan={3} className="px-6 py-6 text-right font-black uppercase text-xs tracking-widest">Total Amount Due</td>
-                      <td className="px-6 py-6 text-right font-black text-xl">{formatCurrency(viewInvoice.total_amount)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="p-4 rounded-xl border border-dashed border-success/30 bg-success/5 flex justify-between items-center">
-                    <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-success/70">Required Deposit (60%)</p>
-                        <p className="text-lg font-black text-success">{formatCurrency(viewInvoice.deposit_amount)}</p>
+            <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
+              {/* Info Bar */}
+              <div className="grid grid-cols-2 gap-16">
+                 <div className="space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b pb-2">Sender Information</h4>
+                    <div className="space-y-1">
+                       <p className="text-sm font-black text-slate-900">Ozmae Freight Solutions Ltd</p>
+                       <p className="text-xs text-slate-500">Plot 14, Nyerere Road, Dar es Salaam</p>
+                       <p className="text-xs text-slate-500">Tanzania, East Africa</p>
+                       <p className="text-xs font-bold text-slate-700 pt-1">TIN: 123-456-789</p>
                     </div>
-                    <StatusBadge status={viewInvoice.deposit_status} />
                  </div>
-                 <div className="p-4 rounded-xl border border-dashed border-accent/20 bg-accent/5 flex justify-between items-center">
-                    <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-accent/70">Remaining Balance (40%)</p>
-                        <p className="text-lg font-black text-accent">{formatCurrency(viewInvoice.balance_amount)}</p>
+                 <div className="space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b pb-2">Attention To</h4>
+                    <div className="space-y-1">
+                       <p className="text-sm font-black text-slate-900">{viewInvoice.job?.customer?.company_name || 'N/A'}</p>
+                       <p className="text-xs text-slate-500 italic">Reference Job: JOB-{viewInvoice.job_order_id?.split('-')[0].toUpperCase()}</p>
+                       <div className="flex items-center gap-2 pt-1">
+                          <span className="text-[10px] font-black bg-accent/5 text-accent px-2 py-0.5 rounded border border-accent/10">DUE DATE: {viewInvoice.deposit_due_date && format(new Date(viewInvoice.deposit_due_date), "MMM dd, yyyy")}</span>
+                       </div>
                     </div>
-                    <StatusBadge status={viewInvoice.balance_status} />
                  </div>
               </div>
 
-              <div className="pt-4 flex gap-3">
-                 <Button className="flex-1 h-12 bg-slate-900 hover:bg-slate-800 text-white font-black uppercase text-xs tracking-widest gap-2">
-                    <Download className="h-4 w-4" /> Download PDF
-                 </Button>
+              {/* Service Details Table */}
+              <div className="space-y-4">
+                 <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Statement of Services</h4>
+                 <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                    <table className="w-full text-sm">
+                       <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                             <th className="text-left px-6 py-4 font-bold uppercase text-[10px] tracking-widest text-slate-500">Description</th>
+                             <th className="text-right px-6 py-4 font-bold uppercase text-[10px] tracking-widest text-slate-500 w-32">Amount (USD)</th>
+                          </tr>
+                       </thead>
+                       <tbody>
+                          <tr className="bg-white group">
+                             <td className="px-6 py-6 font-medium text-slate-900">
+                                <div>
+                                   <p className="font-bold">Operational Transport & Freight Logistics</p>
+                                   <p className="text-[10px] text-slate-400 italic mt-0.5">Origin: {viewInvoice.job?.origin} → Destination: {viewInvoice.job?.destination}</p>
+                                </div>
+                             </td>
+                             <td className="px-6 py-6 text-right font-black text-slate-900 group-hover:text-accent transition-colors">
+                                {formatCurrency(viewInvoice.total_amount_usd)}
+                             </td>
+                          </tr>
+                       </tbody>
+                       <tfoot className="bg-slate-50/50">
+                          <tr className="border-t border-slate-200">
+                             <td className="px-6 py-4 text-right text-[10px] font-black uppercase text-slate-400">Subtotal</td>
+                             <td className="px-6 py-4 text-right font-bold text-slate-700">{formatCurrency(viewInvoice.subtotal_usd || viewInvoice.total_amount_usd)}</td>
+                          </tr>
+                          <tr>
+                             <td className="px-6 py-4 text-right text-[10px] font-black uppercase text-slate-400">Tax / VAT (0%)</td>
+                             <td className="px-6 py-4 text-right font-bold text-slate-700">$0.00</td>
+                          </tr>
+                          <tr className="bg-slate-900 text-white">
+                             <td className="px-6 py-6 text-right text-[11px] font-black uppercase tracking-widest">Grand Total Balance</td>
+                             <td className="px-6 py-6 text-right font-black text-xl">{formatCurrency(viewInvoice.total_amount_usd)}</td>
+                          </tr>
+                       </tfoot>
+                    </table>
+                 </div>
+              </div>
+
+              {/* Installment Breakdown */}
+              <div className="grid grid-cols-2 gap-8">
+                 <div className="p-6 rounded-2xl bg-indigo-50/50 border border-indigo-100/50 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                       <DollarSign className="h-12 w-12" />
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-tighter text-indigo-400 mb-1">60% Required Deposit</p>
+                    <div className="flex items-end justify-between">
+                       <p className="text-2xl font-black text-slate-900">{formatCurrency(viewInvoice.deposit_amount_usd)}</p>
+                       <StatusBadge status={viewInvoice.deposit_status} />
+                    </div>
+                 </div>
+                 <div className="p-6 rounded-2xl bg-emerald-50/50 border border-emerald-100/50 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                       <Clock className="h-12 w-12" />
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-tighter text-emerald-400 mb-1">40% Final Balance</p>
+                    <div className="flex items-end justify-between">
+                       <p className="text-2xl font-black text-slate-900">{formatCurrency(viewInvoice.balance_amount_usd)}</p>
+                       <StatusBadge status={viewInvoice.balance_status} />
+                    </div>
+                 </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 pt-4 shrink-0">
+                 <PDFDownloadLink 
+                    document={<InvoicePDF invoice={viewInvoice} />} 
+                    fileName={`${viewInvoice.invoice_number}.pdf`}
+                    className="flex-1"
+                 >
+                    {({ loading }) => (
+                       <Button className="w-full h-14 bg-slate-900 hover:bg-slate-800 text-white font-black uppercase text-xs tracking-widest gap-2 shadow-xl shadow-slate-200" disabled={loading}>
+                          <Download className="h-4 w-4" /> {loading ? "Generating..." : "Download Original PDF"}
+                       </Button>
+                    )}
+                 </PDFDownloadLink>
+                 
                  <Button 
-                    className="flex-1 h-12 bg-accent hover:bg-accent/90 text-accent-foreground font-black uppercase text-xs tracking-widest gap-2 shadow-lg shadow-accent/20"
+                    className="flex-1 h-14 bg-accent hover:bg-accent/90 text-accent-foreground font-black uppercase text-xs tracking-widest gap-2 shadow-xl shadow-accent/20"
                     onClick={() => updateStatusMutation.mutate({ id: viewInvoice.id, status: 'paid' })}
-                  >
-                    <DollarSign className="h-4 w-4" /> Mark as Paid
+                    disabled={updateStatusMutation.isPending || (viewInvoice.deposit_status === 'paid' && viewInvoice.balance_status === 'paid')}
+                 >
+                    {updateStatusMutation.isPending ? <div className="h-4 w-4 border-2 border-current border-t-transparent animate-spin rounded-full" /> : <CheckCircle2 className="h-4 w-4" />}
+                    {viewInvoice.deposit_status === 'paid' && viewInvoice.balance_status === 'paid' ? "Invoice Settled" : "Mark as Fully Paid"}
                  </Button>
+              </div>
+
+              {/* Terms Footer */}
+              <div className="pt-6 text-center border-t border-slate-100">
+                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ozmae Freight Solutions • Professional Logistics Infrastructure</p>
               </div>
             </div>
           )}

@@ -5,7 +5,18 @@ import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 
-const stages = ["planning", "dispatched", "in transit", "at destination", "delivered", "closed"] as const;
+const stages = [
+  "planning",
+  "awaiting_deposit",
+  "deposit_confirmed",
+  "dispatched",
+  "picked_up",
+  "in_transit",
+  "at_destination",
+  "delivered",
+  "closed",
+  "cancelled"
+] as const;
 
 export default function Tracking() {
   const { data: trackingJobs, isLoading } = useQuery({

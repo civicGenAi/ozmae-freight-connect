@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import * as XLSX from 'xlsx';
+import { Upload, FileSpreadsheet } from "lucide-react";
 
 export default function Fleet() {
   const [vehicleSearch, setVehicleSearch] = useState("");
@@ -126,18 +128,141 @@ export default function Fleet() {
     });
   };
 
+  const downloadVehicleTemplate = () => {
+    const data = [
+      { "Plate Number": "T 123 ABC", "Vehicle Type": "Semi-Trailer", "Capacity (Tons)": 28 },
+      { "Plate Number": "T 456 DEF", "Vehicle Type": "Flatbed", "Capacity (Tons)": 30 }
+    ];
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Vehicles");
+    XLSX.writeFile(wb, "Ozmae_Vehicles_Template.xlsx");
+  };
+
+  const downloadDriverTemplate = () => {
+    const data = [
+      { "Full Name": "John Doe", "Phone Number": "+255 700 000 000", "License Class": "Class E" },
+      { "Full Name": "Jane Smith", "Phone Number": "+255 700 111 222", "License Class": "Class C" }
+    ];
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Drivers");
+    XLSX.writeFile(wb, "Ozmae_Drivers_Template.xlsx");
+  };
+
+  const handleVehicleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const dataStatus = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(dataStatus, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+
+        const mapped = json.map((row: any) => {
+          const validTypes = ['van', 'truck_10t', 'truck_20t', 'truck_30t', 'flatbed', 'trailer'];
+          let type = (row['Vehicle Type'] || row['Type'] || '').toString().toLowerCase().replace(' ', '_');
+          if (!validTypes.includes(type)) type = 'truck_20t';
+
+          return {
+            plate_number: row['Plate Number'] || row['Plate'] || 'Unknown',
+            vehicle_type: type,
+            capacity_tons: parseFloat(row['Capacity (Tons)'] || row['Capacity'] || '0'),
+            status: 'available'
+          };
+        });
+
+        const { error } = await supabase.from('vehicles').insert(mapped);
+        if (error) throw error;
+
+        queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+        toast.success(`Successfully imported ${mapped.length} vehicles`);
+      } catch (err: any) {
+        toast.error(`Import failed: ${err.message}`);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleDriverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const dataStatus = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(dataStatus, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet);
+
+        const mapped = json.map((row: any) => ({
+          full_name: row['Full Name'] || row['Name'] || 'New Driver',
+          phone: (row['Phone Number'] || row['Phone'] || '').toString(),
+          license_class: row['License Class'] || row['License'] || 'TBA',
+          status: 'available'
+        }));
+
+        const { error } = await supabase.from('drivers').insert(mapped);
+        if (error) throw error;
+
+        queryClient.invalidateQueries({ queryKey: ["drivers"] });
+        toast.success(`Successfully imported ${mapped.length} drivers`);
+      } catch (err: any) {
+        toast.error(`Import failed: ${err.message}`);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
   return (
     <div className="space-y-12">
       {/* Vehicles Section */}
       <div className="space-y-6">
         <PageHeader title="Fleet & Drivers">
-          <div className="flex gap-2">
-            <Button onClick={() => setIsVehicleModalOpen(true)} className="bg-accent hover:bg-accent/90 text-accent-foreground h-10 px-4 gap-2">
-              <Plus className="h-4 w-4" /> Add Vehicle
-            </Button>
-            <Button onClick={() => setIsDriverModalOpen(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground h-10 px-4 gap-2">
-              <Plus className="h-4 w-4" /> Add Driver
-            </Button>
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Vehicle Controls */}
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" accept=".xlsx,.xls,.csv" onChange={handleVehicleUpload} />
+                  <Button variant="outline" size="sm" className="h-9 border-accent/20 hover:border-accent hover:text-accent gap-2">
+                    <Upload className="h-3.5 w-3.5" /> Import Vehicles
+                  </Button>
+                </div>
+                <Button onClick={() => setIsVehicleModalOpen(true)} className="bg-accent hover:bg-accent/90 text-accent-foreground h-9 gap-2">
+                  <Plus className="h-4 w-4" /> Add Vehicle
+                </Button>
+              </div>
+              <button onClick={downloadVehicleTemplate} className="text-[9px] text-accent hover:underline flex items-center gap-1">
+                <FileSpreadsheet className="h-2.5 w-2.5" /> Driver Template
+              </button>
+            </div>
+
+            <div className="h-8 w-[1px] bg-border mx-2 hidden md:block" />
+
+            {/* Driver Controls */}
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer z-10" accept=".xlsx,.xls,.csv" onChange={handleDriverUpload} />
+                  <Button variant="outline" size="sm" className="h-9 border-primary/20 hover:border-primary hover:text-primary gap-2">
+                    <Upload className="h-3.5 w-3.5" /> Import Drivers
+                  </Button>
+                </div>
+                <Button onClick={() => setIsDriverModalOpen(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 gap-2">
+                  <Plus className="h-4 w-4" /> Add Driver
+                </Button>
+              </div>
+              <button onClick={downloadDriverTemplate} className="text-[9px] text-primary hover:underline flex items-center gap-1">
+                <FileSpreadsheet className="h-2.5 w-2.5" /> Driver Template
+              </button>
+            </div>
           </div>
         </PageHeader>
 
@@ -317,7 +442,19 @@ export default function Fleet() {
              </div>
              <div className="space-y-2">
                 <Label>Vehicle Type</Label>
-                <Input name="vehicle_type" placeholder="Semi-Trailer" required />
+                <Select name="vehicle_type" defaultValue="truck_20t" required>
+                  <SelectTrigger className="bg-muted/50 border-accent/20">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="van">Van</SelectItem>
+                    <SelectItem value="truck_10t">Truck (10 Ton)</SelectItem>
+                    <SelectItem value="truck_20t">Truck (20 Ton)</SelectItem>
+                    <SelectItem value="truck_30t">Truck (30 Ton)</SelectItem>
+                    <SelectItem value="flatbed">Flatbed</SelectItem>
+                    <SelectItem value="trailer">Trailer</SelectItem>
+                  </SelectContent>
+                </Select>
              </div>
              <div className="space-y-2">
                 <Label>Capacity (Tons)</Label>

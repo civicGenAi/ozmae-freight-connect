@@ -5,8 +5,15 @@ import {
   LayoutDashboard, Users, FileText, DollarSign, Truck, MapPin,
   CreditCard, FolderOpen, Settings, Building2, UserCog, Bell,
   ClipboardList, Receipt, Menu, X, LogOut, AlertTriangle,
-  Activity, Phone, CheckSquare, TrendingDown
+  Activity, Phone, CheckSquare, TrendingDown, ChevronDown, 
+  ChevronRight, PanelLeft, PanelLeftClose, BarChart3
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import ozmaeLogoImg from "@/assets/ozmae-logo.png";
 import { supabase } from "@/lib/supabase";
 import {
@@ -35,6 +42,7 @@ const navSections = [
     label: "OVERVIEW",
     items: [
       { title: "Dashboard", path: "/", icon: LayoutDashboard },
+      { title: "Reports", path: "/reports", icon: BarChart3 },
     ],
   },
   {
@@ -85,14 +93,42 @@ const navSections = [
   },
 ];
 
-function SidebarNav({ onClose }: { onClose?: () => void }) {
+function SidebarNav({ 
+  onClose, 
+  isCollapsed, 
+  openGroups, 
+  toggleGroup 
+}: { 
+  onClose?: () => void;
+  isCollapsed: boolean;
+  openGroups: string[];
+  toggleGroup: (label: string) => void;
+}) {
   const location = useLocation();
 
   return (
-    <div className="flex flex-col h-full bg-primary text-primary-foreground/80">
+    <div className="flex flex-col h-full bg-primary text-primary-foreground/80 overflow-hidden">
       {/* Logo */}
-      <div className="px-5 py-5 flex items-center gap-2 border-b border-sidebar-border">
-        <img src={ozmaeLogoImg} alt="Ozmae" className="h-8 w-auto brightness-0 invert" />
+      <div className={cn(
+        "px-5 py-5 flex items-center border-b border-sidebar-border h-14 overflow-hidden shrink-0",
+        isCollapsed ? "justify-center px-0" : "gap-2"
+      )}>
+        <motion.img 
+          initial={false}
+          animate={{ width: isCollapsed ? 28 : "auto", opacity: 1 }}
+          src={ozmaeLogoImg} 
+          alt="Ozmae" 
+          className={cn("h-7 brightness-0 invert shrink-0", isCollapsed && "mx-auto")} 
+        />
+        {!isCollapsed && (
+          <motion.span 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="font-black text-white tracking-tighter text-lg"
+          >
+            OZMAE
+          </motion.span>
+        )}
         {onClose && (
           <button onClick={onClose} className="ml-auto md:hidden">
             <X className="h-5 w-5" />
@@ -101,36 +137,99 @@ function SidebarNav({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
-        {navSections.map((section) => (
-          <div key={section.label}>
-            <p className="px-3 mb-2 text-[10px] font-semibold tracking-widest text-primary-foreground/40 uppercase">
-              {section.label}
-            </p>
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={onClose}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors",
-                      isActive
-                        ? "bg-accent text-accent-foreground font-medium"
-                        : "hover:bg-sidebar-accent text-primary-foreground/70 hover:text-primary-foreground"
-                    )}
+      <nav className="flex-1 overflow-y-auto py-2 px-3 space-y-4 custom-scrollbar">
+        {navSections.map((section) => {
+          const isOpen = openGroups.includes(section.label);
+          const hasActiveItem = section.items.some(item => location.pathname === item.path);
+
+          return (
+            <div key={section.label} className="space-y-1">
+              {!isCollapsed && (
+                <button 
+                  onClick={() => toggleGroup(section.label)}
+                  className="w-full flex items-center justify-between px-3 mb-1 group"
+                >
+                  <p className="text-[10px] font-black tracking-widest text-primary-foreground/30 uppercase group-hover:text-primary-foreground/50 transition-colors">
+                    {section.label}
+                  </p>
+                  <motion.div animate={{ rotate: isOpen ? 0 : -90 }}>
+                    <ChevronDown className="h-3 w-3 text-primary-foreground/20" />
+                  </motion.div>
+                </button>
+              )}
+
+              <AnimatePresence initial={false}>
+                {(isOpen || isCollapsed || section.label === "OVERVIEW") && (
+                  <motion.div 
+                    initial={isCollapsed ? { opacity: 1 } : { height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-0.5 overflow-hidden"
                   >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span>{item.title}</span>
-                  </Link>
-                );
-              })}
+                    {section.items.map((item) => {
+                      const isActive = location.pathname === item.path;
+                      const content = (
+                        <Link
+                          key={item.path}
+                          to={item.path}
+                          onClick={onClose}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2 text-sm rounded-xl transition-all duration-200 group relative",
+                            isActive
+                              ? "bg-accent text-accent-foreground font-bold shadow-lg shadow-accent/20"
+                              : "hover:bg-white/5 text-primary-foreground/60 hover:text-white"
+                          )}
+                        >
+                          <item.icon className={cn("h-4 w-4 shrink-0 transition-transform group-hover:scale-110", isActive && "text-accent-foreground")} />
+                          {!isCollapsed && (
+                             <motion.span 
+                               initial={{ opacity: 0, x: -10 }}
+                               animate={{ opacity: 1, x: 0 }}
+                               className="truncate"
+                             >
+                               {item.title}
+                             </motion.span>
+                          )}
+                          {isCollapsed && isActive && (
+                             <motion.div 
+                               layoutId="active-indicator"
+                               className="absolute left-[-12px] w-1 h-6 bg-accent rounded-r-full"
+                             />
+                          )}
+                        </Link>
+                      );
+
+                      if (isCollapsed) {
+                        return (
+                          <Tooltip key={item.path} delayDuration={0}>
+                            <TooltipTrigger asChild>
+                              {content}
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="bg-[#0f1d35] border-white/10 text-white font-bold text-[10px] uppercase tracking-widest">
+                              {item.title}
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      }
+                      return content;
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
+      
+      {/* Settings Footer */}
+      {!isCollapsed && (
+        <div className="p-4 border-t border-white/5 bg-black/10">
+           <div className="flex items-center gap-3 px-3 py-2 text-[10px] font-black text-primary-foreground/40 uppercase tracking-widest">
+              <Settings className="h-3 w-3" /> System Status: Online
+           </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -141,12 +240,39 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  
+  // Sidebar state
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem("ozmae_sidebar_collapsed");
+    return saved === "true";
+  });
+  
+  const [openGroups, setOpenGroups] = useState<string[]>(() => {
+    const saved = localStorage.getItem("ozmae_sidebar_groups");
+    return saved ? JSON.parse(saved) : ["OVERVIEW", "CRM & RELATIONSHIPS", "OPERATIONS"];
+  });
+
+  const toggleGroup = (label: string) => {
+    if (label === "OVERVIEW") return; // Keep overview always accessible
+    setOpenGroups(prev => {
+      const next = prev.includes(label) 
+        ? prev.filter(l => l !== label) 
+        : [...prev, label];
+      localStorage.setItem("ozmae_sidebar_groups", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem("ozmae_sidebar_collapsed", String(next));
+      return next;
+    });
+  };
 
   useEffect(() => {
-    let isFetching = false;
     const fetchProfile = async (u?: any) => {
-      if (isFetching) return;
-      isFetching = true;
       try {
         const user = u || (await supabase.auth.getUser()).data.user;
         if (user) {
@@ -161,24 +287,25 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error("Error fetching profile:", error);
-      } finally {
-        isFetching = false;
       }
     };
 
-    // Initial fetch
-    fetchProfile();
-
+    // The listener fires INITIAL_SESSION on mount in many cases, 
+    // but we can also just rely on its first valid event to avoid parallel calls with AuthGuard.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-        fetchProfile(session?.user);
+      if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "INITIAL_SESSION") {
+        if (session?.user) {
+          fetchProfile(session.user);
+        }
       } else if (event === "SIGNED_OUT") {
         setProfile(null);
         navigate("/login");
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const confirmLogout = async () => {
@@ -197,11 +324,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     .find((i) => i.path === location.pathname)?.title || "Ozmae Freight";
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[#F8F9FA]">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-sidebar-border">
-        <SidebarNav />
-      </aside>
+      <motion.aside 
+        initial={false}
+        animate={{ width: isCollapsed ? 76 : 240 }}
+        className="hidden md:flex shrink-0 flex-col border-r border-sidebar-border bg-primary z-40 transition-all duration-300 ease-in-out"
+      >
+        <SidebarNav 
+          isCollapsed={isCollapsed} 
+          openGroups={openGroups} 
+          toggleGroup={toggleGroup} 
+        />
+      </motion.aside>
 
       {/* Mobile overlay */}
       {mobileOpen && (
@@ -216,12 +351,29 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="h-14 bg-card border-b flex items-center justify-between px-4 md:px-6 shrink-0">
+        <header className="h-14 bg-white border-b flex items-center justify-between px-4 md:px-6 shrink-0 z-30">
           <div className="flex items-center gap-3">
-            <button onClick={() => setMobileOpen(true)} className="md:hidden">
+            <button onClick={() => setMobileOpen(true)} className="md:hidden p-2 hover:bg-muted rounded-xl transition-colors">
               <Menu className="h-5 w-5 text-foreground" />
             </button>
-            <h2 className="font-semibold text-foreground">{currentTitle}</h2>
+            
+            <button 
+              onClick={toggleCollapse} 
+              className="hidden md:flex p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground hover:text-foreground"
+            >
+              {isCollapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            </button>
+
+            <div className="h-6 w-px bg-border mx-1 hidden md:block" />
+            
+            <motion.h2 
+              key={currentTitle}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="font-black text-xs uppercase tracking-widest text-foreground"
+            >
+              {currentTitle}
+            </motion.h2>
           </div>
           <div className="flex items-center gap-3">
              <NotificationCenter />

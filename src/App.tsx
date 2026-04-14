@@ -22,6 +22,7 @@ import MyAccount from "@/pages/MyAccount";
 import NotFound from "@/pages/NotFound";
 import Verify2FA from "@/pages/Verify2FA";
 import ResetPassword from "@/pages/ResetPassword";
+import Reports from "@/pages/Reports";
 
 import Customers from "@/pages/crm/Customers";
 import CustomerProfile from "@/pages/crm/CustomerProfile";
@@ -46,6 +47,12 @@ const App = () => (
               <Verify2FA />
             </AuthGuard>
           } />
+          
+          <Route element={
+            <AuthGuard>
+              <AppLayout><Reports /></AppLayout>
+            </AuthGuard>
+          } path="/reports" />
           
           <Route element={
             <AuthGuard>

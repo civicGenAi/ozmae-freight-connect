@@ -44,10 +44,18 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from("job_orders")
         .select(`
-          *,
+          id,
+          job_number,
+          customer_id,
+          origin,
+          destination,
+          status,
+          total_amount,
+          created_at,
           customer:customers(company_name),
-          driver:drivers(full_name),
-          vehicle:vehicles(plate_number)
+          driver:drivers!job_orders_assigned_driver_id_fkey(full_name),
+          vehicle:vehicles!job_orders_assigned_vehicle_id_fkey(plate_number),
+          quotation:quotations(total_amount_usd)
         `)
         .order("created_at", { ascending: false })
         .limit(6);
@@ -271,7 +279,7 @@ export default function Dashboard() {
                   <TableCell className="text-xs font-bold text-foreground">{job.customer?.company_name || 'N/A'}</TableCell>
                   <TableCell className="text-[10px] text-muted-foreground font-medium">{job.origin} → {job.destination}</TableCell>
                   <TableCell><StatusBadge status={job.status} /></TableCell>
-                  <TableCell className="text-right font-black text-xs">{formatCurrency(job.total_amount_usd || 0)}</TableCell>
+                  <TableCell className="text-right font-black text-xs">{formatCurrency(job.quotation?.total_amount_usd || job.total_amount || 0)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

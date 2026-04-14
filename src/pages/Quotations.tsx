@@ -17,7 +17,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -129,10 +128,10 @@ export default function Quotations() {
         if (item.type === 'header') return acc;
         return acc + cleanAmount(item.rate_usd);
       }, 0);
-      
+
       const qty = parseUnitQuantity(watchedMainUnit);
       const calculatedTotal = sum * qty;
-      
+
       // Always sync — even when 0, so erasing a rate clears the total
       form.setValue("amount", calculatedTotal > 0 ? calculatedTotal.toFixed(2) as any : "" as any, { shouldDirty: false });
     }
@@ -164,8 +163,8 @@ export default function Quotations() {
           extra_units: lead.cargo_items?.find((it: any) => it.type === 'metadata')?.extra_units || lead.extra_metadata?.extra_units || [],
           cargo_items: lead.cargo_items?.filter((it: any) => it.type !== 'metadata').length > 0
             ? lead.cargo_items
-                .filter((it: any) => it.type !== 'metadata')
-                .map((it: any) => ({ ...it, extra_rates: it.extra_rates || [] }))
+              .filter((it: any) => it.type !== 'metadata')
+              .map((it: any) => ({ ...it, extra_rates: it.extra_rates || [] }))
             : [{ description: lead.cargo_description || "", type: "item", rate_usd: "", remarks: "", extra_rates: [], indent: 1 }],
           remarks: lead.remarks || "",
           amount: lead.rate_usd?.toString() || "" as any,
@@ -181,8 +180,8 @@ export default function Quotations() {
             const values = form.getValues();
             // Ensure we have a valid customer name if customer_id is missing
             createQuoteMutation.mutate({
-               ...values,
-               customer_name_fallback: lead.customer_name_raw
+              ...values,
+              customer_name_fallback: lead.customer_name_raw
             } as any);
           }, 100);
         } else {
@@ -234,8 +233,8 @@ export default function Quotations() {
     const unique = new Set<string>();
     if (leads) leads.forEach((l: any) => { if (l.commodity) unique.add(l.commodity) });
     if (quotations) quotations.forEach((q: any) => {
-       const comm = q.metadata?.tableHeaders?.find((h:any) => h.label === "Commodity")?.value;
-       if (comm && typeof comm === "string") unique.add(comm);
+      const comm = q.metadata?.tableHeaders?.find((h: any) => h.label === "Commodity")?.value;
+      if (comm && typeof comm === "string") unique.add(comm);
     });
     return ["General Cargo", "Electronics", "Agricultural", "Vehicles", "Heavy Machinery", "Perishables", "Minerals/Ores", ...Array.from(unique)];
   }, [leads, quotations]);
@@ -249,8 +248,8 @@ export default function Quotations() {
   const createQuoteMutation = useMutation({
     mutationFn: async (values: QuoteFormValues) => {
       // Ensure numeric fields are correctly handled (default to 0 if empty to satisfy DB constraints)
-      const amountValue = typeof values.amount === 'string' 
-        ? (values.amount === "" ? 0 : parseFloat(values.amount)) 
+      const amountValue = typeof values.amount === 'string'
+        ? (values.amount === "" ? 0 : parseFloat(values.amount))
         : (values.amount || 0);
 
       const newQuote = {
@@ -265,17 +264,17 @@ export default function Quotations() {
         metadata: {
           titleText: "FREIGHT QUOTATION",
           tableHeaders: [
-            "DESCRIPTION", 
-            (values.main_unit || "1*40'HC").toUpperCase(), 
+            "DESCRIPTION",
+            (values.main_unit || "1*40'HC").toUpperCase(),
             ...(values.extra_units || []).map(u => u.toUpperCase()),
             "REMARKS"
           ],
           leftFields: [
-            { 
-              label: "Date :", 
+            {
+              label: "Date :",
               value: values.lead_id && leads?.find(l => l.id === values.lead_id)
                 ? format(new Date(leads.find(l => l.id === values.lead_id).created_at), "dd/MM/yyyy")
-                : format(new Date(), "dd/MM/yyyy") 
+                : format(new Date(), "dd/MM/yyyy")
             },
             { label: "Customer :", value: customers?.find(c => c.id === values.customer_id)?.company_name || (values as any).customer_name_fallback || "N/A" },
             { label: "Contact Person :", value: values.contact_person || "N/A" },
@@ -289,7 +288,7 @@ export default function Quotations() {
           tableRows: values.cargo_items.map((item) => ({
             type: item.type,
             desc: item.description,
-            amount: item.rate_usd || "-", 
+            amount: item.rate_usd || "-",
             extraCols: item.extra_rates || [],
             remarks: item.remarks || "",
             indent: item.indent || 0,
@@ -583,7 +582,7 @@ export default function Quotations() {
         <SheetContent className="sm:max-w-2xl overflow-y-auto">
           <SheetHeader className="border-b pb-4 mb-4">
             {hasDraft && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-accent/10 border border-accent/20 p-4 rounded-xl mb-6 flex items-center justify-between gap-4"
@@ -598,16 +597,16 @@ export default function Quotations() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     onClick={discardDraft}
                     className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
                   >
                     Discard
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     onClick={restoreDraft}
                     className="bg-accent text-accent-foreground text-[10px] font-black uppercase tracking-widest px-4 h-8 rounded-lg shadow-lg shadow-accent/20"
                   >
@@ -674,11 +673,11 @@ export default function Quotations() {
                     <FormItem>
                       <FormLabel>Commodity</FormLabel>
                       <FormControl>
-                        <CreatableCombobox 
-                           options={existingCommodities} 
-                           value={field.value || ""} 
-                           onChange={field.onChange} 
-                           placeholder="Search or add commodity..." 
+                        <CreatableCombobox
+                          options={existingCommodities}
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          placeholder="Search or add commodity..."
                         />
                       </FormControl>
                       <FormMessage />
@@ -736,11 +735,11 @@ export default function Quotations() {
                     <FormItem>
                       <FormLabel>CIF (USD)</FormLabel>
                       <FormControl>
-                        <CreatableCombobox 
-                           options={existingCifValues} 
-                           value={field.value || "TBA"} 
-                           onChange={field.onChange} 
-                           placeholder="TBA or specific value..." 
+                        <CreatableCombobox
+                          options={existingCifValues}
+                          value={field.value || "TBA"}
+                          onChange={field.onChange}
+                          placeholder="TBA or specific value..."
                         />
                       </FormControl>
                       <FormMessage />
@@ -754,11 +753,11 @@ export default function Quotations() {
                     <FormItem>
                       <FormLabel>Validity</FormLabel>
                       <FormControl>
-                        <CreatableCombobox 
-                           options={validityOptions} 
-                           value={field.value || "15 Days"} 
-                           onChange={field.onChange} 
-                           placeholder="15 Days" 
+                        <CreatableCombobox
+                          options={validityOptions}
+                          value={field.value || "15 Days"}
+                          onChange={field.onChange}
+                          placeholder="15 Days"
                         />
                       </FormControl>
                       <FormMessage />
@@ -780,12 +779,12 @@ export default function Quotations() {
                         </span>
                       </FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
+                        <Input
+                          type="number"
+                          step="0.01"
                           {...field}
                           value={field.value ?? ""}
-                          className="font-bold text-accent text-lg h-12" 
+                          className="font-bold text-accent text-lg h-12"
                           placeholder="Auto-calculated from cargo rates"
                         />
                       </FormControl>
