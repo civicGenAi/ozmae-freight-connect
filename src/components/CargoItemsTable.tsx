@@ -32,6 +32,8 @@ export function CargoItemsTable({ control, name, className }: CargoItemsTablePro
   
   const { setValue, getValues, register } = useFormContext();
 
+  const movementType = useWatch({ control, name: "movement_type" });
+  const transportMode = useWatch({ control, name: "transport_mode" });
   const mainUnit = useWatch({ control, name: "main_unit" });
   const extraUnits = useWatch({ control, name: "extra_units" }) || [];
 
@@ -72,7 +74,7 @@ export function CargoItemsTable({ control, name, className }: CargoItemsTablePro
       // Only auto-fill if the cell is still empty (don't overwrite user edits)
       if (currentExtraRate !== undefined && currentExtraRate !== "" && currentExtraRate !== "0" && currentExtraRate !== "0.00") return;
       
-      const baseRate = cleanAmount(row?.rate_usd);
+      const baseRate = localCleanAmount(row?.rate_usd);
       if (baseRate === 0) return;
       
       const scaledRate = (baseRate * multiplier).toFixed(2);
@@ -96,7 +98,7 @@ export function CargoItemsTable({ control, name, className }: CargoItemsTablePro
     });
   };
 
-  const cleanAmount = (val: any) => {
+  const localCleanAmount = (val: any) => {
     if (!val || val === "-" || val === "—") return 0;
     const cleaned = String(val).replace(/[^\d.-]/g, '');
     return parseFloat(cleaned) || 0;
@@ -111,19 +113,13 @@ export function CargoItemsTable({ control, name, className }: CargoItemsTablePro
       if (colIdx === 0) val = row?.rate_usd || "";
       else val = row?.extra_rates?.[colIdx - 1] || "";
       
-      return acc + cleanAmount(val);
+      return acc + localCleanAmount(val);
     }, 0);
   };
 
   const formatTotal = (num: number) => {
     if (num === 0) return "—";
     return `$ ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
-
-  const getColWidth = (idx: number, totalExtra: number) => {
-    if (idx === 0) return "min-w-[300px]"; // Description
-    if (idx === totalExtra + 2) return "w-40"; // Remarks
-    return "w-32"; // Rate columns
   };
 
   return (

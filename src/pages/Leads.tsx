@@ -38,6 +38,7 @@ import { PhoneInput } from "@/components/PhoneInput";
 import { CargoItemsTable } from "@/components/CargoItemsTable";
 import { TransportModeSelector, TransportModeBadge, TransportModeGroupHeader, type TransportMode } from "@/components/TransportModeSelector";
 import { Pagination } from "@/components/Pagination";
+import { CreatableCombobox } from "@/components/CreatableCombobox";
 
 const PAGE_SIZE = 15;
 
@@ -56,7 +57,11 @@ const leadSchema = z.object({
   commodity: z.string().optional(),
   chargeable_weight: z.string().optional(),
   cif_value_usd: z.string().optional(),
-  transport_mode: z.enum(["air", "sea", "road"]).optional().nullable(),
+  transport_mode: z.enum(["air", "sea", "road"]),
+  movement_type: z.enum(["import", "export"]).optional().nullable(),
+  logistics_carrier: z.string().optional(),
+  logistics_transit: z.string().optional(),
+  logistics_extra: z.string().optional(),
   validity: z.string().optional(),
   cargo_description: z.string().optional(),
   main_unit: z.string().default("1*40'HC"),
@@ -109,7 +114,11 @@ export default function Leads() {
       commodity: "",
       chargeable_weight: "",
       cif_value_usd: "TBA",
-      transport_mode: null,
+      transport_mode: "sea", // Default to sea
+      movement_type: "export",
+      logistics_carrier: "",
+      logistics_transit: "",
+      logistics_extra: "",
       validity: "15 Days",
       cargo_description: "",
       main_unit: "1*40'HC",
@@ -145,7 +154,11 @@ export default function Leads() {
         commodity: leadToEdit.commodity || "",
         chargeable_weight: leadToEdit.chargeable_weight || "",
         cif_value_usd: leadToEdit.cif_value_usd?.toString() || "",
-        transport_mode: leadToEdit.transport_mode || null,
+        transport_mode: leadToEdit.transport_mode || "sea",
+        movement_type: leadToEdit.movement_type || "export",
+        logistics_carrier: leadToEdit.logistics_carrier || "",
+        logistics_transit: leadToEdit.logistics_transit || "",
+        logistics_extra: leadToEdit.logistics_extra || "",
         validity: leadToEdit.validity || "15 Days",
         cargo_description: leadToEdit.cargo_description || "",
         main_unit: leadToEdit.cargo_items?.find((it: any) => it.type === 'metadata')?.main_unit || leadToEdit.main_unit || "1*40'HC",
@@ -223,10 +236,14 @@ export default function Leads() {
         validity: values.validity || null,
         chargeable_weight: values.chargeable_weight,
         cif_value_usd: values.cif_value_usd,
-        transport_mode: values.transport_mode || null,
+        transport_mode: values.transport_mode,
+        movement_type: values.movement_type,
+        logistics_carrier: values.logistics_carrier,
+        logistics_transit: values.logistics_transit,
+        logistics_extra: values.logistics_extra,
         remarks: values.remarks || null,
         cargo_type: "general", 
-        cargo_description: values.cargo_items[0]?.description || "", // Fallback for old column
+        cargo_description: values.cargo_items[0]?.description || "", 
         cargo_items: [
           ...values.cargo_items,
           { type: 'metadata', main_unit: values.main_unit, extra_units: values.extra_units }
@@ -265,9 +282,13 @@ export default function Leads() {
         validity: values.validity || null,
         chargeable_weight: values.chargeable_weight,
         cif_value_usd: values.cif_value_usd,
-        transport_mode: values.transport_mode || null,
+        transport_mode: values.transport_mode,
+        movement_type: values.movement_type,
+        logistics_carrier: values.logistics_carrier,
+        logistics_transit: values.logistics_transit,
+        logistics_extra: values.logistics_extra,
         remarks: values.remarks || null,
-        cargo_description: values.cargo_items[0]?.description || "", // Fallback for old column
+        cargo_description: values.cargo_items[0]?.description || "", 
         cargo_items: [
           ...values.cargo_items,
           { type: 'metadata', main_unit: values.main_unit, extra_units: values.extra_units }
@@ -388,6 +409,7 @@ export default function Leads() {
                       <TableHeader className="bg-muted/50">
                         <TableRow>
                           <TableHead className="w-[100px]">Lead ID</TableHead>
+                          <TableHead className="w-[160px]">Mode</TableHead>
                           <TableHead>Customer</TableHead>
                           <TableHead>Route</TableHead>
                           <TableHead>Commodity</TableHead>
@@ -409,6 +431,9 @@ export default function Leads() {
                             onClick={() => setSelectedLead(lead)}
                           >
                             <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{lead.id.split('-')[0]}</TableCell>
+                            <TableCell>
+                              <TransportModeBadge mode={lead.transport_mode} movement={lead.movement_type} />
+                            </TableCell>
                             <TableCell>
                               <div className="flex flex-col">
                                 <span className="font-medium text-foreground">{lead.customer_name_raw}</span>
@@ -578,8 +603,8 @@ export default function Leads() {
                 {/* Transport Mode Badge in detail */}
               {selectedLead.transport_mode && (
                 <div className="flex items-center gap-2">
-                  <p className="text-[9px] text-muted-foreground uppercase font-bold">Transport Mode</p>
-                  <TransportModeBadge mode={selectedLead.transport_mode} />
+                  <p className="text-[9px] text-muted-foreground uppercase font-bold">Mode & Movement</p>
+                  <TransportModeBadge mode={selectedLead.transport_mode} movement={selectedLead.movement_type} />
                 </div>
               )}
 
@@ -618,6 +643,14 @@ export default function Leads() {
                     <p className="text-[9px] text-muted-foreground uppercase">Validity</p>
                     <p className="text-xs font-bold">{selectedLead.validity || "N/A"}</p>
                   </div>
+                  {selectedLead.movement_type === 'export' && (
+                    <div className="col-span-2 p-2 bg-accent/5 rounded border border-accent/20">
+                      <p className="text-[9px] text-accent uppercase font-bold">Logistics Meta</p>
+                      <p className="text-[11px] font-bold">
+                        {selectedLead.logistics_carrier} {selectedLead.logistics_transit && `| ${selectedLead.logistics_transit}`} {selectedLead.logistics_extra && `| ${selectedLead.logistics_extra}`}
+                      </p>
+                    </div>
+                  )}
                   <div className="p-2 bg-accent/5 rounded border border-accent/20">
                     <p className="text-[9px] text-accent uppercase font-bold">Calc. Sub-Total</p>
                     <p className="text-xs font-bold text-accent">
@@ -861,7 +894,13 @@ function LeadFormSheet({
             <div className="p-4 bg-muted/20 rounded-xl border border-dashed">
               <TransportModeSelector
                 value={form.watch("transport_mode")}
-                onChange={(mode) => form.setValue("transport_mode", mode as any)}
+                onChange={(mode) => {
+                  form.setValue("transport_mode", mode as any);
+                  if (mode === 'road') form.setValue("movement_type", null);
+                  else if (!form.getValues("movement_type")) form.setValue("movement_type", "export");
+                }}
+                movement={form.watch("movement_type")}
+                onMovementChange={(mv) => form.setValue("movement_type", mv)}
               />
             </div>
 
@@ -1004,10 +1043,81 @@ function LeadFormSheet({
                   )}
                 />
               </div>
-              <div className="space-y-3 pt-2">
+              <div className="space-y-4 pt-4 border-t">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 px-1">
                   Cargo Specification <span className="text-destructive">*</span>
                 </Label>
+
+                {form.watch("movement_type") === "export" && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="bg-accent/5 border border-accent/20 rounded-xl p-4 space-y-4 mb-4"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="bg-accent/20 p-1.5 rounded-lg">
+                          <Globe className="h-4 w-4 text-accent" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-accent tracking-widest leading-none">Logistics Quick-Setup</p>
+                          <p className="text-[11px] text-muted-foreground font-medium">Set defaults for all cargo rows</p>
+                        </div>
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        className="h-8 text-[9px] font-bold uppercase tracking-widest border-accent/20 hover:bg-accent hover:text-white transition-all shadow-sm"
+                        onClick={() => {
+                          const carrier = form.getValues("logistics_carrier") || "";
+                          const transit = form.getValues("logistics_transit") || "";
+                          const extra = form.getValues("logistics_extra") || "";
+                          const items = form.getValues("cargo_items") || [];
+                          
+                          const combined = [carrier, transit, extra].filter(Boolean).join(" / ");
+                          
+                          const updated = items.map((item: any) => ({
+                            ...item,
+                            extra_info: combined
+                          }));
+                          form.setValue("cargo_items", updated);
+                          toast.success("Applied to all rows");
+                        }}
+                      >
+                        Apply to All Rows
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-bold uppercase text-muted-foreground/70">{form.watch("transport_mode") === 'air' ? 'Airline Name' : 'Shipping Line'}</Label>
+                        <Input 
+                          placeholder="Carrier name..."
+                          {...form.register("logistics_carrier")}
+                          className="h-9 text-xs bg-white font-medium focus-visible:ring-accent"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-bold uppercase text-muted-foreground/70">Transit Time</Label>
+                        <Input 
+                          placeholder="e.g. 25-30 Days"
+                          {...form.register("logistics_transit")}
+                          className="h-9 text-xs bg-white font-medium focus-visible:ring-accent"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-[9px] font-bold uppercase text-muted-foreground/70">{form.watch("transport_mode") === 'air' ? 'Time (Days)' : 'Free Days'}</Label>
+                        <Input 
+                          placeholder="e.g. 14 Days"
+                          {...form.register("logistics_extra")}
+                          className="h-9 text-xs bg-white font-medium focus-visible:ring-accent"
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
                 <CargoItemsTable control={form.control} name="cargo_items" />
               </div>
             </div>

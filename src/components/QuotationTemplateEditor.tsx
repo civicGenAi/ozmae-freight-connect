@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { X, Save, Download, Plus, Trash2, Printer, Link2, Unlink, FileText, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ozmaeLogoImg from "@/assets/ozmae-logo.png";
 // @ts-ignore
 import signatureImg from "@/assets/signature.png";
+import memberImg from "@/assets/member.jpg";
 import { cn } from "@/lib/utils";
 import { pdf } from "@react-pdf/renderer";
 import { QuotationPDFDocument } from "./QuotationPDFDocument";
@@ -13,6 +15,7 @@ export interface QuotationMetadata {
   titleText: string;
   leftFields: { label: string; value: string }[];
   tableHeaders: string[]; // typically ["DESCRIPTION", "30Tons", "REMARKS"]
+  columnTypes?: ("desc" | "pricing" | "text" | "remarks")[];
   tableRows: { type: "header" | "item"; desc: string; amount: string; remarks: string; extraCols?: string[]; mergeRemark?: boolean; indent?: number }[];
   totalAmountText: string;
   footerNotesLeft: string;
@@ -60,6 +63,7 @@ interface QuotationTemplateEditorProps {
   onClose?: () => void;
   isSaving?: boolean;
   renderActions?: (meta: QuotationMetadata) => React.ReactNode;
+  memberLogoUrl?: string;
 }
 
 // --- Sub-components (Moved outside to prevent re-rendering loss of focus) ---
@@ -91,10 +95,18 @@ const EditableTextarea = ({ value, onChange, className, isBold = false, printMod
   );
 };
 
-export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose, isSaving, renderActions }: QuotationTemplateEditorProps) {
+export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose, isSaving, renderActions, memberLogoUrl }: QuotationTemplateEditorProps) {
   const [meta, setMeta] = useState<QuotationMetadata>(DEFAULT_METADATA);
   const [printMode, setPrintMode] = useState(false);
   
+  useEffect(() => {
+    // Lock body scroll when editor is open
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   useEffect(() => {
     if (initialData?.metadata && Object.keys(initialData.metadata).length > 0) {
       setMeta({ ...DEFAULT_METADATA, ...initialData.metadata });
@@ -127,8 +139,6 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
     const updated = [...meta.tableRows];
     updated[index][field] = val;
     setMeta({ ...meta, tableRows: updated });
-    
-    // Auto-sum functionality could be added here if amount contains purely numbers
   };
 
   const addRow = () => {
@@ -148,6 +158,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
           meta={meta} 
           logoUrl={ozmaeLogoImg} 
           signatureUrl={signatureImg} 
+          memberLogoUrl={memberLogoUrl || memberImg}
         />
       ).toBlob();
       
@@ -166,16 +177,8 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
 
   const handleSave = () => {
     if (onSave) {
-      // attempt to parse total amount
       const totalNum = parseFloat(meta.totalAmountText.replace(/[^0-9.-]+/g,"")) || 0;
       onSave(meta, totalNum);
-    }
-  };
-
-  const handleDownloadAndEmail = async () => {
-    await handlePrint();
-    if (onEmail) {
-      onEmail(meta);
     }
   };
 
@@ -189,7 +192,6 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
 
   const cleanAmount = (val: any) => {
     if (!val || val === "-" || val === "—") return 0;
-    // Extract only digits, decimal point, and minus sign
     const cleaned = String(val).replace(/[^\d.-]/g, '');
     return parseFloat(cleaned) || 0;
   };
@@ -201,6 +203,9 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
   };
 
   const calculateSum = (colIdx: number, colCount: number) => {
+    const colType = meta.columnTypes ? meta.columnTypes[colIdx] : (colIdx === 0 ? "desc" : colIdx === colCount - 1 ? "remarks" : "pricing");
+    if (colType !== "pricing") return 0;
+
     return meta.tableRows.reduce((acc, row) => {
       if (row.type !== 'item') return acc;
       const val = getRowValue(row, colIdx, colCount);
@@ -289,261 +294,311 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
 
 
   return (
-    <div className={cn("flex flex-col h-full bg-gray-100", printMode && "bg-white")}>
-      {!printMode && (
-        <div className="flex-none bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm z-10 sticky top-0">
-          <div>
-            <h2 className="text-lg font-bold">Quotation Editor</h2>
-            <p className="text-sm text-gray-500">Edit any text block by clicking on it.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {onClose && (
-              <Button variant="outline" onClick={onClose}><X className="h-4 w-4 mr-2" /> Cancel</Button>
-            )}
-            <Button variant="secondary" onClick={handlePrint} className="gap-2 bg-[#0a1e3f] text-white hover:bg-[#0a1e3f]/90 h-10 px-4">
-              <FileText className="h-4 w-4" /> Download Professional PDF
-            </Button>
-            {onSave && (
-              <Button onClick={handleSave} disabled={isSaving} className="bg-[#F26B2A] hover:bg-[#d85e23] gap-2 h-10 px-4">
-                <Save className="h-4 w-4" /> {isSaving ? "Saving..." : "Save Template"}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden">
+      {/* Backdrop */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-[#0a1e3f]/60 backdrop-blur-md"
+      />
+
+      {/* Editor Surface */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        className={cn(
+          "relative w-[95%] max-w-[1200px] h-[92vh] bg-gray-100 rounded-xl shadow-2xl flex flex-col overflow-hidden border border-white/20",
+          printMode && "bg-white"
+        )}
+      >
+        {!printMode && (
+          <div className="flex-none bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm z-10 sticky top-0">
+            <div>
+              <h2 className="text-xl font-black text-[#0a1e3f]">Quotation Designer</h2>
+              <p className="text-xs text-gray-500 font-medium">Click any text block to customize the dynamic template</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {onClose && (
+                <Button variant="ghost" size="icon" onClick={onClose} className="hover:bg-red-50 hover:text-red-500 rounded-full">
+                  <X className="h-5 w-5" />
+                </Button>
+              )}
+              <div className="w-px h-6 bg-gray-200 mx-2" />
+              <Button variant="secondary" onClick={handlePrint} className="gap-2 bg-[#0a1e3f] text-white hover:bg-[#0a1e3f]/90 h-10 px-6 rounded-lg font-bold">
+                <FileText className="h-4 w-4" /> Export PDF
               </Button>
-            )}
-            <Button 
-              variant="outline" 
-              onClick={handleDownloadAndEmail}
-              className="gap-2 border-[#F26B2A] text-[#F26B2A] hover:bg-[#F26B2A]/5 h-10 px-4"
-            >
-              <Mail className="h-4 w-4" /> Download & Send Email
-            </Button>
-            {renderActions && (
-              <>
-                <div className="w-px h-6 bg-gray-300 mx-1" />
-                {renderActions(meta)}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className={cn("flex-1 overflow-y-auto w-full", !printMode && "p-8")}>
-        <div id="quotation-print-area" className={cn(
-            "bg-white mx-auto relative",
-            !printMode && "shadow-xl max-w-[850px] min-h-[1200px] border border-gray-200"
-          )}
-          style={printMode ? { width: '210mm', minHeight: '297mm', margin: 0, padding: 0 } : {}}
-        >
-          {/* Top Border Line */}
-          <div className="h-2 w-full bg-[#0a1e3f]" />
-
-          {/* Header Row */}
-          <div className="px-12 py-8 flex justify-between items-center">
-            {/* Logo */}
-            <div className="flex items-center gap-4 w-[50%]">
-              <img src={ozmaeLogoImg} alt="Ozmae Freight" className="w-full max-w-[320px] h-auto object-contain object-left scale-[1.1] origin-left" />
-            </div>
-
-            {/* Header divider and Text */}
-            <div className="flex items-center gap-6">
-              <div className="h-28 w-1 bg-black rounded-full opacity-80" />
-              <div className="flex flex-col text-[#404040]">
-                <h1 className="text-2xl font-black tracking-tight uppercase">Ozmae Freight Solutions</h1>
-                <p className="text-[13px]">Arusha, Tanzania East Africa</p>
-                <p className="text-[13px]">info@ozmaelogistics.com</p>
-                <p className="text-[13px]">www.ozmaelogistics.com</p>
-                <p className="text-[13px] font-medium">+255 787 240 780 | +255 754 757 670</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Title Bar */}
-          <div className="bg-[#0a1e3f] text-white w-full py-4 px-12 text-center my-2">
-            {!printMode ? (
-               <input 
-                 value={meta.titleText}
-                 onChange={(e) => setMeta({ ...meta, titleText: e.target.value.toUpperCase() })}
-                 className="bg-transparent text-white font-bold text-center w-full uppercase text-[15px] outline-none border border-transparent hover:border-white/30 focus:border-white p-1 rounded transition-all"
-               />
-            ) : (
-               <h2 className="font-bold uppercase text-[15px] tracking-wide m-0">{meta.titleText}</h2>
-            )}
-          </div>
-
-          {/* Body Content - Two Column Layout */}
-          <div className="px-12 py-6 flex gap-6 relative items-start">
-            
-            {/* Left Column - Details Matrix */}
-            <div className="w-[36%] border border-black/80 flex flex-col mt-px">
-              {meta.leftFields.map((field, idx) => (
-                <div key={idx} className="flex border-b border-black/80 last:border-b-0 min-h-[32px]">
-                  <div className="w-[45%] border-r border-black/80 p-1.5 flex items-center bg-[#fafafa]">
-                    <EditableInput value={field.label} onChange={(v: string) => updateLeftFieldLabel(idx, v)} isBold className="text-[13px]" printMode={printMode} />
-                  </div>
-                  <div className="w-[55%] p-1.5 flex items-center">
-                     <EditableInput value={field.value} onChange={(v: string) => updateLeftField(idx, v)} className="text-[13px] text-gray-800" printMode={printMode} />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Right Column - Pricing Table */}
-            <div className="flex-1 flex flex-col">
-              <div className="border border-black/80 w-full flex flex-col">
-                {/* Headers */}
-                <div className="flex border-b border-black/80">
-                  {meta.tableHeaders.map((header, colIdx) => (
-                    <div key={colIdx} className={cn("border-r border-black/80 p-2", getColWidthClass(colIdx, meta.tableHeaders.length), colIdx === meta.tableHeaders.length - 1 && "border-r-0")}>
-                      <div className="flex justify-between items-center group relative">
-                        <EditableInput 
-                          value={header} 
-                          onChange={(v: string) => {
-                            const newHeaders = [...meta.tableHeaders];
-                            newHeaders[colIdx] = v;
-                            setMeta({ ...meta, tableHeaders: newHeaders });
-                          }} 
-                          isBold 
-                          className={cn("text-[13px] uppercase tracking-wide", colIdx === meta.tableHeaders.length - 1 ? "text-center" : "")} 
-                          printMode={printMode}
-                        />
-                        {!printMode && meta.tableHeaders.length > 3 && colIdx > 0 && colIdx < meta.tableHeaders.length - 1 && (
-                          <button onClick={() => removeColumn(colIdx)} className="absolute -top-1 -right-1 p-0.5 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded bg-white shadow-sm border">
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Rows */}
-                {meta.tableRows.map((row, rowIdx) => (
-                  <div key={rowIdx} className="flex group relative min-h-[32px]">
-                    {meta.tableHeaders.map((_, colIdx) => {
-                      const isLastRow = rowIdx === meta.tableRows.length - 1;
-                      const isRemarks = colIdx === meta.tableHeaders.length - 1;
-                      const hideBottomBorder = isRemarks && row.mergeRemark && !isLastRow;
-                      
-                      return (
-                        <div key={colIdx} className={cn(
-                          "border-r border-black/80 p-1.5 flex flex-col justify-start relative", 
-                          getColWidthClass(colIdx, meta.tableHeaders.length), 
-                          isRemarks && "border-r-0", 
-                          colIdx === 0 && "pl-3",
-                          (!isLastRow && !hideBottomBorder) ? "border-b border-black/20" : ""
-                        )}>
-                          <EditableTextarea 
-                            value={getRowValue(row, colIdx, meta.tableHeaders.length)}
-                            onChange={(v: string) => updateRowValue(rowIdx, colIdx, meta.tableHeaders.length, v)}
-                            className={cn("text-[13px] relative z-10", colIdx > 0 && !isRemarks ? "text-right pr-2" : isRemarks ? "text-center" : "")}
-                            printMode={printMode}
-                          />
-                          
-                          {/* Toggle merge button for remarks column */}
-                          {!printMode && isRemarks && !isLastRow && (
-                            <button 
-                               onClick={() => {
-                                  const updated = [...meta.tableRows];
-                                  updated[rowIdx].mergeRemark = !updated[rowIdx].mergeRemark;
-                                  setMeta({ ...meta, tableRows: updated });
-                               }} 
-                               className="absolute -bottom-[9px] left-1/2 -translate-x-1/2 p-[2px] bg-white border border-gray-300 rounded shadow-sm opacity-0 group-hover:opacity-100 z-20 text-gray-500 hover:text-blue-600 transition-opacity" 
-                               title={row.mergeRemark ? "Restore divider line" : "Hide divider line (merge downward)"}
-                            >
-                              {row.mergeRemark ? <Unlink className="h-[10px] w-[10px]" /> : <Link2 className="h-[10px] w-[10px]" />}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {!printMode && (
-                      <div className="absolute -right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                        <button onClick={() => removeRow(rowIdx)} className="p-1 text-red-500 hover:bg-red-50 rounded bg-white border shadow-sm">
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {/* Total Row */}
-                <div className="flex border-t border-black/80 bg-[#0a1e3f] text-white font-bold">
-                  {meta.tableHeaders.map((_, colIdx) => {
-                    if (colIdx === 0) {
-                      return (
-                        <div key={colIdx} className={cn("border-r border-white/20 p-2 pl-3 flex items-center font-bold", getColWidthClass(colIdx, meta.tableHeaders.length))}>
-                          <span className="text-[13px] uppercase tracking-widest text-white tracking-widest font-black">TOTAL</span>
-                        </div>
-                      );
-                    } else if (colIdx === meta.tableHeaders.length - 1) {
-                      return <div key={colIdx} className={cn("p-2", getColWidthClass(colIdx, meta.tableHeaders.length))} />;
-                    } else {
-                      const sum = calculateSum(colIdx, meta.tableHeaders.length);
-                      const totalVal = formatAmount(sum);
-                      
-                      return (
-                        <div key={colIdx} className={cn("border-r border-white/20 p-2 flex items-center justify-end text-white font-bold", getColWidthClass(colIdx, meta.tableHeaders.length))}>
-                          <span className="text-[14px] pr-2">{totalVal}</span>
-                        </div>
-                      );
-                    }
-                  })}
-                </div>
-              </div>
-
-              {!printMode && (
-                <div className="mt-2 text-right flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={addColumn} className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50">
-                    <Plus className="h-3 w-3 mr-1" /> Add Column
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={addRow} className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50">
-                    <Plus className="h-3 w-3 mr-1" /> Add Row
-                  </Button>
-                </div>
+              {onSave && (
+                <Button onClick={handleSave} disabled={isSaving} className="bg-[#F26B2A] hover:bg-[#d85e23] gap-2 h-10 px-6 rounded-lg font-bold shadow-lg shadow-orange-500/20">
+                  <Save className="h-4 w-4" /> {isSaving ? "Saving..." : "Save Template"}
+                </Button>
+              )}
+              {renderActions && (
+                <>
+                  <div className="w-px h-6 bg-gray-300 mx-1" />
+                  {renderActions(meta)}
+                </>
               )}
             </div>
           </div>
+        )}
 
-          {/* Footer Area */}
-          <div className="px-12 pt-16 pb-12 mt-auto grid grid-cols-3 gap-8">
-            <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col items-start pr-4 relative">
-               <EditableTextarea value={meta.footerNotesLeft} onChange={(v: string) => setMeta({ ...meta, footerNotesLeft: v })} className="min-h-[160px] leading-relaxed relative z-10" printMode={printMode} />
-               <div className="absolute top-[28px] left-[0px] w-[220px] h-[70px] pointer-events-none mix-blend-multiply opacity-100 flex items-center">
-                 <img src={signatureImg} alt="Signature" className="w-full h-full object-contain object-left scale-[1.3] origin-left" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-               </div>
+        <div className={cn("flex-1 overflow-y-auto w-full p-8 scrollbar-thin scrollbar-thumb-gray-300")}>
+          <div id="quotation-print-area" className={cn(
+              "bg-white mx-auto relative",
+              !printMode && "shadow-2xl max-w-[850px] min-h-[1200px] border border-gray-100 rounded-sm"
+            )}
+            style={printMode ? { width: '210mm', minHeight: '297mm', margin: 0, padding: 0 } : {}}
+          >
+            {/* Top Border Line */}
+            <div className="h-2 w-full bg-[#0a1e3f]" />
+
+            {/* Header Row */}
+            <div className="px-12 py-8 flex justify-between items-center">
+              {/* Logo */}
+              <div className="flex items-center gap-4 w-[50%]">
+                <img src={ozmaeLogoImg} alt="Ozmae Freight" className="w-full max-w-[320px] h-auto object-contain object-left scale-[1.1] origin-left" />
+              </div>
+
+              {/* Header divider and Text */}
+              <div className="flex items-center gap-6">
+                <div className="h-28 w-1 bg-black rounded-full opacity-80" />
+                <div className="flex flex-col text-[#404040]">
+                  <h1 className="text-2xl font-black tracking-tight uppercase">Ozmae Freight Solutions</h1>
+                  <p className="text-[13px]">Arusha, Tanzania East Africa</p>
+                  <p className="text-[13px]">info@ozmaelogistics.com</p>
+                  <p className="text-[13px]">www.ozmaelogistics.com</p>
+                  <p className="text-[13px] font-medium">+255 787 240 780 | +255 754 757 670</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Title Bar */}
+            <div className="bg-[#0a1e3f] text-white w-full py-4 px-12 text-center my-2">
+              {!printMode ? (
+                 <input 
+                   value={meta.titleText}
+                   onChange={(e) => setMeta({ ...meta, titleText: e.target.value.toUpperCase() })}
+                   className="bg-transparent text-white font-bold text-center w-full uppercase text-[15px] outline-none border border-transparent hover:border-white/30 focus:border-white p-1 rounded transition-all"
+                 />
+              ) : (
+                 <h2 className="font-bold uppercase text-[15px] tracking-wide m-0">{meta.titleText}</h2>
+              )}
+            </div>
+
+            {/* Body Content - Two Column Layout */}
+            <div className="px-12 py-6 flex gap-6 relative items-start">
+              
+              {/* Left Column - Details Matrix */}
+              <div className="w-[36%] border border-black/80 flex flex-col mt-px">
+                {meta.leftFields.map((field, idx) => (
+                  <div key={idx} className="flex border-b border-black/80 last:border-b-0 min-h-[32px]">
+                    <div className="w-[45%] border-r border-black/80 p-1.5 flex items-center bg-[#fafafa]">
+                      <EditableInput value={field.label} onChange={(v: string) => updateLeftFieldLabel(idx, v)} isBold className="text-[13px]" printMode={printMode} />
+                    </div>
+                    <div className="w-[55%] p-1.5 flex items-center">
+                       <EditableInput value={field.value} onChange={(v: string) => updateLeftField(idx, v)} className="text-[13px] text-gray-800" printMode={printMode} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right Column - Pricing Table */}
+              <div className="flex-1 flex flex-col">
+                <div className="border border-black/80 w-full flex flex-col">
+                  {/* Headers */}
+                  <div className="flex border-b border-black/80">
+                    {meta.tableHeaders.map((header, colIdx) => (
+                      <div key={colIdx} className={cn("border-r border-black/80 p-2", getColWidthClass(colIdx, meta.tableHeaders.length), colIdx === meta.tableHeaders.length - 1 && "border-r-0")}>
+                        <div className="flex justify-between items-center group relative">
+                          <EditableInput 
+                            value={header} 
+                            onChange={(v: string) => {
+                              const newHeaders = [...meta.tableHeaders];
+                              newHeaders[colIdx] = v;
+                              setMeta({ ...meta, tableHeaders: newHeaders });
+                            }} 
+                            isBold 
+                            className={cn("text-[13px] uppercase tracking-wide", colIdx === meta.tableHeaders.length - 1 ? "text-center" : "")} 
+                            printMode={printMode}
+                          />
+                          {!printMode && meta.tableHeaders.length > 3 && colIdx > 0 && colIdx < meta.tableHeaders.length - 1 && (
+                            <button onClick={() => removeColumn(colIdx)} className="absolute -top-1 -right-1 p-0.5 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded bg-white shadow-sm border">
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Rows */}
+                  {meta.tableRows.map((row, rowIdx) => (
+                    <div key={rowIdx} className="flex group relative min-h-[32px]">
+                      {meta.tableHeaders.map((_, colIdx) => {
+                        const isLastRow = rowIdx === meta.tableRows.length - 1;
+                        const isRemarks = colIdx === meta.tableHeaders.length - 1;
+                        const hideBottomBorder = isRemarks && row.mergeRemark && !isLastRow;
+                        
+                        return (
+                          <div key={colIdx} className={cn(
+                            "border-r border-black/80 p-1.5 flex flex-col justify-start relative", 
+                            getColWidthClass(colIdx, meta.tableHeaders.length), 
+                            isRemarks && "border-r-0", 
+                            colIdx === 0 && "pl-3",
+                            (!isLastRow && !hideBottomBorder) ? "border-b border-black/20" : ""
+                          )}>
+                            {(() => {
+                              const colType = meta.columnTypes ? meta.columnTypes[colIdx] : (colIdx === 0 ? "desc" : isRemarks ? "remarks" : "pricing");
+                              const isPricing = colType === "pricing";
+                              const val = getRowValue(row, colIdx, meta.tableHeaders.length);
+                              
+                              return (
+                                <EditableTextarea 
+                                  value={isPricing && row.type !== 'header' ? formatAmount(val) : val}
+                                  onChange={(v: string) => updateRowValue(rowIdx, colIdx, meta.tableHeaders.length, v)}
+                                  className={cn(
+                                    "text-[13px] relative z-10", 
+                                    isPricing ? "text-right pr-2 font-bold" : isRemarks || colType === "text" ? "text-center" : ""
+                                  )}
+                                  printMode={printMode}
+                                />
+                              );
+                            })()}
+                            
+                            {/* Toggle merge button for remarks column */}
+                            {!printMode && isRemarks && !isLastRow && (
+                              <button 
+                                 onClick={() => {
+                                    const updated = [...meta.tableRows];
+                                    updated[rowIdx].mergeRemark = !updated[rowIdx].mergeRemark;
+                                    setMeta({ ...meta, tableRows: updated });
+                                 }} 
+                                 className="absolute -bottom-[9px] left-1/2 -translate-x-1/2 p-[2px] bg-white border border-gray-300 rounded shadow-sm opacity-0 group-hover:opacity-100 z-20 text-gray-500 hover:text-blue-600 transition-opacity" 
+                                 title={row.mergeRemark ? "Restore divider line" : "Hide divider line (merge downward)"}
+                              >
+                                {row.mergeRemark ? <Unlink className="h-[10px] w-[10px]" /> : <Link2 className="h-[10px] w-[10px]" />}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {!printMode && (
+                        <div className="absolute -right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <button onClick={() => removeRow(rowIdx)} className="p-1 text-red-500 hover:bg-red-50 rounded bg-white border shadow-sm">
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Total Row */}
+                  <div className="flex border-t border-black/80 bg-[#0a1e3f] text-white font-bold">
+                    {meta.tableHeaders.map((_, colIdx) => {
+                      const colType = meta.columnTypes ? meta.columnTypes[colIdx] : (colIdx === 0 ? "desc" : colIdx === meta.tableHeaders.length - 1 ? "remarks" : "pricing");
+                      
+                      if (colIdx === 0) {
+                        return (
+                          <div key={colIdx} className={cn("border-r border-white/20 p-2 pl-3 flex items-center font-bold", getColWidthClass(colIdx, meta.tableHeaders.length))}>
+                            <span className="text-[13px] uppercase tracking-widest text-white tracking-widest font-black">TOTAL</span>
+                          </div>
+                        );
+                      } else if (colType === "pricing") {
+                        const sum = calculateSum(colIdx, meta.tableHeaders.length);
+                        const totalVal = formatAmount(sum);
+                        
+                        return (
+                          <div key={colIdx} className={cn("border-r border-white/20 p-2 flex items-center justify-end text-white font-bold", getColWidthClass(colIdx, meta.tableHeaders.length))}>
+                            <span className="text-[14px] pr-2">{totalVal}</span>
+                          </div>
+                        );
+                      } else {
+                        return <div key={colIdx} className={cn("border-r border-white/20 p-2", getColWidthClass(colIdx, meta.tableHeaders.length))} />;
+                      }
+                    })}
+                  </div>
+                </div>
+
+                {!printMode && (
+                  <div className="mt-2 text-right flex justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={addColumn} className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                      <Plus className="h-3 w-3 mr-1" /> Add Column
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={addRow} className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                      <Plus className="h-3 w-3 mr-1" /> Add Row
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Area */}
+            <div className="px-12 pt-16 pb-12 mt-auto grid grid-cols-3 gap-8">
+              {/* Left column - Sincerely */}
+              <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex items-start pr-4 relative">
+                 <div className="flex-1 min-h-[160px] flex flex-col relative">
+                   <EditableTextarea 
+                     value={meta.footerNotesLeft} 
+                     onChange={(v: string) => setMeta({ ...meta, footerNotesLeft: v })} 
+                     className="leading-relaxed relative z-10 w-full" 
+                     printMode={printMode} 
+                   />
+                   <div className="absolute top-[28px] left-[0px] w-[220px] h-[70px] pointer-events-none mix-blend-multiply opacity-100 flex items-center">
+                     <img src={signatureImg} alt="Signature" className="w-full h-full object-contain object-left scale-[1.3] origin-left" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                   </div>
+                 </div>
+              </div>
+              
+              {/* Middle column - Not Included */}
+              <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col px-4">
+                 <div className="mb-2">
+                   <EditableInput 
+                     value={meta.footerNotesMiddleTitle} 
+                     onChange={(v: string) => setMeta({ ...meta, footerNotesMiddleTitle: v })} 
+                     isBold 
+                     className="text-[11px] uppercase tracking-wider text-[#0a1e3f]" 
+                     printMode={printMode} 
+                   />
+                 </div>
+                 <EditableTextarea value={meta.footerNotesMiddle} onChange={(v: string) => setMeta({ ...meta, footerNotesMiddle: v })} isBold={false} className="min-h-[140px] font-medium" printMode={printMode} />
+              </div>
+
+              {/* Right column - Important Docs & Member Logo */}
+              <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col pl-4">
+                 <div className="mb-2">
+                   <EditableInput 
+                     value={meta.footerNotesRightTitle} 
+                     onChange={(v: string) => setMeta({ ...meta, footerNotesRightTitle: v })} 
+                     isBold 
+                     className="text-[11px] uppercase tracking-wider text-[#0a1e3f]" 
+                     printMode={printMode} 
+                   />
+                 </div>
+                 <EditableTextarea value={meta.footerNotesRight} onChange={(v: string) => setMeta({ ...meta, footerNotesRight: v })} isBold={false} className="min-h-[140px] font-medium" printMode={printMode} />
+                 
+                 {(memberLogoUrl || memberImg) && (
+                   <div className="mt-4 flex justify-end">
+                     <img 
+                       src={memberLogoUrl || memberImg} 
+                       alt="Member Logo" 
+                       className="w-[80px] h-auto object-contain" 
+                     />
+                   </div>
+                 )}
+              </div>
             </div>
             
-            <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col px-4">
-               <div className="mb-2">
-                 <EditableInput 
-                   value={meta.footerNotesMiddleTitle} 
-                   onChange={(v: string) => setMeta({ ...meta, footerNotesMiddleTitle: v })} 
-                   isBold 
-                   className="text-[11px] uppercase tracking-wider text-[#0a1e3f]" 
-                   printMode={printMode} 
-                 />
-               </div>
-               <EditableTextarea value={meta.footerNotesMiddle} onChange={(v: string) => setMeta({ ...meta, footerNotesMiddle: v })} isBold={false} className="min-h-[140px] font-medium" printMode={printMode} />
-            </div>
-
-            <div className="text-gray-600 text-[13px] whitespace-pre-wrap flex flex-col pl-4">
-               <div className="mb-2">
-                 <EditableInput 
-                   value={meta.footerNotesRightTitle} 
-                   onChange={(v: string) => setMeta({ ...meta, footerNotesRightTitle: v })} 
-                   isBold 
-                   className="text-[11px] uppercase tracking-wider text-[#0a1e3f]" 
-                   printMode={printMode} 
-                 />
-               </div>
-               <EditableTextarea value={meta.footerNotesRight} onChange={(v: string) => setMeta({ ...meta, footerNotesRight: v })} isBold={false} className="min-h-[140px] font-medium" printMode={printMode} />
-            </div>
+            <style>{`
+              /* Print styles removed in favor of @react-pdf/renderer */
+            `}</style>
           </div>
-          
-          <style>{`
-            /* Print styles removed in favor of @react-pdf/renderer */
-          `}</style>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

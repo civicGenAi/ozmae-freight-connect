@@ -38,6 +38,7 @@ import { QuotationPDFDocument } from "@/components/QuotationPDFDocument";
 import ozmaeLogoImg from "@/assets/ozmae-logo.png";
 // @ts-ignore
 import signatureImg from "@/assets/signature.png";
+import memberImg from "@/assets/member.jpg";
 import { CreatableCombobox } from "@/components/CreatableCombobox";
 import { parseUnitQuantity, cleanAmount } from "@/lib/quotationUtils";
 import { useWatch } from "react-hook-form";
@@ -71,6 +72,10 @@ const quoteSchema = z.object({
   chargeable_weight: z.string().optional(),
   cif_value_usd: z.string().optional(),
   transport_mode: z.enum(["air", "sea", "road"]).optional().nullable(),
+  movement_type: z.enum(["import", "export"]).optional().nullable(),
+  logistics_carrier: z.string().optional(),
+  logistics_transit: z.string().optional(),
+  logistics_extra: z.string().optional(),
   validity: z.string().optional(),
   amount: z.string().optional().transform(v => v ? parseFloat(v) : null),
   valid_until: z.string().min(1, "Valid until date is required"),
@@ -110,6 +115,10 @@ export default function Quotations() {
       valid_until: "",
       remarks: "",
       transport_mode: null,
+      movement_type: "import",
+      logistics_carrier: "",
+      logistics_transit: "",
+      logistics_extra: "",
     }
   });
 
@@ -171,6 +180,10 @@ export default function Quotations() {
           validity: lead.validity || "15 Days",
           valid_until: new Date(Date.now() + (parseInt(lead.validity || "15") || 15) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           transport_mode: lead.transport_mode || null,
+          movement_type: lead.movement_type || "import",
+          logistics_carrier: lead.logistics_carrier || "",
+          logistics_transit: lead.logistics_transit || "",
+          logistics_extra: lead.logistics_extra || "",
         });
 
         if (location.state.directPreview) {
@@ -284,21 +297,36 @@ export default function Quotations() {
             { label: "Chargeable Weight :", value: values.chargeable_weight || "N/A" },
             { label: "CIF Value (USD) :", value: values.cif_value_usd || "N/A" },
             { label: "Validity :", value: values.validity || "15 Days" },
+            ...(values.movement_type === 'export' ? [
+              { 
+                label: values.transport_mode === 'sea' ? "Line/Carrier :" : "Airline/Carrier :", 
+                value: values.logistics_carrier || "N/A" 
+              },
+              { label: "Transit Time :", value: values.logistics_transit || "N/A" },
+              { label: "Free Days :", value: values.logistics_extra || "N/A" }
+            ] : [])
           ],
           tableRows: values.cargo_items.map((item) => ({
             type: item.type,
             desc: item.description,
             amount: item.rate_usd || "-",
-            extraCols: item.extra_rates || [],
+            extraCols: [...(item.extra_rates || [])],
             remarks: item.remarks || "",
             indent: item.indent || 0,
           })),
+          columnTypes: [
+            "desc",
+            "pricing",
+            ...(values.extra_units || []).map(() => "pricing"),
+            "remarks"
+          ],
           totalAmountText: values.amount ? `$${values.amount.toLocaleString()}` : "—",
           footerNotesLeft: "Yours Sincerely,",
           footerNotesMiddle: "• Storage for overstayed shipment\n• Demurrage charges\n• Offloading charges at client premises",
           footerNotesRight: "• Commercial Invoice\n• Packing List\n• Bill of Lading Copy\n• TPIN Copy"
         },
-        transport_mode: (values as any).transport_mode || null,
+        transport_mode: values.transport_mode || null,
+        movement_type: values.movement_type || null,
       };
 
       const { data, error } = await supabase.from("quotations").insert([newQuote]).select().single();
@@ -378,6 +406,7 @@ export default function Quotations() {
           meta={quote.metadata}
           logoUrl={ozmaeLogoImg}
           signatureUrl={signatureImg}
+          memberLogoUrl={memberImg}
         />
       ).toBlob();
       const url = URL.createObjectURL(blob);
@@ -945,25 +974,29 @@ export default function Quotations() {
         customerId={selectedQuote?.customer_id}
       />
 
-      {isPreviewOpen && viewQuote && (
-        <QuotationTemplateEditor
-          initialData={viewQuote}
-          isSaving={updateQuoteMutation.isPending}
-          onSave={async (meta, total) => {
-            await updateQuoteMutation.mutateAsync({ id: viewQuote.id, metadata: meta, totalAmount: total });
-          }}
-          onEmail={() => {
-            const customerEmail = viewQuote.customer?.email || "";
-            const quoteRef = viewQuote.id.split("-")[0].toUpperCase();
-            const subject = encodeURIComponent(`Quotation #${quoteRef} - Ozmae Freight Solutions`);
-            const body = encodeURIComponent(`Dear Customer,\n\nPlease find attached the quotation #${quoteRef} for your freight inquiry.\n\nBest regards,\nOzmae Freight Solutions`);
+      <AnimatePresence>
+        {isPreviewOpen && viewQuote && (
+          <QuotationTemplateEditor
+            key="quotation-editor"
+            initialData={viewQuote}
+            isSaving={updateQuoteMutation.isPending}
+            memberLogoUrl={memberImg}
+            onSave={async (meta, total) => {
+              await updateQuoteMutation.mutateAsync({ id: viewQuote.id, metadata: meta, totalAmount: total });
+            }}
+            onEmail={() => {
+              const customerEmail = viewQuote.customer?.email || "";
+              const quoteRef = viewQuote.id.split("-")[0].toUpperCase();
+              const subject = encodeURIComponent(`Quotation #${quoteRef} - Ozmae Freight Solutions`);
+              const body = encodeURIComponent(`Dear Customer,\n\nPlease find attached the quotation #${quoteRef} for your freight inquiry.\n\nBest regards,\nOzmae Freight Solutions`);
 
-            window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
-            setLogInteractionQuoteId(viewQuote.id);
-          }}
-          onClose={() => setIsPreviewOpen(false)}
-        />
-      )}
+              window.location.href = `mailto:${customerEmail}?subject=${subject}&body=${body}`;
+              setLogInteractionQuoteId(viewQuote.id);
+            }}
+            onClose={() => setIsPreviewOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {declineQuote && (
         <DeclineReasonModal

@@ -33,57 +33,116 @@ const MODES: { value: TransportMode; label: string; icon: string; color: string;
 interface TransportModeSelectorProps {
   value?: TransportMode | null;
   onChange: (mode: TransportMode | null) => void;
+  movement?: "import" | "export" | null;
+  onMovementChange?: (movement: "import" | "export" | null) => void;
   className?: string;
 }
 
-export function TransportModeSelector({ value, onChange, className }: TransportModeSelectorProps) {
+export function TransportModeSelector({ 
+  value, 
+  onChange, 
+  movement, 
+  onMovementChange,
+  className 
+}: TransportModeSelectorProps) {
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-        Transport Mode <span className="font-normal italic opacity-60 ml-1">— optional, recommended</span>
-      </p>
-      <div className="flex gap-3">
-        {MODES.map((mode) => {
-          const isSelected = value === mode.value;
-          return (
-            <button
-              key={mode.value}
-              type="button"
-              onClick={() => onChange(isSelected ? null : mode.value)}
-              className={cn(
-                "flex flex-col items-center justify-center gap-1.5 px-5 py-3 rounded-xl border-2 transition-all duration-200 cursor-pointer",
-                isSelected
-                  ? cn(mode.bg, mode.border, mode.color, "shadow-sm scale-[1.03]")
-                  : "border-border bg-muted/20 text-muted-foreground hover:border-muted-foreground/40",
-              )}
-            >
-              <span className="text-2xl leading-none">{mode.icon}</span>
-              <span className={cn("text-[10px] font-bold uppercase tracking-wide", isSelected ? mode.color : "")}>
-                {mode.label}
-              </span>
-            </button>
-          );
-        })}
+    <div className={cn("space-y-3", className)}>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+          Transport Mode <span className="text-destructive font-black">*</span>
+        </p>
+        <div className="flex gap-3">
+          {MODES.map((mode) => {
+            const isSelected = value === mode.value;
+            return (
+              <button
+                key={mode.value}
+                type="button"
+                onClick={() => {
+                  onChange(isSelected ? null : mode.value);
+                  if (onMovementChange && mode.value === 'road') onMovementChange(null);
+                }}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1.5 px-5 py-3 rounded-xl border-2 transition-all duration-200 cursor-pointer min-w-[100px]",
+                  isSelected
+                    ? cn(mode.bg, mode.border, mode.color, "shadow-sm scale-[1.03]")
+                    : "border-border bg-muted/20 text-muted-foreground hover:border-muted-foreground/40",
+                )}
+              >
+                <span className="text-2xl leading-none">{mode.icon}</span>
+                <span className={cn("text-[10px] font-bold uppercase tracking-wide", isSelected ? mode.color : "")}>
+                  {mode.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
+
+      {(value === "air" || value === "sea") && onMovementChange && (
+        <div className="pt-1 animate-in fade-in slide-in-from-top-2 duration-300">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+            Movement Type <span className="text-destructive font-black">*</span>
+          </p>
+          <div className="flex bg-muted/50 p-1 rounded-lg w-fit border border-dashed border-muted-foreground/20">
+            {[
+              { value: "import", label: "Import", icon: "📥" },
+              { value: "export", label: "Export", icon: "📤" }
+            ].map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => onMovementChange(m.value as any)}
+                className={cn(
+                  "flex items-center gap-2 px-6 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all",
+                  movement === m.value
+                    ? "bg-white text-accent shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span>{m.icon}</span> {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// Standalone badge for list views
-export function TransportModeBadge({ mode }: { mode?: TransportMode | null }) {
+interface TransportModeBadgeProps {
+  mode?: TransportMode | null;
+  movement?: "import" | "export" | null;
+}
+
+export function TransportModeBadge({ mode, movement }: TransportModeBadgeProps) {
   const found = MODES.find((m) => m.value === mode);
   if (!found) return null;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border",
-        found.bg,
-        found.border,
-        found.color
+    <div className="flex items-center gap-1.5">
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border",
+          found.bg,
+          found.border,
+          found.color
+        )}
+      >
+        {found.icon} {found.label}
+      </span>
+      {movement && (
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border",
+            movement === "import" 
+              ? "bg-blue-50 border-blue-200 text-blue-600" 
+              : "bg-orange-50 border-orange-200 text-orange-600"
+          )}
+        >
+          {movement === "import" ? "📥 Import" : "📤 Export"}
+        </span>
       )}
-    >
-      {found.icon} {found.label}
-    </span>
+    </div>
   );
 }
 

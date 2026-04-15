@@ -208,6 +208,17 @@ const styles = StyleSheet.create({
   signatureImg: {
     width: 100,
     height: "auto",
+  },
+  memberLogo: {
+    width: 100,
+    height: "auto",
+    marginTop: 5,
+  },
+  sincerelyRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    width: "100%",
   }
 });
 
@@ -215,11 +226,12 @@ interface Props {
   meta: QuotationMetadata;
   logoUrl: string;
   signatureUrl: string;
+  memberLogoUrl?: string;
 }
 
-export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => {
+export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl, memberLogoUrl }: Props) => {
   const colCount = meta.tableHeaders.length;
-  
+
   // Helpers
   const cleanAmount = (val: any) => {
     if (!val || val === "-" || val === "—") return 0;
@@ -240,7 +252,7 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
     if (idx === 0) return "48%";
     // Remarks (last) takes 18%
     if (idx === total - 1) return "20%";
-    
+
     // Remaining cols share the middle
     const remaining = 100 - 48 - 20;
     const midCount = total - 2;
@@ -257,11 +269,11 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
   const calculateTotal = (colIdx: number) => {
     if (colIdx === 0) return "TOTAL AMOUNT (USD)";
     if (colIdx === colCount - 1) return "";
-    
+
     const sum = meta.tableRows.reduce((acc, row) => {
-       if (row.type !== 'item') return acc;
-       const val = getRowValue(row, colIdx);
-       return acc + cleanAmount(val);
+      if (row.type !== 'item') return acc;
+      const val = getRowValue(row, colIdx);
+      return acc + cleanAmount(val);
     }, 0);
 
     return formatAmount(sum);
@@ -269,18 +281,18 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
 
   // Convert raw footer notes to segments if they contain signatures
   // For simplicity, we'll draw the signature image over the standard text flow in the footerColumn
-  
+
   return (
     <Document title={`Quotation - ${meta.leftFields.find(f => f.label.includes('Customer'))?.value || 'Ozmae'}`}>
       <Page size="A4" style={styles.page}>
         <View style={styles.topBorder} />
-        
+
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             <Image src={logoUrl} style={styles.logo} />
           </View>
-          
+
           <View style={styles.headerInfo}>
             <View style={styles.headerDivider} />
             <View style={styles.headerTextContainer}>
@@ -332,30 +344,32 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
                 return (
                   <View key={rowIdx} style={[styles.tableRow, isHeaderLine && styles.headerRowBG]}>
                     {meta.tableHeaders.map((_, colIdx) => {
-                      const isDesc = colIdx === 0;
-                      const isPricing = colIdx > 0 && colIdx < colCount - 1;
-                      const isRemarks = colIdx === colCount - 1;
+                      const colType = meta.columnTypes ? meta.columnTypes[colIdx] : (colIdx === 0 ? "desc" : colIdx === colCount - 1 ? "remarks" : "pricing");
+                      const isPricing = colType === "pricing";
+                      const isRemarks = colType === "remarks";
+                      const isDesc = colType === "desc";
                       const value = getRowValue(row, colIdx);
 
                       return (
                         <View key={colIdx} style={[
-                          styles.tableCell, 
-                          { width: getColWidth(colIdx) }, 
+                          styles.tableCell,
+                          { width: getColWidth(colIdx) },
                           isRemarks && { borderRightWidth: 0 },
                           (rowIdx === meta.tableRows.length - 1) ? { borderBottomWidth: 0 } : { borderBottomWidth: 0.5, borderBottomColor: "#eee" }
                         ]}>
                           {isPricing ? (
-                             <Text style={[
-                               { textAlign: 'right', fontWeight: 'bold' },
-                               isHeaderLine && { opacity: 0 }
-                             ]}>
-                               {isHeaderLine ? "" : formatAmount(value)}
-                             </Text>
+                            <Text style={[
+                              { textAlign: 'right', fontWeight: 'bold' },
+                              isHeaderLine && { opacity: 0 }
+                            ]}>
+                              {isHeaderLine ? "" : formatAmount(value)}
+                            </Text>
                           ) : (
                             <Text style={[
                               isDesc && isHeaderLine && styles.headerText,
                               isDesc && !isHeaderLine && styles.itemIndent,
                               isRemarks && { textAlign: 'center', fontSize: 7.5, color: '#666' },
+                              !isDesc && !isRemarks && { textAlign: 'center', fontWeight: 'bold' },
                               { width: '100%' }
                             ]}>
                               {value}
@@ -371,19 +385,20 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
               {/* Total Row */}
               <View style={styles.totalRow}>
                 {meta.tableHeaders.map((_, idx) => {
-                   const isFirst = idx === 0;
-                   const isLast = idx === colCount - 1;
-                   const val = calculateTotal(idx);
-                   
-                   return (
-                     <View key={idx} style={[
-                        isFirst ? styles.totalLabel : styles.totalValue, 
-                        { width: getColWidth(idx) },
-                        isLast && { borderRightWidth: 0 }
-                      ]}>
-                       <Text>{val}</Text>
-                     </View>
-                   );
+                  const isFirst = idx === 0;
+                  const isLast = idx === colCount - 1;
+                  const colType = meta.columnTypes ? meta.columnTypes[idx] : (idx === 0 ? "desc" : idx === colCount - 1 ? "remarks" : "pricing");
+                  const val = colType === "pricing" || isFirst ? calculateTotal(idx) : "";
+
+                  return (
+                    <View key={idx} style={[
+                      isFirst ? styles.totalLabel : styles.totalValue,
+                      { width: getColWidth(idx) },
+                      isLast && { borderRightWidth: 0 }
+                    ]}>
+                      <Text>{val}</Text>
+                    </View>
+                  );
                 })}
               </View>
             </View>
@@ -394,31 +409,43 @@ export const QuotationPDFDocument = ({ meta, logoUrl, signatureUrl }: Props) => 
         <View style={styles.footer}>
           {/* Sincerely Zone */}
           <View style={styles.footerColumn}>
-             <Text style={styles.footerText}>Yours Sincerely,</Text>
-             
-             <View style={styles.signatureContainer}>
-                <Image src={signatureUrl} style={styles.signatureImg} />
-             </View>
-             
-             <Text style={[styles.footerText, { fontWeight: 'bold' }]}>OSMOND MOSHA</Text>
-             <Text style={styles.footerText}>DIRECTOR/FOUNDER</Text>
-             <Text style={styles.footerText}>Ozmae Freight Solutions</Text>
-             <Text style={styles.footerText}>Tel. +255 787 240 780 | +255 754 757 670</Text>
-             <Text style={styles.footerText}>Email: info@ozmaelogistics.com</Text>
+            <View style={styles.sincerelyRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.footerText}>Yours Sincerely,</Text>
+
+                <View style={styles.signatureContainer}>
+                  <Image src={signatureUrl} style={styles.signatureImg} />
+                </View>
+
+                <Text style={[styles.footerText, { fontWeight: 'bold' }]}>OSMOND MOSHA</Text>
+                <Text style={styles.footerText}>DIRECTOR/FOUNDER</Text>
+                <Text style={styles.footerText}>Ozmae Freight Solutions</Text>
+                <Text style={styles.footerText}>Tel. +255 787 240 780 | +255 754 757 670</Text>
+                <Text style={styles.footerText}>Email: info@ozmaelogistics.com</Text>
+              </View>
+            </View>
           </View>
 
           <View style={styles.footerColumn}>
-             {meta.footerNotesMiddleTitle ? (
-               <Text style={styles.footerHeader}>{meta.footerNotesMiddleTitle}</Text>
-             ) : null}
-             <Text style={styles.footerText}>{meta.footerNotesMiddle}</Text>
+            {meta.footerNotesMiddleTitle ? (
+              <Text style={styles.footerHeader}>{meta.footerNotesMiddleTitle}</Text>
+            ) : null}
+            <Text style={styles.footerText}>{meta.footerNotesMiddle}</Text>
           </View>
 
           <View style={styles.footerColumn}>
-             {meta.footerNotesRightTitle ? (
-               <Text style={styles.footerHeader}>{meta.footerNotesRightTitle}</Text>
-             ) : null}
-             <Text style={styles.footerText}>{meta.footerNotesRight}</Text>
+            {meta.footerNotesRightTitle ? (
+              <Text style={styles.footerHeader}>{meta.footerNotesRightTitle}</Text>
+            ) : (
+              <Text style={styles.footerHeader}>Important Documents:</Text>
+            )}
+            <Text style={styles.footerText}>{meta.footerNotesRight}</Text>
+
+            {memberLogoUrl && (
+              <View style={{ alignItems: 'flex-end', marginTop: 15 }}>
+                <Image src={memberLogoUrl} style={styles.memberLogo} />
+              </View>
+            )}
           </View>
         </View>
       </Page>
