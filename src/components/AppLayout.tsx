@@ -37,34 +37,52 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NotificationCenter } from "@/components/NotificationCenter";
 
-const navSections = [
+import { useAuth, UserRole } from "@/hooks/useAuth";
+
+interface NavItem {
+  title: string;
+  path: string;
+  icon: any;
+  roles?: UserRole[];
+}
+
+interface NavSection {
+  label: string;
+  items: NavItem[];
+  roles?: UserRole[];
+}
+
+const navSections: NavSection[] = [
   {
     label: "OVERVIEW",
     items: [
       { title: "Dashboard", path: "/", icon: LayoutDashboard },
-      { title: "Reports", path: "/reports", icon: BarChart3 },
+      { title: "Reports", path: "/reports", icon: BarChart3, roles: ["Admin", "Sales"] },
     ],
   },
   {
     label: "CRM & RELATIONSHIPS",
+    roles: ["Admin", "Leads", "Sales"],
     items: [
       { title: "Customers", path: "/crm/customers", icon: Users },
       { title: "Interactions", path: "/crm/interactions", icon: Phone },
       { title: "Tasks Queue", path: "/crm/tasks", icon: CheckSquare },
-      { title: "Health Metrics", path: "/crm/health", icon: Activity },
-      { title: "Lost Deals", path: "/crm/lost-deals", icon: TrendingDown },
+      { title: "Health Metrics", path: "/crm/health", icon: Activity, roles: ["Admin", "Sales"] },
+      { title: "Lost Deals", path: "/crm/lost-deals", icon: TrendingDown, roles: ["Admin", "Sales"] },
     ],
   },
   {
     label: "SALES",
+    roles: ["Admin", "Leads", "Sales"],
     items: [
       { title: "Leads", path: "/leads", icon: Users },
       { title: "Quotations", path: "/quotations", icon: FileText },
-      { title: "Rate Card", path: "/rate-card", icon: DollarSign },
+      { title: "Rate Card", path: "/rate-card", icon: DollarSign, roles: ["Admin", "Sales"] },
     ],
   },
   {
     label: "OPERATIONS",
+    roles: ["Admin", "Operations"],
     items: [
       { title: "Job Orders", path: "/job-orders", icon: ClipboardList },
       { title: "Fleet & Drivers", path: "/fleet", icon: Truck },
@@ -73,6 +91,7 @@ const navSections = [
   },
   {
     label: "FINANCE",
+    roles: ["Admin", "Sales"],
     items: [
       { title: "Invoices", path: "/invoices", icon: Receipt },
       { title: "Payments", path: "/payments", icon: CreditCard },
@@ -86,6 +105,7 @@ const navSections = [
   },
   {
     label: "SETTINGS",
+    roles: ["Admin"],
     items: [
       { title: "My Account", path: "/settings/profile", icon: UserCog },
       { title: "Users & Roles", path: "/settings/users", icon: Users },
@@ -97,14 +117,32 @@ function SidebarNav({
   onClose, 
   isCollapsed, 
   openGroups, 
-  toggleGroup 
+  toggleGroup,
+  roles
 }: { 
   onClose?: () => void;
   isCollapsed: boolean;
   openGroups: string[];
   toggleGroup: (label: string) => void;
+  roles: UserRole[];
 }) {
   const location = useLocation();
+
+  const filteredSections = navSections.filter(section => {
+    // If section has role restrictions, check them
+    if (section.roles && !section.roles.some(r => roles.includes(r))) {
+      return false;
+    }
+    return true;
+  }).map(section => ({
+    ...section,
+    items: section.items.filter(item => {
+      if (item.roles && !item.roles.some(r => roles.includes(r))) {
+        return false;
+      }
+      return true;
+    })
+  })).filter(section => section.items.length > 0);
 
   return (
     <div className="flex flex-col h-full bg-primary text-primary-foreground/80 overflow-hidden">
@@ -138,7 +176,7 @@ function SidebarNav({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-3 space-y-4 custom-scrollbar">
-        {navSections.map((section) => {
+        {filteredSections.map((section) => {
           const isOpen = openGroups.includes(section.label);
           const hasActiveItem = section.items.some(item => location.pathname === item.path);
 
@@ -238,8 +276,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const { user: profile, roles, loading: authLoading, mustChangePassword, shouldShowPasswordReminder } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && mustChangePassword && location.pathname !== "/reset-password") {
+      navigate("/reset-password", { replace: true });
+    }
+  }, [authLoading, mustChangePassword, location.pathname, navigate]);
   
   // Sidebar state
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -271,43 +315,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     });
   };
 
-  useEffect(() => {
-    const fetchProfile = async (u?: any) => {
-      try {
-        const user = u || (await supabase.auth.getUser()).data.user;
-        if (user) {
-          const { data } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", user.id)
-            .single();
-          setProfile(data);
-        } else {
-          setProfile(null);
-        }
-      } catch (error) {
-        console.error("Error fetching profile:", error);
-      }
-    };
-
-    // The listener fires INITIAL_SESSION on mount in many cases, 
-    // but we can also just rely on its first valid event to avoid parallel calls with AuthGuard.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "INITIAL_SESSION") {
-        if (session?.user) {
-          fetchProfile(session.user);
-        }
-      } else if (event === "SIGNED_OUT") {
-        setProfile(null);
-        navigate("/login");
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [navigate]);
-
   const confirmLogout = async () => {
     setShowLogoutDialog(false);
     await supabase.auth.signOut();
@@ -323,6 +330,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     .flatMap((s) => s.items)
     .find((i) => i.path === location.pathname)?.title || "Ozmae Freight";
 
+  if (authLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-[#F8F9FA]">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="h-12 w-12 rounded-full bg-primary/20" />
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Initializing Ozmae Systems...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#F8F9FA]">
       {/* Desktop Sidebar */}
@@ -335,6 +353,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           isCollapsed={isCollapsed} 
           openGroups={openGroups} 
           toggleGroup={toggleGroup} 
+          roles={roles}
         />
       </motion.aside>
 
@@ -343,7 +362,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
           <aside className="relative w-60 h-full overflow-y-auto bg-primary">
-            <SidebarNav onClose={() => setMobileOpen(false)} />
+            <SidebarNav onClose={() => setMobileOpen(false)} roles={roles} isCollapsed={false} openGroups={openGroups} toggleGroup={toggleGroup} />
           </aside>
         </div>
       )}
@@ -408,6 +427,23 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </DropdownMenu>
           </div>
         </header>
+
+        {/* Password Reminder Banner */}
+        {shouldShowPasswordReminder && location.pathname !== "/reset-password" && (
+          <div className="bg-amber-100 border-b border-amber-200 px-6 py-2 flex items-center justify-between animate-in fade-in slide-in-from-top duration-500">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest leading-none">
+                Security Reminder: Please update your default password to ensure account safety.
+              </p>
+            </div>
+            <Link to="/reset-password">
+              <button className="text-[9px] font-black uppercase tracking-tighter bg-amber-200 hover:bg-amber-300 text-amber-900 px-3 py-1 rounded transition-colors">
+                Change Now
+              </button>
+            </Link>
+          </div>
+        )}
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#F8F9FA]">

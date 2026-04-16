@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer, Clock } from "lucide-react";
+import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer, Clock, CheckCircle2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -43,6 +43,16 @@ import { CreatableCombobox } from "@/components/CreatableCombobox";
 import { parseUnitQuantity, cleanAmount } from "@/lib/quotationUtils";
 import { useWatch } from "react-hook-form";
 import { TransportModeSelector, TransportModeBadge, TransportModeGroupHeader, type TransportMode } from "@/components/TransportModeSelector";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -93,6 +103,7 @@ export default function Quotations() {
   const [logInteractionQuoteId, setLogInteractionQuoteId] = useState<string | null>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(false);
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
@@ -392,6 +403,76 @@ export default function Quotations() {
       toast.success("Quotation updated successfully");
     },
     onError: (err: any) => toast.error(err.message),
+  });
+
+  const acceptQuoteMutation = useMutation({
+    mutationFn: async (quote: any) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // 1. Update Quotation Status
+      const { error: quoteErr } = await supabase
+        .from("quotations")
+        .update({ status: 'accepted' })
+        .eq("id", quote.id);
+      if (quoteErr) throw quoteErr;
+
+      // 2. Create Job Order
+      const newJob = {
+        customer_id: quote.customer_id,
+        quotation_id: quote.id,
+        origin: quote.origin,
+        destination: quote.destination,
+        total_amount: quote.total_amount_usd,
+        status: "planning",
+        created_at: new Date().toISOString()
+      };
+
+      const { data: job, error: jobErr } = await supabase
+        .from("job_orders")
+        .insert([newJob])
+        .select()
+        .single();
+      if (jobErr) throw jobErr;
+
+      // 3. Find Operations Users
+      const { data: opUsers } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "Operations");
+
+      // 4. Create Task for Operations
+      if (opUsers && opUsers.length > 0) {
+        const tasks = opUsers.map(op => ({
+          customer_id: quote.customer_id,
+          quotation_id: quote.id,
+          job_order_id: job.id,
+          title: `New Job Order: ${job.id.split('-')[0].toUpperCase()}`,
+          description: `Quote accepted. Please initialize operations for ${quote.origin} to ${quote.destination}.`,
+          due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Due tomorrow
+          priority: 'high',
+          status: 'pending',
+          assigned_to: op.user_id,
+          created_by: user.id
+        }));
+
+        const { error: taskErr } = await supabase.from("crm_tasks").insert(tasks);
+        if (taskErr) console.error("Failed to create op tasks:", taskErr);
+      }
+
+      return job;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quotations"] });
+      queryClient.invalidateQueries({ queryKey: ["job_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["crm_tasks"] });
+      setSelectedQuote(null);
+      setIsAcceptConfirmOpen(false);
+      toast.success("Quotation accepted!", {
+        description: "Job Order has been initialized and assigned to Operations."
+      });
+    },
+    onError: (err: any) => toast.error("Failed to accept quotation: " + err.message),
   });
 
   const filtered = quotations?.filter((q: any) =>
@@ -961,6 +1042,14 @@ export default function Quotations() {
                 >
                   <Trash2 className="h-4 w-4" /> Decline & Close
                 </Button>
+                {selectedQuote.status !== 'accepted' && (
+                  <Button
+                    className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 col-span-2"
+                    onClick={() => setIsAcceptConfirmOpen(true)}
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> Accept & Initialize Job
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -1014,6 +1103,36 @@ export default function Quotations() {
           }}
         />
       )}
+
+      <AlertDialog open={isAcceptConfirmOpen} onOpenChange={setIsAcceptConfirmOpen}>
+        <AlertDialogContent className="bg-white rounded-3xl border-2">
+          <AlertDialogHeader>
+            <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
+              <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+            </div>
+            <AlertDialogTitle className="text-xl font-black uppercase tracking-tight">Confirm Acceptance</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm font-medium text-muted-foreground leading-relaxed">
+              Accepting this quotation will automatically:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Update status to <span className="text-emerald-600 font-bold uppercase">Accepted</span></li>
+                <li>Initialize a new <span className="text-emerald-600 font-bold uppercase">Job Order</span></li>
+                <li>Notify the <span className="text-emerald-600 font-bold uppercase">Operations Team</span> for fulfillment</li>
+              </ul>
+              Are you sure you want to proceed?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6">
+            <AlertDialogCancel className="rounded-xl font-bold uppercase text-[10px] tracking-widest h-11">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest h-11 px-6 shadow-lg shadow-emerald-200"
+              onClick={() => acceptQuoteMutation.mutate(selectedQuote)}
+              disabled={acceptQuoteMutation.isPending}
+            >
+              {acceptQuoteMutation.isPending ? "Initializing..." : "Confirm & Accept"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

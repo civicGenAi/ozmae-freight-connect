@@ -1,6 +1,17 @@
 // Base Stubs for existing DB entities to avoid any typing errors
 export interface Customer { id: string; company_name: string; contact_person?: string; city?: string; [key: string]: any; }
-export interface Profile { id: string; full_name: string; avatar_url?: string; [key: string]: any; }
+export type UserRole = "Admin" | "Leads" | "Sales" | "Operations";
+
+export interface Profile { 
+  id: string; 
+  full_name: string; 
+  email?: string;
+  avatar_url?: string; 
+  role?: string; // Legacy
+  roles?: UserRole[]; // New bridge table roles
+  is_active?: boolean;
+  [key: string]: any; 
+}
 export interface Lead { id: string; lead_number?: string; [key: string]: any; }
 export interface Quotation { id: string; quote_number?: string; [key: string]: any; }
 export interface JobOrder { id: string; job_number?: string; [key: string]: any; }

@@ -98,6 +98,8 @@ export default function JobOrders() {
   const destination = form.watch("destination");
   const amount = form.watch("amount");
 
+  const [isConfirming, setIsConfirming] = useState(false);
+
   const { data: jobData, isLoading, error: fetchError } = useQuery({
     queryKey: ["job_orders", currentPage],
     queryFn: async () => {
@@ -862,7 +864,37 @@ export default function JobOrders() {
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 gap-6 bg-muted/30 p-6 rounded-xl border border-dashed">
+                    {selectedJob.status === 'planning' && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="mb-8 p-6 rounded-2xl bg-emerald-600 text-white shadow-xl shadow-emerald-200"
+                      >
+                        <div className="flex items-center gap-4 mb-4">
+                           <div className="h-12 w-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md">
+                              <CheckCircle2 className="h-6 w-6" />
+                           </div>
+                           <div>
+                              <h4 className="text-sm font-black uppercase tracking-tight text-white">Ready for Activation</h4>
+                              <p className="text-[11px] text-emerald-50 opacity-80">All requirements met. Confirm to notify Operations and Driver.</p>
+                           </div>
+                        </div>
+                        <Button
+                          className="w-full bg-white text-emerald-700 hover:bg-emerald-50 h-11 text-[10px] font-black uppercase tracking-widest shadow-lg"
+                          onClick={() => updateStageMutation.mutate({ id: selectedJob.id, status: 'dispatched' })}
+                        >
+                          Confirm & Activate Operation
+                        </Button>
+                      </motion.div>
+                    )}
+                    <div className="grid grid-cols-2 gap-6 bg-muted/30 p-6 rounded-xl border border-dashed relative overflow-hidden">
+                      {selectedJob.status === 'planning' && (
+                        <div className="absolute top-0 right-0">
+                          <Badge className="rounded-none rounded-bl-xl bg-amber-500 text-white border-none text-[8px] font-black uppercase tracking-tighter">
+                            Awaiting Confirmation
+                          </Badge>
+                        </div>
+                      )}
                       <div className="space-y-1">
                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Customer</p>
                         <p className="text-lg font-bold text-foreground leading-tight">{selectedJob.customer?.company_name || 'N/A'}</p>
