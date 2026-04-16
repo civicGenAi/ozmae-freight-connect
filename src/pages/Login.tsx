@@ -1,17 +1,60 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Truck, ArrowRight, MessageCircle, Mail } from "lucide-react";
+import { Eye, EyeOff, Truck, ArrowRight, MessageCircle, Mail, TrendingUp, Globe, ShieldCheck } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import ozmaeLogoImg from "@/assets/ozmae-logo.png";
+import React from "react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+
+const SLIDES = [
+  {
+    id: 1,
+    title: "Moving East Africa Forward",
+    subtitle: "Scaling logistics infrastructure across 6+ nations with digital precision.",
+    icon: Globe,
+    chartType: "bar",
+    data: [
+      { name: "TZ", value: 450 },
+      { name: "KE", value: 780 },
+      { name: "UG", value: 620 },
+      { name: "RW", value: 1200 },
+    ]
+  },
+  {
+    id: 2,
+    title: "Intelligent Freight Routing",
+    subtitle: "Real-time AI analytics optimizing every mile of the logistics journey.",
+    icon: TrendingUp,
+    chartType: "pie",
+    data: [
+      { name: "On-Time", value: 99.2 },
+      { name: "Transit", value: 0.8 },
+    ]
+  },
+  {
+    id: 3,
+    title: "Seamless Financial Control",
+    subtitle: "Transparent auditing and automated cost management for global trade.",
+    icon: ShieldCheck,
+    chartType: "bar",
+    data: [
+      { name: "Audits", value: 2400 },
+      { name: "Savings", value: 3100 },
+      { name: "Accuracy", value: 9800 },
+      { name: "Volume", value: 1500 },
+    ]
+  }
+];
 
 export default function Login() {
   const navigate = useNavigate();
@@ -19,6 +62,14 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % SLIDES.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,12 +134,8 @@ export default function Login() {
         user_agent: navigator.userAgent
       });
 
-      // ─── MFA Gate ───────────────────────────────────────────────
-      // Use Supabase's native AAL check — this is always accurate
-      // and works regardless of what's stored in the profiles table.
       const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aalData?.currentLevel === "aal1" && aalData?.nextLevel === "aal2") {
-        // User has a verified MFA factor → must verify before entering app
         navigate("/verify-2fa");
       } else {
         navigate("/");
@@ -108,12 +155,10 @@ export default function Login() {
           50% { transform: translateY(-8px); }
         }
         .animate-float-1 { animation: float-slow 4s ease-in-out infinite; }
-        .animate-float-2 { animation: float-slow 4.5s ease-in-out infinite 1s; }
-        .animate-float-3 { animation: float-slow 5s ease-in-out infinite 2s; }
       `}</style>
 
-      {/* Left — branding panel with creative moving SVGs using True Brand Colors */}
-      <div className="hidden lg:flex lg:w-[55%] bg-[#0f1d35] relative overflow-hidden flex-col justify-between p-12 lg:p-16">
+      {/* Left — branding panel with creative moving SVGs */}
+      <div className="hidden lg:flex lg:w-[55%] bg-[#0f1d35] relative overflow-hidden flex-col justify-between p-12 lg:p-16 text-white">
 
         {/* Animated Background SVGs */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
@@ -124,58 +169,17 @@ export default function Login() {
                 <stop offset="100%" style={{ stopColor: '#FF925E', stopOpacity: 0.8 }} />
               </linearGradient>
             </defs>
-
-            {/* Moving Grid Lines */}
             <g>
-              <line x1="10%" y1="0" x2="10%" y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-              <line x1="30%" y1="0" x2="30%" y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-              <line x1="50%" y1="0" x2="50%" y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-              <line x1="70%" y1="0" x2="70%" y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-              <line x1="90%" y1="0" x2="90%" y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-
-              <line x1="0" y1="20%" x2="100%" y2="20%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-              <line x1="0" y1="40%" x2="100%" y2="40%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-              <line x1="0" y1="60%" x2="100%" y2="60%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-              <line x1="0" y1="80%" x2="100%" y2="80%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+              {[10, 30, 50, 70, 90].map(x => (
+                <line key={`x-${x}`} x1={`${x}%`} y1="0" x2={`${x}%`} y2="100%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+              ))}
+              {[20, 40, 60, 80].map(y => (
+                <line key={`y-${y}`} x1="0" y1={`${y}%`} x2="100%" y2={`${y}%`} stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+              ))}
             </g>
-
-            {/* Glowing nodes & connecting lines */}
-            <circle cx="30%" cy="40%" r="4" fill="#F26B2A">
-              <animate attributeName="r" values="4;8;4" dur="3s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.5;1;0.5" dur="3s" repeatCount="indefinite" />
-            </circle>
-            <circle cx="70%" cy="20%" r="6" fill="#F26B2A">
-              <animate attributeName="r" values="6;10;6" dur="4s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.3;0.8;0.3" dur="4s" repeatCount="indefinite" />
-            </circle>
-            <circle cx="50%" cy="80%" r="5" fill="#FF925E">
-              <animate attributeName="r" values="5;9;5" dur="3.5s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.4;0.9;0.4" dur="3.5s" repeatCount="indefinite" />
-            </circle>
-
-            <path d="M 30% 40% L 70% 20%" stroke="url(#brandGrad)" strokeWidth="2" strokeDasharray="10 5" fill="none">
-              <animate attributeName="stroke-dashoffset" from="15" to="0" dur="2s" repeatCount="indefinite" />
-            </path>
-            <path d="M 30% 40% L 50% 80%" stroke="url(#brandGrad)" strokeWidth="2" strokeDasharray="10 5" fill="none">
-              <animate attributeName="stroke-dashoffset" from="15" to="0" dur="3s" repeatCount="indefinite" />
-            </path>
-            <path d="M 70% 20% L 50% 80%" stroke="url(#brandGrad)" strokeWidth="2" strokeDasharray="10 5" fill="none">
-              <animate attributeName="stroke-dashoffset" from="15" to="0" dur="2.5s" repeatCount="indefinite" />
-            </path>
-
-            {/* Moving Freight Box Simulation */}
-            <rect x="0" y="38%" width="12" height="12" fill="#F26B2A" rx="2">
-              <animate attributeName="x" from="30%" to="70%" dur="8s" repeatCount="indefinite" />
-              <animate attributeName="y" from="40%" to="20%" dur="8s" repeatCount="indefinite" />
-            </rect>
-            <rect x="0" y="0" width="10" height="10" fill="#FF925E" rx="2">
-              <animate attributeName="x" from="70%" to="50%" dur="7s" repeatCount="indefinite" />
-              <animate attributeName="y" from="20%" to="80%" dur="7s" repeatCount="indefinite" />
-            </rect>
           </svg>
         </div>
 
-        {/* Big decorative glow spots */}
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#F26B2A] rounded-full mix-blend-screen filter blur-[120px] opacity-10 animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-[#FF925E] rounded-full mix-blend-screen filter blur-[150px] opacity-10" />
 
@@ -183,29 +187,108 @@ export default function Login() {
           <img src={ozmaeLogoImg} alt="Ozmae Freight Solutions" className="h-10 lg:h-12 w-auto object-contain brightness-0 invert drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]" />
         </div>
 
-        <div className="relative z-10 space-y-6 max-w-lg mt-12">
-          <h1 className="text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight">
-            Moving East Africa <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F26B2A] to-[#FF925E]">
-              Forward.
-            </span>
-          </h1>
-          <p className="text-white/70 text-lg leading-relaxed font-medium">
-            Architecting the future of freight with real-time operations, intelligent routing, and seamless financial control.
-          </p>
-
-          <div className="flex gap-10 pt-8 mt-8 border-t border-white/10">
-            {[
-              { value: "1,200+", label: "Shipments", animClass: "animate-float-1" },
-              { value: "6", label: "Countries", animClass: "animate-float-2" },
-              { value: "99.2%", label: "On-time", animClass: "animate-float-3" },
-            ].map((stat) => (
-              <div key={stat.label} className={cn("flex flex-col gap-1 transition-all hover:scale-110 cursor-pointer", stat.animClass)}>
-                <p className="text-3xl font-black text-white drop-shadow-[0_2px_15px_rgba(242,107,42,0.4)]">{stat.value}</p>
-                <p className="text-white/60 text-xs uppercase tracking-[0.2em] font-bold group-hover:text-[#F26B2A] transition-colors">{stat.label}</p>
+        <div className="relative z-10 w-full max-w-lg mt-12 flex-1 flex flex-col justify-center">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentSlide}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="space-y-8"
+            >
+              <div className="space-y-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+                  {React.createElement(SLIDES[currentSlide].icon, { className: "w-4 h-4 text-[#F26B2A]" })}
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#F26B2A]">
+                    Logistics 4.0
+                  </span>
+                </div>
+                
+                <h1 className="text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight">
+                  {SLIDES[currentSlide].title.split(' ').map((word, i, arr) => (
+                    <span key={i}>
+                      {i === arr.length - 1 ? (
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F26B2A] to-[#FF925E]">
+                          {word}
+                        </span>
+                      ) : (
+                        word + ' '
+                      )}
+                    </span>
+                  ))}
+                </h1>
+                
+                <p className="text-white/70 text-lg leading-relaxed font-medium">
+                  {SLIDES[currentSlide].subtitle}
+                </p>
               </div>
-            ))}
-          </div>
+
+              {/* Chart Visualization */}
+              <div className="h-72 w-full bg-white/5 rounded-3xl p-6 border border-white/10 backdrop-blur-xl relative group overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#F26B2A]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                
+                <ResponsiveContainer width="100%" height="100%">
+                  {SLIDES[currentSlide].chartType === "bar" ? (
+                    <BarChart data={SLIDES[currentSlide].data}>
+                      <XAxis dataKey="name" hide />
+                      <Tooltip 
+                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                        contentStyle={{ backgroundColor: '#0f1d35', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                        itemStyle={{ color: '#fff' }}
+                      />
+                      <Bar 
+                        dataKey="value" 
+                        fill="#F26B2A" 
+                        radius={[6, 6, 0, 0]} 
+                        animationDuration={1500}
+                      />
+                    </BarChart>
+                  ) : (
+                    <PieChart>
+                      <Pie
+                        data={SLIDES[currentSlide].data}
+                        innerRadius={65}
+                        outerRadius={85}
+                        paddingAngle={5}
+                        dataKey="value"
+                        animationDuration={1500}
+                        stroke="none"
+                      >
+                        {SLIDES[currentSlide].data.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={index === 0 ? "#F26B2A" : "rgba(255,255,255,0.1)"} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f1d35', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                        itemStyle={{ color: '#fff' }}
+                      />
+                    </PieChart>
+                  )}
+                </ResponsiveContainer>
+
+                {SLIDES[currentSlide].chartType === "pie" && (
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                    <p className="text-3xl font-black text-white">99.2%</p>
+                    <p className="text-[10px] text-white/50 uppercase font-bold tracking-widest leading-none">On-Time</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Slide Indicators */}
+              <div className="flex gap-2">
+                {SLIDES.map((_, i) => (
+                  <div 
+                    key={i} 
+                    className={cn(
+                      "h-1.5 rounded-full transition-all duration-500",
+                      i === currentSlide ? "w-8 bg-[#F26B2A]" : "w-1.5 bg-white/20"
+                    )}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         <p className="relative z-10 text-white/30 text-xs font-medium tracking-wide">
@@ -216,7 +299,6 @@ export default function Login() {
       {/* Right — login form */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 lg:p-24 bg-white relative overflow-hidden">
         
-        {/* Subtle background watermark */}
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] mix-blend-multiply">
           <img src={ozmaeLogoImg} alt="Watermark" className="w-[80%] max-w-[800px] object-contain rotate-[-5deg] grayscale" />
         </div>
