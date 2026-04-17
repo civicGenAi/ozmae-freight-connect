@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer, Clock, CheckCircle2 } from "lucide-react";
+import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer, Clock, CheckCircle2, MessageSquare, CornerUpLeft, CheckCircle, Send } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -57,7 +58,7 @@ import {
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const tabs = ["All", "Draft", "Sent", "Accepted", "Declined", "Expired"];
+const tabs = ["All", "Draft", "Awaiting Review", "Under Revision", "Approved", "Sent", "Accepted", "Declined", "Expired"];
 
 const validityOptions = Array.from({ length: 94 }, (_, i) => `${i + 7} Days`);
 
@@ -104,9 +105,17 @@ export default function Quotations() {
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Fetch current user and role
+  const { user: userProfile, isAdmin, isLeads, isSales, isOperations, isFinance } = useAuth();
+  
+  const canEditQuotes = isAdmin || isLeads || isSales;
+  const canReview = isAdmin || isLeads || isOperations || isFinance;
 
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteSchema),
@@ -475,6 +484,56 @@ export default function Quotations() {
     onError: (err: any) => toast.error("Failed to accept quotation: " + err.message),
   });
 
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string, status: string }) => {
+      const { error } = await supabase.from("quotations").update({ status }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["quotations"] });
+      toast.success(`Quotation status updated to ${variables.status.replace('_', ' ')}`);
+      // Update local state if needed
+      if (selectedQuote?.id === variables.id) {
+        setSelectedQuote({ ...selectedQuote, status: variables.status });
+      }
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ quotation_id, comment }: { quotation_id: string, comment: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { error } = await supabase.from("quotation_comments").insert([{
+        quotation_id,
+        user_id: user.id,
+        comment
+      }]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quotation-comments"] });
+      setCommentText("");
+      toast.success("Comment added");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const { data: comments } = useQuery({
+    queryKey: ["quotation-comments", selectedQuote?.id],
+    queryFn: async () => {
+      if (!selectedQuote?.id) return [];
+      const { data, error } = await supabase
+        .from("quotation_comments")
+        .select(`*, user:profiles(full_name, avatar_url)`)
+        .eq("quotation_id", selectedQuote.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedQuote?.id
+  });
+
   const filtered = quotations?.filter((q: any) =>
     q.customer?.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     q.id.toLowerCase().includes(searchQuery.toLowerCase())
@@ -539,9 +598,11 @@ export default function Quotations() {
           >
             <Eye className="h-4 w-4" /> Printable Preview
           </Button>
-          <Button onClick={() => setIsNewModalOpen(true)} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-11 px-6 shadow-lg shadow-accent/20">
-            <Plus className="h-5 w-5" /> New Quotation
-          </Button>
+          {canEditQuotes && (
+            <Button onClick={() => setIsNewModalOpen(true)} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-11 px-6 shadow-lg shadow-accent/20">
+              <Plus className="h-5 w-5" /> New Quotation
+            </Button>
+          )}
         </div>
       </PageHeader>
 
@@ -672,7 +733,16 @@ export default function Quotations() {
                             <TableCell><StatusBadge status={quote.status} /></TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                {['draft', 'under_revision'].includes(quote.status) && (
+                                  <Button size="icon" variant="ghost" onClick={() => { 
+                                     // Logic to open edit form with this quote's data
+                                     toast.info("Opening editor for revision...");
+                                  }} className="text-accent hover:bg-accent/10">
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 <Button size="icon" variant="ghost" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}><Eye className="h-4 w-4" /></Button>
+                                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-foreground" onClick={() => setSelectedQuote(quote)}><Info className="h-4 w-4" /></Button>
                                 <Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteQuoteMutation.mutate(quote.id)}><Trash2 className="h-4 w-4" /></Button>
                               </div>
                             </TableCell>
@@ -1011,46 +1081,128 @@ export default function Quotations() {
                 </div>
               </div>
 
-              <div className="pt-6 grid grid-cols-2 gap-3 pb-8">
-                <Button
-                  variant="outline"
-                  className="h-12 border-accent text-accent hover:bg-accent/5 font-bold gap-2"
-                  onClick={() => {
-                    setViewQuote(selectedQuote);
-                    setIsPreviewOpen(true);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" /> Edit PDF Layout
-                </Button>
-                <Button
-                  className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 font-bold shadow-lg gap-2"
-                  onClick={() => setLogInteractionQuoteId(selectedQuote.id)}
-                >
-                  <Mail className="h-4 w-4" /> Send via Email
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="h-11 border text-muted-foreground font-bold gap-2"
-                  onClick={() => handleDownloadPDF(selectedQuote)}
-                >
-                  <Download className="h-4 w-4" /> Download PDF
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="h-11 border text-red-500 hover:text-red-600 hover:bg-red-50 font-bold gap-2"
-                  onClick={() => setDeclineQuote(selectedQuote)}
-                >
-                  <Trash2 className="h-4 w-4" /> Decline & Close
-                </Button>
-                {selectedQuote.status !== 'accepted' && (
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Internal Feedback</h4>
+                  <div className="bg-muted/30 p-4 rounded-xl space-y-4">
+                    <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2">
+                      {comments?.length === 0 ? (
+                        <p className="text-[10px] text-muted-foreground italic text-center py-2">No comments yet</p>
+                      ) : (
+                        comments?.map((comment: any) => (
+                          <div key={comment.id} className="flex gap-2">
+                            <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center text-[10px] font-bold shrink-0">
+                              {comment.user?.full_name?.charAt(0)}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex justify-between items-center mb-0.5">
+                                <span className="text-[10px] font-black">{comment.user?.full_name}</span>
+                                <span className="text-[8px] text-muted-foreground">{format(new Date(comment.created_at), "MMM d, HH:mm")}</span>
+                              </div>
+                              <p className="text-[11px] text-foreground leading-relaxed bg-white p-2 rounded-lg border shadow-sm">{comment.comment}</p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    
+                    <div className="flex gap-2 pt-2 border-t border-muted-foreground/10">
+                      <Input 
+                        placeholder="Add a comment..." 
+                        className="h-9 text-[11px] bg-white"
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && commentText && addCommentMutation.mutate({ quotation_id: selectedQuote.id, comment: commentText })}
+                      />
+                      <Button 
+                        size="icon" 
+                        className="h-9 w-9 shrink-0" 
+                        onClick={() => commentText && addCommentMutation.mutate({ quotation_id: selectedQuote.id, comment: commentText })}
+                        disabled={!commentText || addCommentMutation.isPending}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 grid grid-cols-2 gap-3 pb-8">
+                  {/* Phase 3 Action Flow */}
+                  {selectedQuote.status === 'draft' && (
+                    <Button 
+                      className="bg-amber-600 hover:bg-amber-700 text-white h-12 font-bold shadow-lg gap-2 col-span-2"
+                      disabled={!canEditQuotes}
+                      onClick={() => updateStatusMutation.mutate({ id: selectedQuote.id, status: 'awaiting_review' })}
+                    >
+                      <CheckCircle className="h-4 w-4" /> {!canEditQuotes ? 'Draft Locking' : 'Submit for Approval'}
+                    </Button>
+                  )}
+
+                  {selectedQuote.status === 'awaiting_review' && canReview && (
+                    <>
+                      <Button 
+                        variant="outline"
+                        className="h-12 border-rose-500 text-rose-500 hover:bg-rose-50 font-bold gap-2"
+                        onClick={() => updateStatusMutation.mutate({ id: selectedQuote.id, status: 'under_revision' })}
+                      >
+                        <CornerUpLeft className="h-4 w-4" /> Needs Revision
+                      </Button>
+                      <Button 
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white h-12 font-bold shadow-lg gap-2"
+                        onClick={() => updateStatusMutation.mutate({ id: selectedQuote.id, status: 'approved' })}
+                      >
+                        <CheckCircle className="h-4 w-4" /> Approve Quote
+                      </Button>
+                    </>
+                  )}
+
+                  {selectedQuote.status === 'under_revision' && (
+                    <Button 
+                      className="bg-blue-600 hover:bg-blue-700 text-white h-12 font-bold shadow-lg gap-2 col-span-2"
+                      onClick={() => updateStatusMutation.mutate({ id: selectedQuote.id, status: 'awaiting_review' })}
+                    >
+                      <Send className="h-4 w-4" /> Re-submit for Review
+                    </Button>
+                  )}
+
+                  {selectedQuote.status === 'approved' && (
+                    <Button 
+                      className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 font-bold shadow-lg gap-2 col-span-2"
+                      onClick={() => updateStatusMutation.mutate({ id: selectedQuote.id, status: 'sent' })}
+                    >
+                      <Mail className="h-4 w-4" /> Mark as Sent to Customer
+                    </Button>
+                  )}
+
                   <Button
-                    className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 col-span-2"
-                    onClick={() => setIsAcceptConfirmOpen(true)}
+                    className="bg-accent/10 text-accent hover:bg-accent/20 h-12 font-bold gap-2"
+                    onClick={() => setLogInteractionQuoteId(selectedQuote.id)}
                   >
-                    <CheckCircle2 className="h-4 w-4" /> Accept & Initialize Job
+                    <Mail className="h-4 w-4" /> Log Email
                   </Button>
-                )}
-              </div>
+                  <Button
+                    variant="ghost"
+                    className="h-11 border text-muted-foreground font-bold gap-2"
+                    onClick={() => handleDownloadPDF(selectedQuote)}
+                  >
+                    <Download className="h-4 w-4" /> Download PDF
+                  </Button>
+                   <Button
+                    variant="ghost"
+                    className="h-11 border text-red-500 hover:text-red-600 hover:bg-red-50 font-bold gap-2"
+                    disabled={!canEditQuotes}
+                    onClick={() => setDeclineQuote(selectedQuote)}
+                  >
+                    <Trash2 className="h-4 w-4" /> {!canEditQuotes ? 'Decline Restricted' : 'Decline & Close'}
+                  </Button>
+                  {['sent', 'approved'].includes(selectedQuote.status) && (
+                    <Button
+                      className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 col-span-2"
+                      onClick={() => setIsAcceptConfirmOpen(true)}
+                    >
+                      <CheckCircle2 className="h-4 w-4" /> Accept & Initialize Job
+                    </Button>
+                  )}
+                </div>
             </div>
           )}
         </SheetContent>

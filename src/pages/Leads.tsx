@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Search, Mail, ArrowRight, Phone, Pencil, Info, Globe, Truck, DollarSign, Clock } from "lucide-react";
+import { Plus, Search, Mail, ArrowRight, Phone, Pencil, Info, Globe, Truck, DollarSign, Clock, BarChart3, TrendingUp, Users, Ship, Plane, Activity } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -10,6 +10,7 @@ import { useFormDraft } from "@/hooks/useFormDraft";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,6 +22,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Form,
   FormControl,
@@ -95,6 +97,9 @@ export default function Leads() {
 
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  const { user: userProfile, isAdmin, isLeads, isSales } = useAuth();
+  const canEditLeads = isAdmin || isLeads || isSales;
 
   // Transport mode grouping state — kept at top per React hooks rules
   const TRANSPORT_ORDER: (TransportMode | null)[] = ["air", "sea", "road", null];
@@ -203,6 +208,57 @@ export default function Leads() {
     },
   });
 
+  const { data: users } = useQuery({
+    queryKey: ["all-users"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("id, full_name, role").order("full_name");
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const assignLeadMutation = useMutation({
+    mutationFn: async ({ leadId, userId }: { leadId: string, userId: string }) => {
+      const { error } = await supabase.from("leads").update({ assigned_to: userId }).eq("id", leadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast.success("Lead assigned successfully");
+    },
+    onError: (err: any) => toast.error(err.message)
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ leadId, status }: { leadId: string, status: string }) => {
+      const { error } = await supabase.from("leads").update({ status }).eq("id", leadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast.success("Lead status updated");
+    },
+    onError: (err: any) => toast.error(err.message)
+  });
+
+  // Real-time subscription for leads
+  useEffect(() => {
+    const channel = supabase
+      .channel('leads_realtime')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'leads' 
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ["leads"] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   const leads = leadData?.leads || [];
   const totalCount = leadData?.totalCount || 0;
 
@@ -222,8 +278,11 @@ export default function Leads() {
 
   const createLeadMutation = useMutation({
     mutationFn: async (values: LeadFormValues) => {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const leadId = `L-${Date.now().toString().slice(-4)}`;
+      
       const data = {
-        lead_number: `L-${Date.now().toString().slice(-4)}`,
+        lead_number: leadId,
         customer_name_raw: values.customer_name,
         contact_person: values.contact_person || null,
         email: values.email || null,
@@ -250,8 +309,23 @@ export default function Leads() {
         ],
         status: "new",
       };
-      const { error } = await supabase.from("leads").insert([data]);
+
+      const { data: lead, error } = await supabase.from("leads").insert([data]).select().single();
       if (error) throw error;
+
+      // Broadcast notifications to all users
+      const { data: profiles } = await supabase.from("profiles").select("id");
+      if (profiles && profiles.length > 0) {
+        const notifications = profiles.map(p => ({
+          user_id: p.id,
+          title: "New Lead Inbound",
+          message: `New inquiry from ${values.customer_name} for ${values.origin} → ${values.destination}`,
+          type: "success",
+          related_table: "leads",
+          related_id: lead.id
+        }));
+        await supabase.from("notifications").insert(notifications);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
@@ -335,20 +409,27 @@ export default function Leads() {
     updateLeadMutation.mutate(values);
   };
 
+
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Leads & Inquiries">
-        <Button 
-          onClick={() => {
-            setAdditionalEmails([]);
-            setAdditionalPhones([]);
-            setIsNewModalOpen(true);
-          }} 
-          className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-11 px-6 shadow-lg shadow-accent/20"
-        >
-          <Plus className="h-5 w-5" /> New Inquiry
-        </Button>
+      <PageHeader title="Inquiry Pipeline">
+        <div className="flex gap-2">
+          {canEditLeads && (
+            <Button 
+              onClick={() => {
+                setAdditionalEmails([]);
+                setAdditionalPhones([]);
+                setIsNewModalOpen(true);
+              }}
+              className="bg-[#F26B2A] hover:bg-[#d85e23] text-white shadow-lg shadow-[#F26B2A]/20 h-11 px-6 font-black uppercase text-[10px] tracking-widest gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Plus className="h-4 w-4" /> New Inquiry
+            </Button>
+          )}
+        </div>
       </PageHeader>
+      
 
       <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
         <div className="flex bg-muted p-1 rounded-lg">
@@ -751,16 +832,75 @@ export default function Leads() {
                 </div>
               </div>
 
+              <div className="space-y-4 pt-4 border-t">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Operational Assignment</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 bg-accent/5 border border-accent/20 rounded-xl">
+                    <div className="h-10 w-10 rounded-full bg-accent/10 flex items-center justify-center text-accent">
+                      <Users className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase">Assigned To</p>
+                      <Select 
+                        value={selectedLead.assigned_to || ""} 
+                        onValueChange={(val) => assignLeadMutation.mutate({ leadId: selectedLead.id, userId: val })}
+                      >
+                        <SelectTrigger className="mt-1 h-8 bg-transparent border-none p-0 focus:ring-0 font-bold text-sm">
+                          <SelectValue placeholder="Assign Personnel..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users?.map((u: any) => (
+                            <SelectItem key={u.id} value={u.id} className="text-xs font-medium">
+                              {u.full_name} <span className="text-[10px] opacity-50 ml-1">({u.role})</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase">Pipeline Status</p>
+                    <Select 
+                      value={selectedLead.status} 
+                      onValueChange={(val) => {
+                        if (val === 'declined') {
+                          setDeclineLead(selectedLead);
+                        } else {
+                          updateStatusMutation.mutate({ leadId: selectedLead.id, status: val });
+                        }
+                      }}
+                      disabled={(selectedLead.status === 'converted' && !isAdmin) || !canEditLeads}
+                    >
+                      <SelectTrigger className={cn(
+                        "h-10 px-4 font-bold text-xs rounded-xl border-slate-200 bg-white shadow-sm",
+                        selectedLead.status === 'converted' && "border-emerald-100 bg-emerald-50/30 text-emerald-700"
+                      )}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['new', 'contacted', 'qualified', 'quoted', 'converted', 'declined', 'archived'].map((status) => (
+                           <SelectItem key={status} value={status} className="text-xs font-bold uppercase tracking-widest">
+                             {status}
+                           </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
               <div className="pt-6 grid grid-cols-2 gap-3 pb-8">
                 <Button 
                   variant="outline"
                   className="h-12 border-accent text-accent hover:bg-accent/5 font-bold gap-2"
+                  disabled={((selectedLead.status === 'converted') && !isAdmin) || !canEditLeads}
                   onClick={() => {
                     setLeadToEdit(selectedLead);
                     setIsEditModalOpen(true);
                   }}
                 >
-                  <Pencil className="h-4 w-4" /> Edit Details
+                  <Pencil className="h-4 w-4" /> {!canEditLeads ? 'View Only' : (selectedLead.status === 'converted' && !isAdmin ? 'Locked (Converted)' : 'Edit Details')}
                 </Button>
                 <Button 
                   className="bg-accent hover:bg-accent/90 text-accent-foreground h-12 font-bold shadow-lg"

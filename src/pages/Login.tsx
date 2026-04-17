@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import ozmaeLogoImg from "@/assets/ozmae-logo.png";
 import React from "react";
+import { LogisticsLoader } from "@/components/LogisticsLoader";
 import {
   Popover,
   PopoverContent,
@@ -149,6 +150,9 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex selection:bg-accent/20">
+      <AnimatePresence>
+        {isLoading && <LogisticsLoader message="Authenticating Credentials..." />}
+      </AnimatePresence>
       <style>{`
         @keyframes float-slow {
           0%, 100% { transform: translateY(0); }
@@ -354,7 +358,11 @@ export default function Login() {
               className="w-full h-12 bg-foreground hover:bg-foreground/90 text-background font-bold text-sm tracking-wide rounded-xl gap-2 shadow-xl shadow-foreground/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               {isLoading ? (
-                <Truck className="h-4 w-4 animate-bounce" />
+                <div className="flex items-center gap-2">
+                   <div className="h-2 w-2 bg-background rounded-full animate-bounce" />
+                   <div className="h-2 w-2 bg-background rounded-full animate-bounce [animation-delay:0.2s]" />
+                   <div className="h-2 w-2 bg-background rounded-full animate-bounce [animation-delay:0.4s]" />
+                </div>
               ) : (
                 <>
                   Sign In to Workforce <ArrowRight className="h-4 w-4" />

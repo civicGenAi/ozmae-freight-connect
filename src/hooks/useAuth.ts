@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Profile } from "@/types";
 
-export type UserRole = "Admin" | "Leads" | "Sales" | "Operations";
+export type UserRole = "Admin" | "Leads" | "Sales" | "Operations" | "Finance";
 
 export function useAuth() {
   const [user, setUser] = useState<Profile | null>(null);
@@ -70,13 +70,15 @@ export function useAuth() {
   const isOperations = roles.includes("Operations");
   const isSales = roles.includes("Sales");
   const isLeads = roles.includes("Leads");
+  const isFinance = roles.includes("Finance");
 
   const passwordAgeDays = user?.password_updated_at 
     ? Math.floor((new Date().getTime() - new Date(user.password_updated_at).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
-  const mustChangePassword = passwordAgeDays > 7;
-  const shouldShowPasswordReminder = passwordAgeDays > 0 && passwordAgeDays <= 7;
+  const isUsingDefaultPassword = user?.is_using_default_password ?? false;
+  const mustChangePassword = passwordAgeDays > 7 || isUsingDefaultPassword;
+  const shouldShowPasswordReminder = (passwordAgeDays > 0 && passwordAgeDays <= 7) && !isUsingDefaultPassword;
 
   return { 
     user, 
@@ -87,7 +89,9 @@ export function useAuth() {
     isOperations, 
     isSales, 
     isLeads,
+    isFinance,
     passwordAgeDays,
+    isUsingDefaultPassword,
     mustChangePassword,
     shouldShowPasswordReminder
   };

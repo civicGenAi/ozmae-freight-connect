@@ -61,20 +61,40 @@ export default function ResetPassword() {
     setIsLoading(true);
 
     try {
+      // Direct fetch of the current user to avoid reliance on hook state during recovery
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (!authUser) {
+        toast.error("Auth session not found. Please try the reset link again.");
+        return;
+      }
+
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
         toast.error(error.message);
       } else {
-        // IMPORTANT: Update profile tracker to lift enforcement
-        if (user?.id) {
-          await supabase
-            .from("profiles")
-            .update({ password_updated_at: new Date().toISOString() })
-            .eq("id", user.id);
+        // We use the authUser.id directly from the session
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .update({ 
+            password_updated_at: new Date().toISOString(),
+            is_using_default_password: false
+          })
+          .eq("id", authUser.id);
+
+        if (profileError) {
+          console.error("Profile security update failed:", profileError);
+          toast.error("Account security sync failed. Please contact admin.");
+          setIsLoading(false);
+          return; // Stop here if we can't clear the default password flag
         }
 
         toast.success("Security verified. Password updated successfully!");
-        navigate("/");
+        
+        // Brief delay to ensure database consistency before redirecting to guarded routes
+        setTimeout(() => {
+          navigate("/", { replace: true });
+        }, 500);
       }
     } catch (err) {
       toast.error("An unexpected error occurred.");

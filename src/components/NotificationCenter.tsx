@@ -145,8 +145,13 @@ export function NotificationCenter() {
             notifications?.map((n) => (
               <div 
                 key={n.id} 
+                onClick={() => {
+                  if (!n.read) markAsRead.mutate(n.id);
+                  if (n.related_table === 'leads') navigate(`/leads?search=${n.related_id}`);
+                  if (n.related_table === 'quotations') navigate(`/quotations?id=${n.related_id}`);
+                }}
                 className={cn(
-                  "p-4 border-b border-muted/10 last:border-0 hover:bg-muted/5 transition-colors group",
+                  "p-4 border-b border-muted/10 last:border-0 hover:bg-muted/5 transition-colors group cursor-pointer",
                   !n.read && "bg-accent/5"
                 )}
               >
@@ -158,7 +163,10 @@ export function NotificationCenter() {
                         {n.title}
                       </p>
                       <button 
-                        onClick={() => deleteNotification.mutate(n.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteNotification.mutate(n.id);
+                        }}
                         className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-rose-500/10 rounded"
                       >
                         <Trash2 className="h-3 w-3 text-muted-foreground hover:text-rose-500" />
@@ -168,12 +176,7 @@ export function NotificationCenter() {
                     <div className="flex justify-between items-center pt-2">
                        <span className="text-[9px] font-bold uppercase text-muted-foreground/60">{new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                        {!n.read && (
-                          <button 
-                            onClick={() => markAsRead.mutate(n.id)}
-                            className="text-[9px] font-black uppercase text-accent hover:underline flex items-center gap-1"
-                          >
-                             <Check className="h-2.5 w-2.5" /> Mark read
-                          </button>
+                          <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                        )}
                     </div>
                   </div>

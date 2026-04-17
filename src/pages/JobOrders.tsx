@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Plus, Search, MapPin, Truck, User, Calendar, DollarSign, Clock, CheckCircle2, ChevronRight, Trash2, Info, Pencil } from "lucide-react";
+import React, { useState } from "react";
+import { Plus, Search, MapPin, Truck, User, Calendar, DollarSign, Clock, CheckCircle2, ChevronRight, Trash2, Info, Pencil, FileText, Upload, History, UserPlus, MessageSquare, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -39,6 +40,7 @@ const formatCurrency = (amount: number) =>
 
 const stages = [
   "planning",
+  "approved",
   "awaiting_deposit",
   "deposit_confirmed",
   "dispatched",
@@ -47,7 +49,10 @@ const stages = [
   "at_destination",
   "delivered",
   "closed",
-  "cancelled"
+  "cancelled",
+  "on_hold",
+  "in_progress",
+  "completed"
 ] as const;
 
 const jobSchema = z.object({
@@ -70,9 +75,34 @@ type JobFormValues = z.infer<typeof jobSchema>;
 export default function JobOrders() {
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
+
+  const { data: userProfile } = useQuery({
+    queryKey: ["user-profile"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      return data;
+    }
+  });
+
+  const userRole = userProfile?.role?.toLowerCase() || '';
+  const isAdmin = userRole === 'admin';
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+
+  // Derived job state for Admin Draft visibility
+  const displayJob = React.useMemo(() => {
+    if (!selectedJob) return null;
+    if (isAdmin && selectedJob.has_pending_draft && selectedJob.draft_data) {
+      return { ...selectedJob, ...selectedJob.draft_data };
+    }
+    return selectedJob;
+  }, [selectedJob, isAdmin]);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [progressText, setProgressText] = useState("");
+  const [newStatus, setNewStatus] = useState<string | null>(null);
+  
   const queryClient = useQueryClient();
 
   const form = useForm<JobFormValues>({
@@ -120,6 +150,8 @@ export default function JobOrders() {
           assigned_driver_id,
           assigned_vehicle_id,
           created_at,
+          draft_data,
+          has_pending_draft,
           customer:customers(company_name),
           driver:drivers!job_orders_assigned_driver_id_fkey(full_name),
           vehicle:vehicles!job_orders_assigned_vehicle_id_fkey(plate_number),
@@ -235,17 +267,54 @@ export default function JobOrders() {
 
   const updateJobMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
-      const { error } = await supabase
-        .from("job_orders")
-        .update(updates)
-        .eq("id", id);
-      if (error) throw error;
+      // If admin, we save to draft_data instead of live columns for 'converted' or confirmed jobs
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", (await supabase.auth.getUser()).data.user?.id).single();
+      const isAdminRole = profile?.role?.toLowerCase() === 'admin';
+
+      if (isAdminRole) {
+        const { error } = await supabase
+          .from("job_orders")
+          .update({ 
+            draft_data: updates,
+            has_pending_draft: true
+          })
+          .eq("id", id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("job_orders")
+          .update(updates)
+          .eq("id", id);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job_orders"] });
       setIsEditing(false);
       setSelectedJob(null);
-      toast.success("Job order updated successfully");
+      toast.success("Changes saved as private draft");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const publishJobMutation = useMutation({
+    mutationFn: async (job: any) => {
+      if (!job.draft_data) return;
+      
+      const { error } = await supabase
+        .from("job_orders")
+        .update({ 
+          ...job.draft_data,
+          draft_data: null,
+          has_pending_draft: false
+        })
+        .eq("id", job.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["job_orders"] });
+      setSelectedJob(null);
+      toast.success("Job order published to all staff");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -260,6 +329,71 @@ export default function JobOrders() {
       setSelectedJob(null);
       toast.success("Job order deleted");
     },
+  });
+
+  const addProgressMutation = useMutation({
+    mutationFn: async ({ job_id, text, status }: { job_id: string, text: string, status?: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const updateData: any = {
+        job_order_id: job_id,
+        update_text: text,
+        reported_by: user?.id,
+        status: status || selectedJob?.status
+      };
+      
+      const { error } = await supabase.from("job_progress_reports").insert([updateData]);
+      if (error) throw error;
+
+      if (status && status !== selectedJob?.status) {
+        await supabase.from("job_orders").update({ status }).eq("id", job_id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["job_progress", selectedJob?.id] });
+      queryClient.invalidateQueries({ queryKey: ["job_orders"] });
+      setProgressText("");
+      setNewStatus(null);
+      toast.success("Progress report added successfully");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const { data: templates } = useQuery({
+    queryKey: ["operation_templates"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("operation_templates").select("*");
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const { data: progressReports } = useQuery({
+    queryKey: ["job_progress", selectedJob?.id],
+    queryFn: async () => {
+      if (!selectedJob?.id) return [];
+      const { data, error } = await supabase
+        .from("job_progress_reports")
+        .select(`*, reporter:profiles(full_name)`)
+        .eq("job_order_id", selectedJob.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedJob?.id
+  });
+
+  const { data: jobDocs } = useQuery({
+    queryKey: ["job_documents", selectedJob?.id],
+    queryFn: async () => {
+      if (!selectedJob?.id) return [];
+      const { data, error } = await supabase
+        .from("documents")
+        .select(`*, uploader:profiles(full_name)`)
+        .eq("job_order_id", selectedJob.id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedJob?.id
   });
 
   const filtered = jobOrders?.filter((j: any) => {
@@ -721,15 +855,32 @@ export default function JobOrders() {
           <SheetHeader className="border-b pb-4">
             <div className="flex justify-between items-start">
               <div>
-                <SheetTitle>Job Order — #{selectedJob?.id.split('-')[0].toUpperCase()}</SheetTitle>
+                <div className="flex items-center gap-2 mb-1">
+                  <SheetTitle>Job Order — #{displayJob?.id.split('-')[0].toUpperCase()}</SheetTitle>
+                  {isAdmin && displayJob?.has_pending_draft && (
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-200 text-[8px] font-black uppercase tracking-tighter animate-pulse">
+                      Private Draft Mode
+                    </Badge>
+                  )}
+                </div>
                 <SheetDescription>Comprehensive operational overview and live tracking.</SheetDescription>
               </div>
               <div className="flex gap-2">
+                {isAdmin && displayJob?.has_pending_draft && (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black uppercase tracking-widest h-8 px-3 shadow-lg"
+                    onClick={() => publishJobMutation.mutate(displayJob)}
+                    disabled={publishJobMutation.isPending}
+                  >
+                    {publishJobMutation.isPending ? "Publishing..." : "Publish to Staff"}
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setIsEditing(!isEditing)}
-                  className={cn("transition-all rounded-full", isEditing ? "bg-accent text-accent-foreground" : "hover:bg-muted")}
+                  className={cn("h-8 w-8 transition-all rounded-full", isEditing ? "bg-accent text-accent-foreground" : "hover:bg-muted")}
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -738,10 +889,10 @@ export default function JobOrders() {
                   size="icon"
                   onClick={() => {
                     if (confirm("Delete this job order?")) {
-                      deleteJobMutation.mutate(selectedJob.id);
+                      deleteJobMutation.mutate(displayJob.id);
                     }
                   }}
-                  className="hover:bg-rose-500 hover:text-white transition-all rounded-full"
+                  className="h-8 w-8 hover:bg-rose-500 hover:text-white transition-all rounded-full"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -751,8 +902,9 @@ export default function JobOrders() {
 
           {selectedJob && (
             <Tabs defaultValue="info" className="mt-8">
-              <TabsList className="grid w-full grid-cols-3 h-12 bg-muted/50 p-1 rounded-xl">
+              <TabsList className="grid w-full grid-cols-4 h-12 bg-muted/50 p-1 rounded-xl">
                 <TabsTrigger value="info" className="rounded-lg font-bold uppercase text-[10px] tracking-widest">Job Info</TabsTrigger>
+                <TabsTrigger value="finance" className="rounded-lg font-bold uppercase text-[10px] tracking-widest border-x">Financials</TabsTrigger>
                 <TabsTrigger value="docs" className="rounded-lg font-bold uppercase text-[10px] tracking-widest">Documents</TabsTrigger>
                 <TabsTrigger value="timeline" className="rounded-lg font-bold uppercase text-[10px] tracking-widest">Live Timeline</TabsTrigger>
               </TabsList>
@@ -864,31 +1016,62 @@ export default function JobOrders() {
                   </div>
                 ) : (
                   <>
-                    {selectedJob.status === 'planning' && (
+                    {isAdmin && displayJob?.has_pending_draft && (
+                      <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                          <ShieldCheck className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-amber-900 uppercase tracking-tight">Administrative Draft Active</p>
+                          <p className="text-[10px] text-amber-700 leading-tight">You are viewing unsaved modifications. These changes are hidden from Operations and Finance staff until published.</p>
+                        </div>
+                      </div>
+                    )}
+                    {(displayJob.status === 'planning' || displayJob.status === 'awaiting_deposit') && (
                       <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="mb-8 p-6 rounded-2xl bg-emerald-600 text-white shadow-xl shadow-emerald-200"
+                        className={cn(
+                          "mb-8 p-6 rounded-2xl shadow-xl transition-all",
+                          displayJob.status === 'awaiting_deposit' 
+                            ? "bg-amber-100 border-2 border-amber-500 text-amber-900 shadow-amber-100" 
+                            : "bg-emerald-600 text-white shadow-emerald-200"
+                        )}
                       >
                         <div className="flex items-center gap-4 mb-4">
-                           <div className="h-12 w-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md">
-                              <CheckCircle2 className="h-6 w-6" />
+                           <div className={cn(
+                             "h-12 w-12 rounded-xl flex items-center justify-center backdrop-blur-md",
+                             displayJob.status === 'awaiting_deposit' ? "bg-amber-500/20" : "bg-white/20"
+                           )}>
+                              {displayJob.status === 'awaiting_deposit' ? <Clock className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
                            </div>
                            <div>
-                              <h4 className="text-sm font-black uppercase tracking-tight text-white">Ready for Activation</h4>
-                              <p className="text-[11px] text-emerald-50 opacity-80">All requirements met. Confirm to notify Operations and Driver.</p>
+                              <h4 className="text-sm font-black uppercase tracking-tight">
+                                {displayJob.status === 'awaiting_deposit' ? "Financial Clearance Required" : "Ready for Activation"}
+                              </h4>
+                              <p className="text-[11px] opacity-80">
+                                {displayJob.status === 'awaiting_deposit' 
+                                  ? "Operating this job before deposit is confirmed is restricted." 
+                                  : "All requirements met. Confirm to notify Operations and Driver."}
+                              </p>
                            </div>
                         </div>
                         <Button
-                          className="w-full bg-white text-emerald-700 hover:bg-emerald-50 h-11 text-[10px] font-black uppercase tracking-widest shadow-lg"
-                          onClick={() => updateStageMutation.mutate({ id: selectedJob.id, status: 'dispatched' })}
+                          disabled={displayJob.status === 'awaiting_deposit' && !isAdmin}
+                          className={cn(
+                            "w-full h-11 text-[10px] font-black uppercase tracking-widest shadow-lg",
+                            displayJob.status === 'awaiting_deposit' 
+                              ? "bg-amber-500 text-white hover:bg-amber-600" 
+                              : "bg-white text-emerald-700 hover:bg-emerald-50"
+                          )}
+                          onClick={() => updateStageMutation.mutate({ id: displayJob.id, status: 'dispatched' })}
                         >
-                          Confirm & Activate Operation
+                          {displayJob.status === 'awaiting_deposit' ? "Force Activation (Admin Only)" : "Confirm & Activate Operation"}
                         </Button>
                       </motion.div>
                     )}
                     <div className="grid grid-cols-2 gap-6 bg-muted/30 p-6 rounded-xl border border-dashed relative overflow-hidden">
-                      {selectedJob.status === 'planning' && (
+                      {displayJob.status === 'planning' && (
                         <div className="absolute top-0 right-0">
                           <Badge className="rounded-none rounded-bl-xl bg-amber-500 text-white border-none text-[8px] font-black uppercase tracking-tighter">
                             Awaiting Confirmation
@@ -897,11 +1080,11 @@ export default function JobOrders() {
                       )}
                       <div className="space-y-1">
                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Customer</p>
-                        <p className="text-lg font-bold text-foreground leading-tight">{selectedJob.customer?.company_name || 'N/A'}</p>
+                        <p className="text-lg font-bold text-foreground leading-tight">{displayJob.customer?.company_name || 'N/A'}</p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Route</p>
-                        <p className="font-bold text-foreground">{selectedJob.origin} → {selectedJob.destination}</p>
+                        <p className="font-bold text-foreground">{displayJob.origin} → {displayJob.destination}</p>
                       </div>
                     </div>
 
@@ -914,7 +1097,7 @@ export default function JobOrders() {
                           </div>
                           <div>
                             <p className="text-[10px] text-muted-foreground font-bold uppercase">Driver</p>
-                            <p className="text-sm font-bold">{selectedJob.driver?.full_name || "Unassigned"}</p>
+                            <p className="text-sm font-bold">{displayJob.driver?.full_name || "Unassigned"}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3 p-3 bg-card rounded-lg border shadow-sm">
@@ -923,7 +1106,7 @@ export default function JobOrders() {
                           </div>
                           <div>
                             <p className="text-[10px] text-muted-foreground font-bold uppercase">Vehicle</p>
-                            <p className="text-sm font-bold font-mono">{selectedJob.vehicle?.plate_number || "None"}</p>
+                            <p className="text-sm font-bold font-mono">{displayJob.vehicle?.plate_number || "None"}</p>
                           </div>
                         </div>
                       </div>
@@ -932,11 +1115,11 @@ export default function JobOrders() {
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground flex items-center gap-2"><DollarSign className="h-4 w-4" /> Value</span>
-                        <span className="font-black text-foreground">{formatCurrency(selectedJob.total_amount || 0)}</span>
+                        <span className="font-black text-foreground">{formatCurrency(displayJob.total_amount || 0)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground flex items-center gap-2"><Calendar className="h-4 w-4" /> Created</span>
-                        <span>{format(new Date(selectedJob.created_at), "MMM d, yyyy")}</span>
+                        <span>{format(new Date(displayJob.created_at), "MMM d, yyyy")}</span>
                       </div>
                     </div>
                   </>
@@ -961,53 +1144,205 @@ export default function JobOrders() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="docs" className="mt-8 text-center py-12 bg-muted/20 rounded-xl border border-dashed">
-                <div className="flex flex-col items-center gap-3">
-                  <MapPin className="h-12 w-12 text-muted-foreground opacity-20" />
-                  <div>
-                    <p className="font-bold text-foreground">No Documents Found</p>
-                    <p className="text-xs text-muted-foreground mt-1">Upload BOL, Invoices, and Delivery Receipts here.</p>
+              <TabsContent value="finance" className="mt-8 space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                <div className="bg-card border rounded-2xl overflow-hidden">
+                  <div className="bg-muted/50 p-4 border-b flex justify-between items-center">
+                    <h4 className="text-xs font-black uppercase tracking-widest">Financial Summary</h4>
+                    <StatusBadge status={selectedJob.payment_status || 'pending'} />
                   </div>
-                  <Button className="mt-4 border-dashed border-2 bg-transparent text-foreground hover:bg-muted/50">Add Document</Button>
+                  <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-muted/20 rounded-xl border border-dashed">
+                        <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Total Contract Value</p>
+                        <p className="text-xl font-black text-foreground">{formatCurrency(selectedJob.total_amount || 0)}</p>
+                      </div>
+                      <div className="p-4 bg-accent/5 rounded-xl border border-accent/20">
+                        <p className="text-[10px] font-black uppercase text-accent mb-1">Required Deposit (60%)</p>
+                        <p className="text-xl font-black text-accent">{formatCurrency((selectedJob.total_amount || 0) * 0.6)}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Payment Controls</h5>
+                      <div className="flex flex-col gap-2">
+                        {selectedJob.status === 'awaiting_deposit' && (
+                          <Button 
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-12 font-bold shadow-lg gap-2"
+                            onClick={() => {
+                              toast.loading("Recording deposit receipt...");
+                              updateStageMutation.mutate({ id: selectedJob.id, status: 'deposit_confirmed' });
+                            }}
+                          >
+                            <CheckCircle2 className="h-4 w-4" /> Confirm Deposit Received
+                          </Button>
+                        )}
+                        <Button variant="outline" className="w-full h-11 text-[10px] font-bold uppercase tracking-widest border-accent text-accent">
+                          Generate Official Invoice
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                      <p className="text-[11px] text-amber-900 font-medium italic leading-relaxed">
+                        "Finance confirmation required before operations activation. All transfers must be verified against bank statements."
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </TabsContent>
 
-              <TabsContent value="timeline" className="mt-8">
-                <div className="relative space-y-6 before:absolute before:inset-0 before:ml-4 before:h-full before:w-0.5 before:bg-muted">
-                  {stages.map((step, i) => {
-                    const currentIdx = stages.indexOf(selectedJob.status?.toLowerCase() as typeof stages[number]);
-                    const stepDone = i <= currentIdx;
-                    const isCurrent = i === currentIdx;
+              <TabsContent value="docs" className="mt-8 space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                <div className="bg-muted/30 p-6 rounded-2xl border-2 border-dashed border-muted flex flex-col items-center justify-center text-center">
+                  <div className="h-12 w-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-4">
+                    <Upload className="h-6 w-6 text-accent" />
+                  </div>
+                  <h4 className="text-xs font-black uppercase tracking-widest">Document Repository</h4>
+                  <p className="text-[11px] text-muted-foreground mt-2 max-w-[200px]">Securely store permits, BLs, and invoices for this job.</p>
+                  <Button variant="outline" className="mt-6 h-10 px-6 rounded-xl font-bold uppercase text-[10px] tracking-widest border-accent text-accent hover:bg-accent/5">
+                    Browse Files
+                  </Button>
+                </div>
 
+                <div className="grid grid-cols-1 gap-3">
+                  {['Permit / License', 'Bill of Lading', 'Commercial Invoice', 'Packing List'].map((docType) => {
+                    const existingDoc = jobDocs?.find((d: any) => d.category === docType);
                     return (
-                      <div key={step} className="relative flex items-center gap-8 pl-10">
-                        <div className={cn(
-                          "absolute left-2.5 h-3.5 w-3.5 rounded-full border-2 border-background ring-2 transition-all",
-                          isCurrent ? "bg-accent ring-accent/30 scale-125" : stepDone ? "bg-success ring-success/20" : "bg-muted ring-muted/20"
-                        )} />
-                        <div className={cn(
-                          "flex-1 p-4 rounded-xl border transition-all shadow-sm",
-                          isCurrent ? "bg-accent/5 border-accent/20" : "bg-card border-muted-foreground/10"
-                        )}>
-                          <div className="flex justify-between items-center mb-1">
-                            <p className={cn(
-                              "text-[10px] font-black uppercase tracking-widest",
-                              isCurrent ? "text-accent" : stepDone ? "text-foreground" : "text-muted-foreground"
-                            )}>{step}</p>
-                            {stepDone && <CheckCircle2 className={cn("h-3.5 w-3.5", isCurrent ? "text-accent" : "text-success")} />}
+                      <div key={docType} className="flex items-center justify-between p-4 bg-card rounded-xl border border-muted/50 hover:border-accent/30 transition-colors group">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "h-10 w-10 rounded-lg flex items-center justify-center transition-colors",
+                            existingDoc ? "bg-emerald-50 text-emerald-600" : "bg-muted/50 text-muted-foreground group-hover:bg-accent/10 group-hover:text-accent"
+                          )}>
+                            <FileText className="h-5 w-5" />
                           </div>
-                          <p className="text-[11px] text-muted-foreground italic">
-                            {isCurrent ? "Current stage of shipment process." : stepDone ? "Completed successfully." : "Awaiting operational trigger."}
-                          </p>
-                          {isCurrent && (
-                            <div className="mt-3 flex items-center gap-2 text-[10px] font-bold text-accent uppercase tracking-wider">
-                              <Clock className="h-3 w-3" /> Updated {selectedJob.updated_at ? format(new Date(selectedJob.updated_at), "HH:mm") : "Recently"}
-                            </div>
-                          )}
+                          <div>
+                            <p className="text-[11px] font-bold text-foreground">{docType}</p>
+                            <p className={cn(
+                              "text-[9px] font-medium uppercase tracking-tighter",
+                              existingDoc ? "text-emerald-600" : "text-muted-foreground"
+                            )}>
+                              {existingDoc ? `Uploaded by ${existingDoc.uploader?.full_name}` : "Status: Missing"}
+                            </p>
+                          </div>
                         </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 text-[9px] font-black uppercase tracking-widest text-accent hover:bg-accent/5"
+                          onClick={() => toast.info(`Initializing upload for ${docType}...`)}
+                        >
+                          {existingDoc ? "Replace" : "Upload"}
+                        </Button>
                       </div>
                     );
                   })}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="timeline" className="mt-8 space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                {/* Progress Update Form */}
+                <div className="bg-card border rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <History className="h-4 w-4 text-accent" />
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Post Operational Update</h4>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <Select onValueChange={(val) => {
+                          const t = templates?.find((tmp: any) => tmp.id === val);
+                          if (t) {
+                            let text = t.template_text
+                              .replace('{origin}', selectedJob.origin)
+                              .replace('{destination}', selectedJob.destination);
+                            setProgressText(text);
+                            // Auto-set status if category matches
+                            const possibleStatus = stages.find(s => t.category.toLowerCase().includes(s));
+                            if (possibleStatus) setNewStatus(possibleStatus);
+                          }
+                        }}>
+                          <SelectTrigger className="h-10 text-[10px] font-black uppercase bg-accent/5 border-dashed border-accent/30">
+                            <SelectValue placeholder="Use Operation Template" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {templates?.map((t: any) => (
+                              <SelectItem key={t.id} value={t.id} className="text-[11px] font-bold">
+                                [{t.category}] {t.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Select value={newStatus || selectedJob.status} onValueChange={setNewStatus}>
+                        <SelectTrigger className="h-10 text-[11px] font-bold">
+                          <SelectValue placeholder="Update Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stages.map(s => (
+                            <SelectItem key={s} value={s} className="text-[11px] font-medium capitalize">
+                              {s.replace('_', ' ')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input placeholder="Location (Optional)" className="h-10 text-[11px]" />
+                    </div>
+                    <Textarea 
+                      placeholder="Describe the current milestone or situation..." 
+                      className="min-h-[80px] text-[11px] bg-muted/20"
+                      value={progressText}
+                      onChange={(e) => setProgressText(e.target.value)}
+                    />
+                    <Button 
+                      className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-11 text-[10px] font-black uppercase tracking-widest gap-2"
+                      onClick={() => addProgressMutation.mutate({ job_id: selectedJob.id, text: progressText, status: newStatus || undefined })}
+                      disabled={!progressText || addProgressMutation.isPending}
+                    >
+                      <Send className="h-3 w-3" /> Broadcast Update
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Timeline */}
+                <div className="relative pl-6 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-muted/50">
+                  {progressReports?.length === 0 ? (
+                    <div className="text-center py-12">
+                       <History className="h-10 w-10 text-muted/30 mx-auto mb-4" />
+                       <p className="text-[11px] text-muted-foreground font-medium">No live updates yet. Add one to start tracking.</p>
+                    </div>
+                  ) : (
+                    progressReports?.map((report: any, idx: number) => (
+                      <div key={report.id} className="relative group animate-in fade-in slide-in-from-left-2" style={{ animationDelay: `${idx * 50}ms` }}>
+                        <div className={cn(
+                          "absolute -left-[27px] top-1.5 h-3.5 w-3.5 rounded-full border-2 border-white shadow-sm ring-4 ring-white z-10",
+                          idx === 0 ? "bg-accent animate-pulse" : "bg-muted-foreground/30"
+                        )} />
+                        <div className="bg-white p-4 rounded-xl border shadow-sm group-hover:border-accent/30 transition-all">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-2">
+                              <StatusBadge status={report.status} />
+                              <span className="text-[8px] font-black uppercase tracking-tighter text-muted-foreground/60">Stage Milestone</span>
+                            </div>
+                            <span className="text-[9px] font-bold text-muted-foreground">{format(new Date(report.created_at), "MMM d, HH:mm")}</span>
+                          </div>
+                          <p className="text-[11px] text-foreground font-medium leading-relaxed">{report.update_text}</p>
+                          <div className="mt-3 pt-3 border-t border-muted/50 flex justify-between items-center">
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-5 w-5 bg-muted rounded-full flex items-center justify-center text-[8px] font-bold">
+                                {report.reporter?.full_name?.charAt(0)}
+                              </div>
+                              <span className="text-[9px] font-bold text-muted-foreground">Reported by {report.reporter?.full_name}</span>
+                            </div>
+                            {report.location && (
+                              <div className="flex items-center gap-1 text-[9px] font-bold text-accent">
+                                <MapPin className="h-3 w-3" /> {report.location}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

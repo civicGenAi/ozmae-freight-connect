@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { LogisticsLoader } from "./LogisticsLoader";
 
 const INACTIVITY_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
 const WARNING_BEFORE = 5 * 60 * 1000; // 5 minutes
@@ -101,14 +102,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [navigate]);
 
   if (isLoading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-full bg-primary/20" />
-          <div className="h-4 w-32 rounded bg-muted" />
-        </div>
-      </div>
-    );
+    return <LogisticsLoader />;
   }
 
   return <>{children}</>;

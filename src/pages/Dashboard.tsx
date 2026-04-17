@@ -105,6 +105,7 @@ const LeadsDashboardMockup = () => (
 );
 
 const SalesDashboardMockup = () => (
+  // ... (Sales Mockup content remains same or similar, but let's keep it as is if it's already good)
   <div className="space-y-6 animate-in fade-in duration-500">
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div className="bg-[#0f1d35] p-5 rounded-2xl text-white shadow-lg relative overflow-hidden">
@@ -171,6 +172,68 @@ const SalesDashboardMockup = () => (
   </div>
 );
 
+const FinanceDashboardMockup = () => (
+  <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-white p-5 rounded-2xl border shadow-sm border-l-4 border-l-emerald-500">
+        <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Receivables</p>
+        <p className="text-2xl font-black mt-1">$42,850.00</p>
+        <p className="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded mt-2 inline-block">70% collected</p>
+      </div>
+      <div className="bg-white p-5 rounded-2xl border shadow-sm border-l-4 border-l-amber-500">
+        <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Pending Proformas</p>
+        <p className="text-2xl font-black mt-1">12</p>
+        <p className="text-[10px] font-bold text-amber-500 mt-2">Awaiting Verification</p>
+      </div>
+      <div className="bg-white p-5 rounded-2xl border shadow-sm border-l-4 border-l-blue-500">
+        <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Monthly Revenue (Confirmed)</p>
+        <p className="text-2xl font-black mt-1">$128,400</p>
+        <p className="text-[10px] font-bold text-blue-500 mt-2">+5% vs forecast</p>
+      </div>
+    </div>
+
+    <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b flex justify-between items-center bg-slate-50">
+        <h4 className="text-[10px] font-black uppercase tracking-widest">Accounts Overview</h4>
+        <div className="flex gap-2">
+           <Button variant="ghost" size="sm" className="h-7 text-[9px] font-black uppercase tracking-widest border border-dashed hover:bg-white">Export Ledger</Button>
+        </div>
+      </div>
+      <div className="p-0">
+        <Table>
+          <TableHeader className="bg-muted/10">
+            <TableRow>
+              <TableHead className="text-[9px] font-black uppercase px-4 h-8">Entity</TableHead>
+              <TableHead className="text-[9px] font-black uppercase px-4 h-8">Due Date</TableHead>
+              <TableHead className="text-[9px] font-black uppercase px-4 h-8">Status</TableHead>
+              <TableHead className="text-right text-[9px] font-black uppercase px-4 h-8">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {[
+              { n: "Swift Movers Ltd", d: "Apr 20, 2026", s: "overdue", v: "$12,400" },
+              { n: "Safari Logics", d: "Apr 25, 2026", s: "pending", v: "$8,200" },
+              { n: "Harbor Trans", d: "May 02, 2026", s: "upcoming", v: "$15,600" },
+            ].map((inv, i) => (
+              <TableRow key={i} className="h-12 hover:bg-muted/5">
+                <TableCell className="px-4 text-xs font-bold">{inv.n}</TableCell>
+                <TableCell className="px-4 text-[10px] font-bold text-muted-foreground">{inv.d}</TableCell>
+                <TableCell className="px-4">
+                  <span className={cn(
+                    "px-2 py-0.5 rounded text-[9px] font-black uppercase",
+                    inv.s === 'overdue' ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
+                  )}>{inv.s}</span>
+                </TableCell>
+                <TableCell className="px-4 text-right font-black text-xs">{inv.v}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  </div>
+);
+
 const OperationsDashboardMockup = () => (
   <div className="space-y-6 animate-in fade-in duration-500">
     <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar no-scrollbar">
@@ -190,33 +253,57 @@ const OperationsDashboardMockup = () => (
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-       <div className="lg:col-span-2 bg-white rounded-2xl border shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b flex justify-between items-center bg-muted/20">
-             <h4 className="text-[10px] font-black uppercase tracking-widest">Active Shipments Map View</h4>
-             <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="h-7 text-[9px] font-black px-2 uppercase">Heatmap</Button>
-                <Button variant="outline" size="sm" className="h-7 text-[9px] font-black px-2 uppercase bg-accent text-accent-foreground">Live Feed</Button>
-             </div>
+       <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b flex justify-between items-center bg-muted/20">
+               <h4 className="text-[10px] font-black uppercase tracking-widest">Active Shipments Map View</h4>
+               <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-[9px] font-black px-2 uppercase">Heatmap</Button>
+                  <Button variant="outline" size="sm" className="h-7 text-[9px] font-black px-2 uppercase bg-accent text-accent-foreground">Live Feed</Button>
+               </div>
+            </div>
+            <div className="p-8 flex flex-col items-center justify-center text-center bg-slate-50 border-b">
+               <MapPin className="h-8 w-8 text-accent mb-4 opacity-50" />
+               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Map Interface Placeholder</p>
+               <p className="text-[10px] text-muted-foreground mt-1">18 Vehicles active across East Africa corridor.</p>
+            </div>
+            <div className="p-4 space-y-3">
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                     <div className="h-2 w-2 rounded-full bg-red-500" />
+                     <p className="text-xs font-bold uppercase tracking-tight">Critically Delayed: TZ-2088-A</p>
+                  </div>
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px] font-black text-accent uppercase">Intervene</Button>
+               </div>
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                     <div className="h-2 w-2 rounded-full bg-amber-500" />
+                     <p className="text-xs font-bold uppercase tracking-tight">Border Clearance Alert: KE-441-X</p>
+                  </div>
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px] font-black text-accent uppercase">Update Doc</Button>
+               </div>
+            </div>
           </div>
-          <div className="p-8 flex flex-col items-center justify-center text-center bg-slate-50 border-b">
-             <MapPin className="h-8 w-8 text-accent mb-4 opacity-50" />
-             <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Map Interface Placeholder</p>
-             <p className="text-[10px] text-muted-foreground mt-1">18 Vehicles active across East Africa corridor.</p>
-          </div>
-          <div className="p-4 space-y-3">
-             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                   <div className="h-2 w-2 rounded-full bg-red-500" />
-                   <p className="text-xs font-bold uppercase tracking-tight">Critically Delayed: TZ-2088-A</p>
-                </div>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px] font-black text-accent uppercase">Intervene</Button>
+
+          {/* New Collaborative Pipeline Feed for Operations */}
+          <div className="bg-[#0f1d35] p-5 rounded-3xl text-white shadow-xl">
+             <div className="flex items-center justify-between mb-4">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-[#F26B2A]">Sales Pipeline Feed (Forward Planning)</h4>
+                <div className="bg-white/10 px-2 py-0.5 rounded text-[8px] font-black uppercase">Read Only</div>
              </div>
-             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                   <div className="h-2 w-2 rounded-full bg-amber-500" />
-                   <p className="text-xs font-bold uppercase tracking-tight">Border Clearance Alert: KE-441-X</p>
-                </div>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px] font-black text-accent uppercase">Update Doc</Button>
+             <div className="space-y-3">
+                {[
+                  { r: "Inquiry #442", d: "TZ -> KE", v: "40ft Container", s: "Quoted" },
+                  { r: "Inquiry #445", d: "KE -> RW", v: "Loose Cargo", s: "Converting" }
+                ].map((p, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5">
+                     <div>
+                        <p className="text-xs font-bold">{p.r} — {p.d}</p>
+                        <p className="text-[10px] text-white/40 uppercase font-black">{p.v}</p>
+                     </div>
+                     <span className="text-[10px] font-black text-[#F26B2A] bg-[#F26B2A]/10 px-2 py-0.5 rounded">{p.s}</span>
+                  </div>
+                ))}
              </div>
           </div>
        </div>
@@ -276,7 +363,7 @@ const OperationsDashboardMockup = () => (
 // --- MAIN DASHBOARD CONTAINER ---
 
 export default function Dashboard() {
-  const { roles, isAdmin, isLeads, isSales, isOperations } = useAuth();
+  const { roles, isAdmin, isLeads, isSales, isOperations, isFinance } = useAuth();
   
   const { data: crmTasks, isLoading: tasksLoading } = useCrmTasks({ status: 'pending', assignedToMe: true });
   
@@ -556,6 +643,17 @@ export default function Dashboard() {
                    <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Ops Center & Fleet Tracking</h2>
                 </div>
                 <OperationsDashboardMockup />
+             </section>
+           )}
+
+           {/* 5. FINANCE - NEW MOCKUP */}
+           {isFinance && (
+             <section className="space-y-6">
+                <div className="flex items-center gap-2 mb-2">
+                   <div className="h-1 w-8 bg-amber-500 rounded-full" />
+                   <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Financial Audit & Control</h2>
+                </div>
+                <FinanceDashboardMockup />
              </section>
            )}
 

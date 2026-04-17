@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { LogisticsLoader } from "./LogisticsLoader";
 
 import { useAuth, UserRole } from "@/hooks/useAuth";
 
@@ -62,7 +63,7 @@ const navSections: NavSection[] = [
   },
   {
     label: "CRM & RELATIONSHIPS",
-    roles: ["Admin", "Leads", "Sales"],
+    roles: ["Admin", "Leads", "Sales", "Operations"],
     items: [
       { title: "Customers", path: "/crm/customers", icon: Users },
       { title: "Interactions", path: "/crm/interactions", icon: Phone },
@@ -73,7 +74,7 @@ const navSections: NavSection[] = [
   },
   {
     label: "SALES",
-    roles: ["Admin", "Leads", "Sales"],
+    roles: ["Admin", "Leads", "Sales", "Operations", "Finance"],
     items: [
       { title: "Leads", path: "/leads", icon: Users },
       { title: "Quotations", path: "/quotations", icon: FileText },
@@ -82,7 +83,7 @@ const navSections: NavSection[] = [
   },
   {
     label: "OPERATIONS",
-    roles: ["Admin", "Operations"],
+    roles: ["Admin", "Operations", "Finance"],
     items: [
       { title: "Job Orders", path: "/job-orders", icon: ClipboardList },
       { title: "Fleet & Drivers", path: "/fleet", icon: Truck },
@@ -91,7 +92,7 @@ const navSections: NavSection[] = [
   },
   {
     label: "FINANCE",
-    roles: ["Admin", "Sales"],
+    roles: ["Admin", "Sales", "Finance"],
     items: [
       { title: "Invoices", path: "/invoices", icon: Receipt },
       { title: "Payments", path: "/payments", icon: CreditCard },
@@ -277,7 +278,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  const { user: profile, roles, loading: authLoading, mustChangePassword, shouldShowPasswordReminder } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { user: profile, roles, loading: authLoading, mustChangePassword, shouldShowPasswordReminder, isUsingDefaultPassword } = useAuth();
 
   useEffect(() => {
     if (!authLoading && mustChangePassword && location.pathname !== "/reset-password") {
@@ -317,8 +319,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const confirmLogout = async () => {
     setShowLogoutDialog(false);
-    await supabase.auth.signOut();
-    navigate("/login");
+    setIsLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+      navigate("/login");
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const getInitials = (name: string) => {
@@ -330,15 +337,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     .flatMap((s) => s.items)
     .find((i) => i.path === location.pathname)?.title || "Ozmae Freight";
 
-  if (authLoading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[#F8F9FA]">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-full bg-primary/20" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Initializing Ozmae Systems...</p>
-        </div>
-      </div>
-    );
+  if (authLoading || isLoggingOut) {
+    return <LogisticsLoader message={isLoggingOut ? "Securely Terminating Session..." : "Initializing Ozmae Systems..."} />;
   }
 
   return (
@@ -428,18 +428,33 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {/* Password Reminder Banner */}
-        {shouldShowPasswordReminder && location.pathname !== "/reset-password" && (
-          <div className="bg-amber-100 border-b border-amber-200 px-6 py-2 flex items-center justify-between animate-in fade-in slide-in-from-top duration-500">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest leading-none">
-                Security Reminder: Please update your default password to ensure account safety.
-              </p>
+        {/* Mandatory Password Update Banner */}
+        {(shouldShowPasswordReminder || isUsingDefaultPassword) && location.pathname !== "/reset-password" && (
+          <div className={cn(
+            "px-6 py-3 flex items-center justify-between animate-in fade-in slide-in-from-top duration-500 shadow-md",
+            isUsingDefaultPassword ? "bg-rose-600 text-white" : "bg-amber-100 border-b border-amber-200"
+          )}>
+            <div className="flex items-center gap-3">
+              <div className={cn("p-1.5 rounded-lg", isUsingDefaultPassword ? "bg-white/20" : "bg-amber-200")}>
+                <AlertTriangle className={cn("h-4 w-4", isUsingDefaultPassword ? "text-white" : "text-amber-700")} />
+              </div>
+              <div className="space-y-0.5">
+                <p className={cn("text-[10px] font-black uppercase tracking-[0.15em] leading-none", isUsingDefaultPassword ? "text-white" : "text-amber-800")}>
+                  {isUsingDefaultPassword ? "MANDATORY SECURITY UPDATE" : "SECURITY RECOMMENDATION"}
+                </p>
+                <p className={cn("text-[9px] font-bold opacity-90", isUsingDefaultPassword ? "text-rose-100" : "text-amber-700")}>
+                  {isUsingDefaultPassword 
+                    ? "You are currently using a default password. System access is restricted until updated." 
+                    : "Your password will expire soon. Please update it to maintain system access."}
+                </p>
+              </div>
             </div>
             <Link to="/reset-password">
-              <button className="text-[9px] font-black uppercase tracking-tighter bg-amber-200 hover:bg-amber-300 text-amber-900 px-3 py-1 rounded transition-colors">
-                Change Now
+              <button className={cn(
+                "text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-lg",
+                isUsingDefaultPassword ? "bg-white text-rose-600 hover:bg-rose-50" : "bg-amber-500 text-white hover:bg-amber-600"
+              )}>
+                Update Password
               </button>
             </Link>
           </div>
