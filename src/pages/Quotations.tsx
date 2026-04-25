@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer, Clock, CheckCircle2, MessageSquare, CornerUpLeft, CheckCircle, Send } from "lucide-react";
+import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer, Clock, CheckCircle2, MessageSquare, CornerUpLeft, CheckCircle, Send, Copy } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -148,6 +148,7 @@ export default function Quotations() {
     enabled: isNewModalOpen
   });
 
+
   const watchedItems = useWatch({ control: form.control, name: "cargo_items" });
   const watchedMainUnit = useWatch({ control: form.control, name: "main_unit" });
 
@@ -181,7 +182,7 @@ export default function Quotations() {
       const lead = leads.find((l: any) => l.id === location.state.leadId);
       if (lead) {
         form.reset({
-          lead_id: lead.id,
+          lead_id: lead.id || "",
           customer_id: lead.customer_id || "",
           contact_person: lead.contact_person || "",
           commodity: lead.commodity || "",
@@ -193,12 +194,19 @@ export default function Quotations() {
           cargo_items: lead.cargo_items?.filter((it: any) => it.type !== 'metadata').length > 0
             ? lead.cargo_items
               .filter((it: any) => it.type !== 'metadata')
-              .map((it: any) => ({ ...it, extra_rates: it.extra_rates || [] }))
+              .map((it: any) => ({ 
+                description: it.description || "",
+                type: it.type || "item",
+                rate_usd: it.rate_usd || "",
+                remarks: it.remarks || "",
+                indent: it.indent || 1,
+                extra_rates: it.extra_rates || [] 
+              }))
             : [{ description: lead.cargo_description || "", type: "item", rate_usd: "", remarks: "", extra_rates: [], indent: 1 }],
           remarks: lead.remarks || "",
           amount: lead.rate_usd?.toString() || "" as any,
           validity: lead.validity || "15 Days",
-          valid_until: new Date(Date.now() + (parseInt(lead.validity || "15") || 15) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          valid_until: lead.validity ? new Date(Date.now() + (parseInt(lead.validity) || 15) * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           transport_mode: lead.transport_mode || null,
           movement_type: lead.movement_type || "import",
           logistics_carrier: lead.logistics_carrier || "",
@@ -733,14 +741,6 @@ export default function Quotations() {
                             <TableCell><StatusBadge status={quote.status} /></TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                {['draft', 'under_revision'].includes(quote.status) && (
-                                  <Button size="icon" variant="ghost" onClick={() => { 
-                                     // Logic to open edit form with this quote's data
-                                     toast.info("Opening editor for revision...");
-                                  }} className="text-accent hover:bg-accent/10">
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                )}
                                 <Button size="icon" variant="ghost" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}><Eye className="h-4 w-4" /></Button>
                                 <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-foreground" onClick={() => setSelectedQuote(quote)}><Info className="h-4 w-4" /></Button>
                                 <Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteQuoteMutation.mutate(quote.id)}><Trash2 className="h-4 w-4" /></Button>

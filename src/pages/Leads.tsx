@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Search, Mail, ArrowRight, Phone, Pencil, Info, Globe, Truck, DollarSign, Clock, BarChart3, TrendingUp, Users, Ship, Plane, Activity } from "lucide-react";
+import { Plus, Search, Mail, ArrowRight, Phone, Pencil, Info, Globe, Truck, DollarSign, Clock, BarChart3, TrendingUp, Users, Ship, Plane, Activity, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -137,6 +137,43 @@ export default function Leads() {
     form: newLeadForm,
     enabled: isNewModalOpen
   });
+
+  const handleDuplicateLead = (lead: any) => {
+    newLeadForm.reset({
+      customer_name: lead.customer_name || "",
+      contact_person: "", // Always force fresh entry as requested
+      email: lead.email || "",
+      phone: lead.phone || "",
+      origin: lead.origin || "",
+      destination: lead.destination || "",
+      commodity: lead.commodity || "",
+      chargeable_weight: lead.chargeable_weight || "",
+      cif_value_usd: lead.cif_value_usd || "TBA",
+      transport_mode: lead.transport_mode || "sea",
+      movement_type: lead.movement_type || "export",
+      logistics_carrier: lead.logistics_carrier || "",
+      logistics_transit: lead.logistics_transit || "",
+      logistics_extra: lead.logistics_extra || "",
+      validity: lead.validity || "15 Days",
+      cargo_description: lead.cargo_description || "",
+      main_unit: lead.main_unit || "1*40'HC",
+      extra_units: lead.extra_units || [],
+      cargo_items: Array.isArray(lead.cargo_items) 
+        ? lead.cargo_items.map((it: any) => ({ 
+            description: it.description || "",
+            type: it.type || "item",
+            rate_usd: it.rate_usd || "",
+            remarks: it.remarks || "",
+            indent: it.indent || 1,
+            extra_rates: it.extra_rates || [] 
+          })) 
+        : [{ type: "item", description: "", rate_usd: "", extra_rates: [], remarks: "", indent: 1 }],
+      remarks: lead.remarks || "",
+    });
+
+    setIsNewModalOpen(true);
+    toast.success("Lead data duplicated (Contact person cleared)");
+  };
 
   // Edit Lead Form
   const editLeadForm = useForm<LeadFormValues>({
@@ -567,6 +604,9 @@ export default function Leads() {
                             <TableCell><StatusBadge status={lead.status} /></TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                <Button size="icon" variant="outline" className="h-8 w-8 hover:text-accent shadow-sm" onClick={() => handleDuplicateLead(lead)} title="Duplicate Lead">
+                                  <Copy className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button size="icon" variant="outline" className="h-8 w-8 hover:text-accent shadow-sm" onClick={() => setLogInteractionLeadId(lead.id)}>
                                   <Phone className="h-3.5 w-3.5" />
                                 </Button>
