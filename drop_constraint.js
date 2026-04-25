@@ -1,0 +1,1 @@
+const { Client } = require('pg'); const client = new Client({ connectionString: process.env.SUPABASE_DB_URL }); async function run() { await client.connect(); await client.query('ALTER TABLE public.documents DROP CONSTRAINT IF EXISTS documents_document_type_check;'); console.log('Dropped constraint!'); await client.end(); } run();

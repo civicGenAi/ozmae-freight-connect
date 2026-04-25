@@ -55,16 +55,9 @@ const docTypes = [
 
 export default function Documents() {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [uploading, setUploading] = useState<{ jobId: string; category: string } | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-  const [templateType, setTemplateType] = useState<"pickup" | "delivery" | null>(null);
-  const [selectedJob, setSelectedJob] = useState<any>(null);
-  const [templateDetails, setTemplateDetails] = useState<any>({});
   const [previewDoc, setPreviewDoc] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const queryClient = useQueryClient();
 
   const { data: jobGroupsData, isLoading } = useQuery({
@@ -100,101 +93,6 @@ export default function Documents() {
 
   const jobGroups = jobGroupsData?.jobs || [];
   const totalCount = jobGroupsData?.totalCount || 0;
-
-  const uploadMutation = useMutation({
-    mutationFn: async ({ file, jobId, category }: { file: File | Blob; jobId: string; category: string }) => {
-      setUploadProgress(10);
-      const fileName = `${category}_${Date.now()}.pdf`;
-      const filePath = `documents/${jobId}/${fileName}`;
-
-      setUploadProgress(30);
-      const { error: uploadError } = await supabase.storage
-        .from('logistic-files')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      setUploadProgress(70);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Authentication required for upload.");
-
-      const { error: dbError } = await supabase.from("documents").insert([{
-        job_order_id: jobId,
-        file_name: file instanceof File ? file.name : fileName,
-        file_path: filePath,
-        document_type: category,
-        uploaded_by: user.id
-      }]);
-
-      if (dbError) throw dbError;
-      setUploadProgress(100);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document_groups"] });
-      toast.success("Document added to vault");
-      setTimeout(() => {
-        setUploading(null);
-        setUploadProgress(0);
-      }, 500);
-    },
-    onError: (err: any) => {
-      toast.error(err.message);
-      setUploading(null);
-      setUploadProgress(0);
-    }
-  });
-
-  const pullFromSystem = async (job: any, type: "quotation" | "invoice") => {
-    setUploading({ jobId: job.id, category: type });
-    try {
-      let blob;
-      if (type === "quotation") {
-        if (!job.quotation_id) throw new Error("No quotation linked to this job.");
-        const { data: quote } = await supabase.from("quotations").select("*").eq("id", job.quotation_id).single();
-        if (!quote) throw new Error("Quotation not found.");
-        
-        // Format metadata for QuotationPDFDocument
-        const meta = {
-            titleText: "TAX QUOTATION",
-            leftFields: [
-                { label: "Customer", value: job.customer?.company_name || "N/A" },
-                { label: "Origin", value: quote.origin },
-                { label: "Destination", value: quote.destination }
-            ],
-            tableHeaders: ["Description", "Price"],
-            tableRows: [{ type: "item", desc: quote.cargo_description || "Transport Services", amount: quote.total_amount_usd }]
-        };
-        blob = await pdf(<QuotationPDFDocument meta={meta as any} logoUrl="" signatureUrl="" />).toBlob();
-        uploadMutation.mutate({ file: blob, jobId: job.id, category: "quotation_pdf" });
-      } else {
-        const { data: inv } = await supabase.from("invoices").select("*, job:job_orders(id, origin, destination, customer:customers(company_name))").eq("job_order_id", job.id).single();
-        if (!inv) throw new Error("No invoice found for this job.");
-        blob = await pdf(<InvoicePDF invoice={inv} />).toBlob();
-        uploadMutation.mutate({ file: blob, jobId: job.id, category: "invoice_pdf" });
-      }
-    } catch (err: any) {
-      toast.error(err.message);
-      setUploading(null);
-    }
-  };
-
-  const generateTemplate = async () => {
-    if (!selectedJob || !templateType) return;
-    setUploading({ jobId: selectedJob.id, category: templateType });
-    setIsTemplateModalOpen(false);
-
-    try {
-      const dbType = templateType === "pickup" ? "pickup_confirmation" : "delivery_note";
-      const blob = templateType === "pickup" 
-        ? await pdf(<PickupPDF job={selectedJob} details={templateDetails} />).toBlob()
-        : await pdf(<DeliveryNotePDF job={selectedJob} details={templateDetails} />).toBlob();
-
-      uploadMutation.mutate({ file: blob, jobId: selectedJob.id, category: dbType });
-    } catch (err: any) {
-      toast.error("Generation failed");
-      setUploading(null);
-    }
-  };
 
   const [requestingAccess, setRequestingAccess] = useState<string | null>(null);
 
@@ -249,32 +147,12 @@ export default function Documents() {
     }
   });
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && uploading) {
-      uploadMutation.mutate({ file, jobId: uploading.jobId, category: uploading.category });
-    }
-  };
-
-  const triggerUpload = (jobId: string, category: string) => {
-    setUploading({ jobId, category });
-    fileInputRef.current?.click();
-  };
-
   const toggleExpand = (jobId: string) => {
     setExpanded(expanded === jobId ? null : jobId);
   };
 
   return (
     <div className="space-y-6">
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        className="hidden" 
-        onChange={handleFileSelect}
-        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-      />
-      
       <PageHeader title="Document Vault">
          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest bg-muted/30 px-3 py-1.5 rounded-full border border-dashed">
           <HardDrive className="h-3 w-3 text-accent" /> Secure Cloud Storage
@@ -291,7 +169,6 @@ export default function Documents() {
               <TableHead className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Route</TableHead>
               <TableHead className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Status</TableHead>
               <TableHead className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Last Activity</TableHead>
-              <TableHead className="w-32"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -305,8 +182,22 @@ export default function Documents() {
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-20 text-muted-foreground italic">No jobs available in the system.</TableCell>
               </TableRow>
-            ) : jobGroups?.map((job: any) => (
-                <Fragment key={job.id}>
+            ) : jobGroups?.map((job: any) => {
+                const customTypes = (job.docs || [])
+                  .map((d: any) => d.document_type)
+                  .filter((type: string) => !docTypes.some(b => b.key === type) && type);
+
+                const activeJobCategories = [
+                  ...docTypes,
+                  ...Array.from(new Set(customTypes)).map((type: any) => ({
+                    key: type,
+                    label: type.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+                    icon: FileText
+                  }))
+                ];
+
+                return (
+                  <Fragment key={job.id}>
                   <TableRow 
                     className={cn(
                       "cursor-pointer transition-colors group",
@@ -332,35 +223,21 @@ export default function Documents() {
                     <TableCell>
                        <div className="flex items-center gap-2">
                           <div className="h-1.5 w-12 bg-muted rounded-full overflow-hidden">
-                             <div className="h-full bg-accent transition-all" style={{ width: `${((job.docs?.length || 0) / 4) * 100}%` }} />
+                             <div className="h-full bg-accent transition-all" style={{ width: `${Math.min(100, ((job.docs?.length || 0) / activeJobCategories.length) * 100)}%` }} />
                           </div>
-                          <span className="text-[10px] font-black text-muted-foreground">{job.docs?.length || 0}/4</span>
+                          <span className="text-[10px] font-black text-muted-foreground">{job.docs?.length || 0}/{activeJobCategories.length}</span>
                        </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {job.lastUpdated ? format(new Date(job.lastUpdated), "MMM d, HH:mm") : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent hover:bg-accent/10" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          triggerUpload(job.id, "quotation");
-                        }}
-                      >
-                        <Upload className="h-3 w-3" /> Quick Upload
-                      </Button>
                     </TableCell>
                   </TableRow>
                   {expanded === job.id && (
                     <TableRow className="bg-muted/10 border-t-0">
                       <TableCell colSpan={7} className="px-12 py-8">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                          {docTypes.map((dt) => {
+                          {activeJobCategories.map((dt) => {
                             const doc = job.docs?.find((d: any) => d.document_type === dt.key);
-                            const isThisUploading = uploading?.jobId === job.id && uploading?.category === dt.key;
                             
                             return (
                               <div
@@ -398,69 +275,13 @@ export default function Documents() {
                                   "h-14 w-14 rounded-2xl flex items-center justify-center mb-3 shadow-inner transition-transform group-hover:scale-110",
                                   doc ? "bg-success/10 text-success" : "bg-muted/50 text-muted-foreground"
                                 )}>
-                                  {isThisUploading ? (
-                                    <div className="relative h-10 w-10 flex items-center justify-center">
-                                       <Loader2 className="h-6 w-6 animate-spin absolute" />
-                                       <span className="text-[8px] font-black mt-8">{uploadProgress}%</span>
-                                    </div>
-                                  ) : (
-                                    doc ? <CheckCircle2 className="h-7 w-7" /> : <dt.icon className="h-7 w-7" />
-                                  )}
+                                  {doc ? <CheckCircle2 className="h-7 w-7" /> : <dt.icon className="h-7 w-7" />}
                                 </div>
                                 
                                 <span className={cn(
                                   "text-[10px] font-black uppercase tracking-widest text-center",
                                   doc ? "text-foreground" : "text-muted-foreground"
                                 )}>{dt.label}</span>
-                                
-                                {isThisUploading ? (
-                                   <div className="w-full mt-4 max-w-[80px]">
-                                      <Progress value={uploadProgress} className="h-1 bg-slate-100" />
-                                   </div>
-                                ) : !doc && (
-                                   <div className="flex gap-2 mt-4 scale-90">
-                                      <button 
-                                        title="Upload Locally"
-                                        onClick={() => {
-                                          setSelectedJob(job);
-                                          setUploading({ jobId: job.id, category: dt.key });
-                                          fileInputRef.current?.click();
-                                        }}
-                                        className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-500 hover:text-accent transition-all"
-                                      >
-                                        <Upload className="h-3 w-3" />
-                                      </button>
-                                      {(dt.key === "quotation_pdf" || dt.key === "invoice_pdf") && (
-                                        <button 
-                                          title="Pull from System"
-                                          onClick={() => pullFromSystem(job, dt.key === "quotation_pdf" ? "quotation" : "invoice")}
-                                          className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-500 hover:text-accent transition-all"
-                                        >
-                                          <FileSearch className="h-3 w-3" />
-                                        </button>
-                                      )}
-                                      {(dt.key === "pickup_confirmation" || dt.key === "delivery_note") && (
-                                        <button 
-                                          title="Generate Template"
-                                          onClick={() => {
-                                            setSelectedJob(job);
-                                            setTemplateType(dt.key === "pickup_confirmation" ? "pickup" : "delivery");
-                                            setTemplateDetails({
-                                              driver_name: "",
-                                              vehicle_plate: "",
-                                              cargo_description: "",
-                                              pickup_date: format(new Date(), "yyyy-MM-dd"),
-                                              delivery_date: format(new Date(), "yyyy-MM-dd"),
-                                            });
-                                            setIsTemplateModalOpen(true);
-                                          }}
-                                          className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-slate-500 hover:text-accent transition-all"
-                                        >
-                                          <Wand2 className="h-3 w-3" />
-                                        </button>
-                                      )}
-                                   </div>
-                                )}
                               </div>
                             );
                           })}
@@ -469,7 +290,8 @@ export default function Documents() {
                     </TableRow>
                   )}
                 </Fragment>
-              ))
+              );
+            })
             }
           </TableBody>
         </Table>
@@ -482,121 +304,43 @@ export default function Documents() {
         />
       </div>
 
-      {/* Template Details Modal */}
-      <Dialog open={isTemplateModalOpen} onOpenChange={setIsTemplateModalOpen}>
-        <DialogContent className="max-w-md">
-           <DialogHeader>
-              <DialogTitle className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                 <Wand2 className="h-5 w-5 text-accent" /> Configure Template
-              </DialogTitle>
-           </DialogHeader>
-           
-           <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                 <Label className="text-[10px] font-black uppercase text-muted-foreground">Cargo Details</Label>
-                 <Input 
-                   placeholder="Quantity (e.g., 20 Tons)"
-                   value={templateDetails.quantity}
-                   onChange={e => setTemplateDetails({...templateDetails, quantity: e.target.value})}
-                   className="font-bold h-11"
-                 />
+      {/* Preview Full-Screen Modal */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
+        <DialogContent className="max-w-5xl h-[90vh] bg-neutral-900 border-none sm:rounded-2xl flex flex-col p-0 overflow-hidden shadow-2xl">
+          <div className="flex items-center justify-between p-4 bg-black/40 backdrop-blur-md absolute top-0 w-full z-10 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-accent/20 flex items-center justify-center">
+                <FileText className="h-4 w-4 text-accent" />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Driver Name</Label>
-                    <Input 
-                      placeholder="Full Name"
-                      value={templateDetails.driver_name}
-                      onChange={e => setTemplateDetails({...templateDetails, driver_name: e.target.value})}
-                      className="font-bold h-11"
-                    />
-                 </div>
-                 <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Vehicle plate</Label>
-                    <Input 
-                      placeholder="ABC-123"
-                      value={templateDetails.vehicle_plate}
-                      onChange={e => setTemplateDetails({...templateDetails, vehicle_plate: e.target.value})}
-                      className="font-bold h-11 uppercase"
-                    />
-                 </div>
-              </div>
-
-              <div className="space-y-2">
-                 <Label className="text-[10px] font-black uppercase text-muted-foreground">
-                   {templateType === "pickup" ? "Pickup Date & Time" : "Expected Delivery Date & Time"}
-                 </Label>
-                 <Input 
-                   type="datetime-local"
-                   value={templateDetails.pickup_datetime}
-                   onChange={e => setTemplateDetails({...templateDetails, pickup_datetime: e.target.value})}
-                   className="font-bold h-11"
-                 />
-              </div>
-
-              {templateType === "delivery" && (
-                <div className="space-y-2">
-                   <Label className="text-[10px] font-black uppercase text-muted-foreground">Consignee Name</Label>
-                   <Input 
-                     placeholder="Receiving Company/Person"
-                     value={templateDetails.consignee_name}
-                     onChange={e => setTemplateDetails({...templateDetails, consignee_name: e.target.value})}
-                     className="font-bold h-11"
-                   />
-                </div>
-              )}
-           </div>
-
-           <DialogFooter>
-              <Button 
-                className="w-full bg-slate-900 h-12 font-black uppercase text-xs tracking-widest gap-2"
-                onClick={generateTemplate}
-              >
-                 <Sparkles className="h-4 w-4 text-accent" /> Generate & Upload into Vault
-              </Button>
-           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Document Preview Modal */}
-      <Dialog open={!!previewDoc} onOpenChange={() => setPreviewDoc(null)}>
-        <DialogContent className="max-w-5xl h-[85vh] p-0 overflow-hidden bg-slate-900 border-slate-800">
-           <DialogHeader className="p-4 bg-slate-800/50 border-b border-slate-700/50 flex flex-row items-center justify-between">
               <div>
-                <DialogTitle className="text-white text-sm font-bold uppercase tracking-widest flex items-center gap-2">
-                   <FileText className="h-4 w-4 text-accent" /> {previewDoc?.file_name}
-                </DialogTitle>
-                <p className="text-[10px] text-slate-400 font-medium">Document Vault Preview • {previewDoc?.document_type.replace('_', ' ')}</p>
+                <h2 className="text-white font-medium text-sm">{previewDoc?.file_name}</h2>
+                <p className="text-white/50 text-[10px] uppercase tracking-widest">{previewDoc?.document_type.replace('_', ' ')}</p>
               </div>
-           </DialogHeader>
-           
-           <div className="flex-1 w-full h-full bg-slate-100 flex items-center justify-center relative">
-              {previewDoc?.signedUrl || previewDoc?.file_path?.startsWith('http') ? (
-                <iframe 
-                  src={`${previewDoc.signedUrl || previewDoc.file_path}#toolbar=0`} 
-                  className="w-full h-full border-none"
-                  title="Document Preview"
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-3">
-                   <Loader2 className="h-10 w-10 animate-spin text-slate-300" />
-                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Verifying Permissions...</p>
-                </div>
-              )}
-           </div>
-
-           <div className="p-3 bg-slate-800/80 border-t border-slate-700/50 flex justify-between items-center">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter italic">Digitally Secured by Ozmae Cloud Storage</span>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setPreviewDoc(null)}
-                className="text-white hover:bg-white/10"
-              >
-                Close Viewer
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" className="h-8 text-white/70 hover:text-white hover:bg-white/10" onClick={() => handleDownload(previewDoc)}>
+                <ExternalLink className="h-4 w-4 mr-2" /> Download
               </Button>
-           </div>
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-white/70 hover:text-white hover:bg-white/10" onClick={() => setPreviewDoc(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          
+          <div className="flex-1 w-full bg-neutral-900 pt-16 flex items-center justify-center">
+            {previewDoc?.signedUrl ? (
+              previewDoc.file_path.toLowerCase().endsWith('.pdf') ? (
+                <iframe src={`${previewDoc.signedUrl}#view=FitH`} className="w-full h-full border-none bg-white" title="PDF Preview" />
+              ) : (
+                <img src={previewDoc.signedUrl} alt="Preview" className="max-w-full max-h-full object-contain p-4" />
+              )
+            ) : (
+              <div className="flex flex-col items-center justify-center text-white/50 space-y-4">
+                <Loader2 className="h-8 w-8 animate-spin" />
+                <p className="text-xs uppercase tracking-widest font-bold">Loading Secure Preview</p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

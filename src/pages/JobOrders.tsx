@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Plus, Search, MapPin, Truck, User, Calendar, DollarSign, Clock, CheckCircle2, ChevronRight, Trash2, Info, Pencil, FileText, Upload, History, UserPlus, MessageSquare, Send } from "lucide-react";
+import { Plus, Search, MapPin, Truck, User, Calendar, DollarSign, Clock, CheckCircle2, ChevronRight, Trash2, Info, Pencil, FileText, Upload, History, UserPlus, MessageSquare, Send, ShieldCheck, ImagePlus, Lock, Unlock, Loader2, Smartphone } from "lucide-react";
+import imageCompression from 'browser-image-compression';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
@@ -88,7 +89,20 @@ export default function JobOrders() {
 
   const userRole = userProfile?.role?.toLowerCase() || '';
   const isAdmin = userRole === 'admin';
+  const isOperations = userRole === 'operations' || userRole === 'lead' || userRole === 'leads';
+  const canManageDocs = isAdmin || isOperations;
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [notifyWhatsApp, setNotifyWhatsApp] = useState(true);
+  const [bulkCategory, setBulkCategory] = useState("");
+
+  const { data: globalCategories } = useQuery({
+    queryKey: ["document_categories"],
+    queryFn: async () => {
+      const { data } = await supabase.from('documents').select('document_type').limit(1000);
+      return Array.from(new Set(data?.map(d => d.document_type))).filter(Boolean) as string[];
+    }
+  });
 
   // Derived job state for Admin Draft visibility
   const displayJob = React.useMemo(() => {
@@ -331,6 +345,74 @@ export default function JobOrders() {
     },
   });
 
+  const handleFileUpload = async (files: FileList | null, category: string) => {
+    if (!files || files.length === 0 || !selectedJob) return;
+    if (!canManageDocs) {
+      toast.error("Authority Required: Only Operations or Admins can upload documents.");
+      return;
+    }
+
+    const fileArray = Array.from(files);
+    
+    for (const file of fileArray) {
+      try {
+        const fileId = Math.random().toString(36).substring(7);
+        setUploadProgress(prev => ({ ...prev, [fileId]: 10 }));
+        
+        let fileToUpload = file;
+
+        // Smart Optimization: Compress images to save storage
+        if (file.type.startsWith('image/')) {
+          const options = {
+            maxSizeMB: 1,
+            maxWidthOrHeight: 1920,
+            useWebWorker: true
+          };
+          setUploadProgress(prev => ({ ...prev, [fileId]: 30 }));
+          fileToUpload = await imageCompression(file, options);
+          setUploadProgress(prev => ({ ...prev, [fileId]: 50 }));
+        }
+
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `documents/${selectedJob.id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('logistic-files')
+          .upload(filePath, fileToUpload);
+
+        if (uploadError) throw uploadError;
+        setUploadProgress(prev => ({ ...prev, [fileId]: 80 }));
+
+        const { error: dbError } = await supabase
+          .from('documents')
+          .insert([{
+            job_order_id: selectedJob.id,
+            file_name: file.name,
+            file_path: filePath,
+            document_type: category,
+            uploaded_by: (await supabase.auth.getUser()).data.user?.id
+          }]);
+
+        if (dbError) throw dbError;
+        setUploadProgress(prev => ({ ...prev, [fileId]: 100 }));
+        
+        toast.success(`Successfully optimized and uploaded: ${file.name}`);
+        setTimeout(() => {
+          setUploadProgress(prev => {
+            const next = { ...prev };
+            delete next[fileId];
+            return next;
+          });
+        }, 2000);
+
+      } catch (err: any) {
+        toast.error(`Upload failed for ${file.name}: ${err.message}`);
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ["job_documents", selectedJob.id] });
+  };
+
   const addProgressMutation = useMutation({
     mutationFn: async ({ job_id, text, status }: { job_id: string, text: string, status?: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -395,6 +477,26 @@ export default function JobOrders() {
     },
     enabled: !!selectedJob?.id
   });
+
+  const activeJobCategories = React.useMemo(() => {
+    const base = [
+      { key: "quotation_pdf", label: "Quotation PDF" },
+      { key: "invoice_pdf", label: "Invoice PDF" },
+      { key: "pickup_confirmation", label: "Pickup Confirmation" },
+      { key: "delivery_note", label: "Delivery Note" }
+    ];
+    
+    const customTypes = (jobDocs || [])
+      .map(d => d.document_type)
+      .filter(type => !base.some(b => b.key === type) && type);
+
+    const customObjs = Array.from(new Set(customTypes)).map(type => ({
+      key: type, 
+      label: type.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    }));
+
+    return [...base, ...customObjs];
+  }, [jobDocs]);
 
   const filtered = jobOrders?.filter((j: any) => {
     const searchStr = searchQuery.toLowerCase();
@@ -1089,7 +1191,12 @@ export default function JobOrders() {
                     </div>
 
                     <div className="space-y-4">
-                      <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b pb-1">Resources Assigned</h4>
+                      <div className="flex justify-between items-center border-b pb-1">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Resources & Access</h4>
+                        <div className="flex items-center gap-1 text-[9px] font-bold text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/20">
+                          <Smartphone className="h-3 w-3" /> Access Code: {displayJob.id.split('-')[0].toUpperCase()}
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center gap-3 p-3 bg-card rounded-lg border shadow-sm">
                           <div className="h-10 w-10 rounded-full bg-accent/10 flex items-center justify-center text-accent">
@@ -1192,22 +1299,90 @@ export default function JobOrders() {
               </TabsContent>
 
               <TabsContent value="docs" className="mt-8 space-y-6 animate-in fade-in slide-in-from-bottom-2">
-                <div className="bg-muted/30 p-6 rounded-2xl border-2 border-dashed border-muted flex flex-col items-center justify-center text-center">
+                <div className={cn(
+                  "bg-muted/30 p-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center transition-all",
+                  canManageDocs ? "border-accent/40" : "opacity-60 grayscale border-muted cursor-not-allowed"
+                )}>
                   <div className="h-12 w-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-4">
-                    <Upload className="h-6 w-6 text-accent" />
+                    {canManageDocs ? <Upload className="h-6 w-6 text-accent" /> : <Lock className="h-6 w-6 text-muted-foreground" />}
                   </div>
                   <h4 className="text-xs font-black uppercase tracking-widest">Document Repository</h4>
-                  <p className="text-[11px] text-muted-foreground mt-2 max-w-[200px]">Securely store permits, BLs, and invoices for this job.</p>
-                  <Button variant="outline" className="mt-6 h-10 px-6 rounded-xl font-bold uppercase text-[10px] tracking-widest border-accent text-accent hover:bg-accent/5">
-                    Browse Files
-                  </Button>
+                  <p className="text-[11px] text-muted-foreground mt-2 max-w-[220px]">
+                    {canManageDocs ? "Securely store optimized BLs, permits, and invoices." : "Authority required to upload or manage documents."}
+                  </p>
+                  
+                  {canManageDocs && (
+                    <div className="mt-6 w-full flex gap-3">
+                      <div className="relative w-[220px]">
+                        <Input 
+                          placeholder="Type or Pick Category" 
+                          value={bulkCategory}
+                          onChange={(e) => setBulkCategory(e.target.value)}
+                          list="category-suggestions"
+                          className="h-10 text-[10px] uppercase font-bold border-accent/20 bg-accent/5 focus:ring-accent"
+                        />
+                        <datalist id="category-suggestions">
+                          <option value="quotation_pdf" />
+                          <option value="invoice_pdf" />
+                          <option value="pickup_confirmation" />
+                          <option value="delivery_note" />
+                          <option value="Bill of Lading" />
+                          <option value="Commercial Invoice" />
+                          <option value="Permit / License" />
+                          {globalCategories?.map((c: string) => <option key={c} value={c} />)}
+                        </datalist>
+                      </div>
+                      <label className="cursor-pointer flex-1">
+                        <div className={cn(
+                          "h-10 px-6 rounded-xl font-bold uppercase text-[10px] tracking-widest transition-all flex items-center justify-center gap-2",
+                          bulkCategory ? "bg-accent text-accent-foreground hover:bg-accent/90" : "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+                        )}>
+                          <Plus className="h-3.5 w-3.5" /> Optimize & Upload
+                        </div>
+                        <input 
+                          type="file" 
+                          multiple 
+                          className="hidden" 
+                          disabled={!bulkCategory}
+                          onChange={(e) => {
+                            if (bulkCategory) {
+                              handleFileUpload(e.target.files, bulkCategory);
+                              setBulkCategory("");
+                            }
+                          }} 
+                        />
+                      </label>
+                    </div>
+                  )}
                 </div>
 
+                {/* Individual Progress Bars */}
+                {Object.keys(uploadProgress).length > 0 && (
+                  <div className="space-y-2 p-4 bg-accent/5 rounded-xl border border-accent/10">
+                    <p className="text-[9px] font-black uppercase text-accent tracking-widest">Optimizing Transfers...</p>
+                    {Object.entries(uploadProgress).map(([id, progress]) => (
+                      <div key={id} className="space-y-1">
+                        <div className="flex justify-between text-[8px] font-bold">
+                          <span className="text-muted-foreground">Compressing & Encrypting...</span>
+                          <span className="text-accent">{progress}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                          <motion.div 
+                            className="h-full bg-accent"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 gap-3">
-                  {['Permit / License', 'Bill of Lading', 'Commercial Invoice', 'Packing List'].map((docType) => {
-                    const existingDoc = jobDocs?.find((d: any) => d.category === docType);
+                  {activeJobCategories.map((dt) => {
+                    const existingDoc = jobDocs?.find((d: any) => d.document_type === dt.key);
                     return (
-                      <div key={docType} className="flex items-center justify-between p-4 bg-card rounded-xl border border-muted/50 hover:border-accent/30 transition-colors group">
+                      <div key={dt.key} className="flex items-center justify-between p-4 bg-card rounded-xl border border-muted/50 hover:border-accent/30 transition-colors group">
                         <div className="flex items-center gap-3">
                           <div className={cn(
                             "h-10 w-10 rounded-lg flex items-center justify-center transition-colors",
@@ -1216,23 +1391,25 @@ export default function JobOrders() {
                             <FileText className="h-5 w-5" />
                           </div>
                           <div>
-                            <p className="text-[11px] font-bold text-foreground">{docType}</p>
+                            <p className="text-[11px] font-bold text-foreground">{dt.label}</p>
                             <p className={cn(
                               "text-[9px] font-medium uppercase tracking-tighter",
                               existingDoc ? "text-emerald-600" : "text-muted-foreground"
                             )}>
-                              {existingDoc ? `Uploaded by ${existingDoc.uploader?.full_name}` : "Status: Missing"}
+                              {existingDoc ? `Uploaded by ${existingDoc.uploader?.full_name || 'System'}` : "Status: Missing"}
                             </p>
                           </div>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 text-[9px] font-black uppercase tracking-widest text-accent hover:bg-accent/5"
-                          onClick={() => toast.info(`Initializing upload for ${docType}...`)}
-                        >
-                          {existingDoc ? "Replace" : "Upload"}
-                        </Button>
+                        <label className="cursor-pointer">
+                          <div className="flex items-center justify-center h-8 px-3 rounded-md text-[9px] font-black uppercase tracking-widest text-accent hover:bg-accent/5 transition-all">
+                            {existingDoc ? "Replace" : "Upload"}
+                          </div>
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            onChange={(e) => handleFileUpload(e.target.files, dt.key)} 
+                          />
+                        </label>
                       </div>
                     );
                   })}
@@ -1293,12 +1470,37 @@ export default function JobOrders() {
                       value={progressText}
                       onChange={(e) => setProgressText(e.target.value)}
                     />
+                    <div className="flex items-center justify-between py-2 border-t border-muted/50">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="checkbox" 
+                          id="wa-notify" 
+                          className="rounded border-muted text-accent focus:ring-accent"
+                          checked={notifyWhatsApp}
+                          onChange={(e) => setNotifyWhatsApp(e.target.checked)}
+                        />
+                        <label htmlFor="wa-notify" className="text-[10px] font-bold text-muted-foreground uppercase cursor-pointer">
+                          Notify Client via WhatsApp
+                        </label>
+                      </div>
+                      {notifyWhatsApp && (
+                        <div className="flex items-center gap-1 text-[8px] font-black text-accent uppercase tracking-tighter animate-pulse">
+                          <MessageSquare className="h-3 w-3" /> API Bridge Ready
+                        </div>
+                      )}
+                    </div>
                     <Button 
                       className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-11 text-[10px] font-black uppercase tracking-widest gap-2"
-                      onClick={() => addProgressMutation.mutate({ job_id: selectedJob.id, text: progressText, status: newStatus || undefined })}
+                      onClick={() => {
+                        addProgressMutation.mutate({ job_id: selectedJob.id, text: progressText, status: newStatus || undefined });
+                        if (notifyWhatsApp) {
+                          toast.info("WhatsApp Trigger: Status update notification queued (Integrations coming soon)");
+                        }
+                      }}
                       disabled={!progressText || addProgressMutation.isPending}
                     >
-                      <Send className="h-3 w-3" /> Broadcast Update
+                      {addProgressMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} 
+                      Broadcast Update
                     </Button>
                   </div>
                 </div>

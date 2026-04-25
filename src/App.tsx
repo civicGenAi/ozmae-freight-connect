@@ -23,6 +23,7 @@ import NotFound from "@/pages/NotFound";
 import Verify2FA from "@/pages/Verify2FA";
 import ResetPassword from "@/pages/ResetPassword";
 import Reports from "@/pages/Reports";
+import PublicTracking from "@/pages/PublicTracking";
 
 import Customers from "@/pages/crm/Customers";
 import CustomerProfile from "@/pages/crm/CustomerProfile";
@@ -168,6 +169,8 @@ const App = () => (
             </AuthGuard>
           } path="/settings/profile" />
           
+          <Route path="/track" element={<PublicTracking />} />
+          <Route path="/track/:code" element={<PublicTracking />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
