@@ -13,12 +13,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import { Upload, FileSpreadsheet } from "lucide-react";
+import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
 
 export default function Fleet() {
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [driverSearch, setDriverSearch] = useState("");
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
   const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
+  const [vehicleToDelete, setVehicleToDelete] = useState<string | null>(null);
+  const [driverToDelete, setDriverToDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: vehicles, isLoading: vehiclesLoading } = useQuery({
@@ -81,6 +84,7 @@ export default function Fleet() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      setVehicleToDelete(null);
       toast.success("Vehicle removed");
     },
   });
@@ -92,6 +96,7 @@ export default function Fleet() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["drivers"] });
+      setDriverToDelete(null);
       toast.success("Driver removed");
     },
   });
@@ -326,9 +331,7 @@ export default function Fleet() {
                         variant="ghost" 
                         size="icon" 
                         className="h-8 w-8 hover:bg-rose-500 hover:text-white transition-all rounded-full"
-                        onClick={() => {
-                          if (confirm("Remove this vehicle?")) deleteVehicleMutation.mutate(v.id);
-                        }}
+                        onClick={() => setVehicleToDelete(v.id)}
                        >
                          <Trash2 className="h-4 w-4" />
                        </Button>
@@ -414,9 +417,7 @@ export default function Fleet() {
                       variant="ghost" 
                       size="icon" 
                       className="h-8 w-8 hover:bg-rose-500 hover:text-white transition-all rounded-full"
-                      onClick={() => {
-                        if (confirm("Remove this driver?")) deleteDriverMutation.mutate(d.id);
-                      }}
+                      onClick={() => setDriverToDelete(d.id)}
                     >
                        <Trash2 className="h-4 w-4" />
                     </Button>
@@ -497,6 +498,24 @@ export default function Fleet() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmModal 
+        isOpen={!!vehicleToDelete}
+        onClose={() => setVehicleToDelete(null)}
+        onConfirm={() => vehicleToDelete && deleteVehicleMutation.mutate(vehicleToDelete)}
+        isDeleting={deleteVehicleMutation.isPending}
+        title="Remove Vehicle?"
+        description="Are you sure you want to completely remove this vehicle from the fleet? This will detach it from any currently assigned drivers. This action cannot be reversed."
+      />
+
+      <DeleteConfirmModal 
+        isOpen={!!driverToDelete}
+        onClose={() => setDriverToDelete(null)}
+        onConfirm={() => driverToDelete && deleteDriverMutation.mutate(driverToDelete)}
+        isDeleting={deleteDriverMutation.isPending}
+        title="Remove Driver?"
+        description="Are you sure you want to remove this driver profile? Any active assignments involving this driver will be unlinked. This action cannot be reversed."
+      />
     </div>
   );
 }

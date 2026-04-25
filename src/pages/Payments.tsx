@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -20,6 +21,7 @@ const formatCurrency = (amount: number) =>
 export default function Payments() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: payments, isLoading } = useQuery({
@@ -89,6 +91,7 @@ export default function Payments() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payments"] });
+      setPaymentToDelete(null);
       toast.success("Transaction removed from ledger");
     },
   });
@@ -210,9 +213,7 @@ export default function Payments() {
                     variant="ghost" 
                     size="icon" 
                     className="h-8 w-8 hover:bg-rose-500 hover:text-white transition-all rounded-full"
-                    onClick={() => {
-                      if (confirm("Delete this transaction?")) deletePaymentMutation.mutate(p.id);
-                    }}
+                    onClick={() => setPaymentToDelete(p.id)}
                    >
                      <Trash2 className="h-4 w-4" />
                    </Button>
@@ -290,6 +291,15 @@ export default function Payments() {
            </form>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmModal 
+        isOpen={!!paymentToDelete}
+        onClose={() => setPaymentToDelete(null)}
+        onConfirm={() => paymentToDelete && deletePaymentMutation.mutate(paymentToDelete)}
+        isDeleting={deletePaymentMutation.isPending}
+        title="Delete Transaction?"
+        description="Are you absolutely sure you want to delete this transaction from the ledger? This action cannot be reversed."
+      />
     </div>
   );
 }

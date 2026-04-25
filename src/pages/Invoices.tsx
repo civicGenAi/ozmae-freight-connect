@@ -19,6 +19,7 @@ import { CheckCircle2 } from "lucide-react";
 const formatCurrency = (amount: number) => 
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 import { Pagination } from "@/components/Pagination";
+import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
 
 const PAGE_SIZE = 15;
 
@@ -26,6 +27,7 @@ export default function Invoices() {
   const [viewInvoice, setViewInvoice] = useState<any>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: invoiceData, isLoading } = useQuery({
@@ -102,6 +104,7 @@ export default function Invoices() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      setInvoiceToDelete(null);
       toast.success("Invoice deleted");
     },
     onError: (err: any) => toast.error(err.message),
@@ -225,11 +228,7 @@ export default function Invoices() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      onClick={() => {
-                        if (confirm("Are you sure you want to delete this invoice?")) {
-                          deleteInvoiceMutation.mutate(inv.id);
-                        }
-                      }} 
+                      onClick={() => setInvoiceToDelete(inv.id)} 
                       className="h-8 w-8 rounded-full hover:bg-rose-500 hover:text-white transition-all"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -433,6 +432,15 @@ export default function Invoices() {
           )}
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmModal 
+        isOpen={!!invoiceToDelete}
+        onClose={() => setInvoiceToDelete(null)}
+        onConfirm={() => invoiceToDelete && deleteInvoiceMutation.mutate(invoiceToDelete)}
+        isDeleting={deleteInvoiceMutation.isPending}
+        title="Delete Invoice?"
+        description="Are you absolutely sure you want to delete this invoice? This will permanently erase the invoice record. This action cannot be reversed."
+      />
     </div>
   );
 }

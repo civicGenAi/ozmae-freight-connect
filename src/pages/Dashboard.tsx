@@ -104,8 +104,35 @@ const LeadsDashboardMockup = () => (
   </div>
 );
 
-const SalesDashboardMockup = () => (
-  // ... (Sales Mockup content remains same or similar, but let's keep it as is if it's already good)
+const SalesDashboardMockup = () => {
+  const { data: routeData } = useQuery({
+     queryKey: ["sales_routes"],
+     queryFn: async () => {
+       const { data, error } = await supabase.from('leads').select('origin, destination');
+       if (error) return [];
+       
+       const counts: Record<string, number> = {};
+       data.forEach(lead => {
+         if (lead.origin && lead.destination) {
+            const originStr = lead.origin.split(',')[0].trim();
+            const destStr = lead.destination.split(',')[0].trim();
+            const route = `${originStr} -> ${destStr}`;
+            counts[route] = (counts[route] || 0) + 1;
+         }
+       });
+
+       return Object.entries(counts)
+         .map(([n, v]) => ({ n: n.length > 12 ? n.substring(0, 12) + '..' : n, v: v as number }))
+         .sort((a, b) => b.v - a.v)
+         .slice(0, 4);
+     }
+  });
+
+  const chartData = routeData && routeData.length > 0 
+     ? routeData 
+     : [{n:'Ke',v:45},{n:'Tz',v:32},{n:'Ug',v:28},{n:'Rw',v:15}];
+
+  return (
   <div className="space-y-6 animate-in fade-in duration-500">
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div className="bg-[#0f1d35] p-5 rounded-2xl text-white shadow-lg relative overflow-hidden">
@@ -140,8 +167,8 @@ const SalesDashboardMockup = () => (
        <div className="bg-white p-4 rounded-2xl border shadow-sm">
           <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Pipeline by Region</h4>
           <div className="h-[180px]">
-             <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={[{n:'Ke',v:45},{n:'Tz',v:32},{n:'Ug',v:28},{n:'Rw',v:15}]}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
                    <XAxis dataKey="n" fontSize={10} axisLine={false} tickLine={false} />
                    <YAxis fontSize={10} axisLine={false} tickLine={false} />
@@ -170,7 +197,8 @@ const SalesDashboardMockup = () => (
        </div>
     </div>
   </div>
-);
+  );
+};
 
 const FinanceDashboardMockup = () => (
   <div className="space-y-6 animate-in fade-in duration-500">
@@ -389,7 +417,7 @@ export default function Dashboard() {
         completedMonth: completedMonth || 0,
       };
     },
-    enabled: isAdmin // Only run for Admin
+    enabled: !!roles.length // Run for all authenticated roles
   });
 
   const { data: recentJobs, isLoading: jobsLoading } = useQuery({
@@ -416,7 +444,7 @@ export default function Dashboard() {
       if (error) throw error;
       return data;
     },
-    enabled: isAdmin // Only run for Admin
+    enabled: !!roles.length
   });
 
   const { data: securityLogs } = useQuery({
@@ -430,18 +458,95 @@ export default function Dashboard() {
       if (error) return [];
       return data;
     },
-    enabled: isAdmin // Only run for Admin
+    enabled: !!roles.length
+  });
+
+  const { data: routeStats, isLoading: routesLoading } = useQuery({
+    queryKey: ["route_stats"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('leads').select('origin, destination');
+      if (error) return [];
+      
+      const routeCounts: Record<string, number> = {};
+      data.forEach(lead => {
+        if (lead.origin && lead.destination) {
+          const originVal = lead.origin.split(',')[0].trim();
+          const destVal = lead.destination.split(',')[0].trim();
+          const key = `${originVal} → ${destVal}`;
+          routeCounts[key] = (routeCounts[key] || 0) + 1;
+        }
+      });
+
+      const sorted = Object.entries(routeCounts)
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 4);
+
+      if (sorted.length === 0) return [];
+
+      const maxCount = sorted[0].count;
+      const colors = ["bg-blue-500", "bg-emerald-500", "bg-amber-500", "bg-purple-500"];
+
+      return sorted.map((item, i) => ({
+        l: item.label,
+        v: Math.round((item.count / maxCount) * 100),
+        rawCount: item.count,
+        c: colors[i % colors.length]
+      }));
+    },
+    enabled: !!roles.length
   });
 
   // Mock admin data
-  const chartData = [
-    { name: 'Mon', jobs: 4, revenue: 2400 },
-    { name: 'Tue', jobs: 3, revenue: 1398 },
-    { name: 'Wed', jobs: 2, revenue: 9800 },
-    { name: 'Thu', jobs: 6, revenue: 3908 },
-    { name: 'Fri', jobs: 8, revenue: 4800 },
-    { name: 'Sat', jobs: 5, revenue: 3800 },
-    { name: 'Sun', jobs: 3, revenue: 4300 },
+  const { data: networkData, isLoading: networkLoading } = useQuery({
+    queryKey: ["network_performance"],
+    queryFn: async () => {
+      // Get the last 7 days of jobs to plot
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const { data, error } = await supabase
+        .from("job_orders")
+        .select("created_at, total_amount")
+        .gte("created_at", sevenDaysAgo.toISOString());
+      
+      if (error) return [];
+      
+      const dailyMap: Record<string, { jobs: number, revenue: number }> = {};
+      
+      // Initialize the last 7 days
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const label = d.toLocaleDateString("en-US", { weekday: 'short' });
+        dailyMap[label] = { jobs: 0, revenue: 0 };
+      }
+
+      data.forEach(job => {
+        const label = new Date(job.created_at).toLocaleDateString("en-US", { weekday: 'short' });
+        if (dailyMap[label]) {
+           dailyMap[label].jobs += 1;
+           dailyMap[label].revenue += Number(job.total_amount || 0);
+        }
+      });
+
+      return Object.entries(dailyMap).map(([name, stats]) => ({
+        name,
+        jobs: stats.jobs,
+        revenue: stats.revenue
+      }));
+    },
+    enabled: !!roles.length
+  });
+
+  const chartData = networkData && networkData.length > 0 ? networkData : [
+    { name: 'Mon', jobs: 0, revenue: 0 },
+    { name: 'Tue', jobs: 0, revenue: 0 },
+    { name: 'Wed', jobs: 0, revenue: 0 },
+    { name: 'Thu', jobs: 0, revenue: 0 },
+    { name: 'Fri', jobs: 0, revenue: 0 },
+    { name: 'Sat', jobs: 0, revenue: 0 },
+    { name: 'Sun', jobs: 0, revenue: 0 },
   ];
 
   const fleetData = [
@@ -509,8 +614,8 @@ export default function Dashboard() {
         {/* Main Dashboard Content (Left/Center Column) */}
         <div className="xl:col-span-2 space-y-12">
            
-           {/* 1. ADMIN - Existing Functionality */}
-           {isAdmin && (
+           {/* 1. GLOBAL COMMAND ANALYTICS - Visible to All Roles */}
+           {roles.length > 0 && (
              <div className="space-y-12">
                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {kpis.map((kpi) => (
@@ -560,25 +665,36 @@ export default function Dashboard() {
                  <div className="bg-white rounded-2xl border shadow-sm p-6 flex flex-col justify-between">
                     <div className="flex items-center gap-2 mb-4">
                        <BarChart3 className="h-4 w-4 text-blue-500" />
-                       <h3 className="font-black text-[10px] uppercase tracking-widest text-foreground text-opacity-70">Region Statistics</h3>
+                       <h3 className="font-black text-[10px] uppercase tracking-widest text-foreground text-opacity-70">Main Shipping Routes</h3>
                     </div>
                     <div className="space-y-4 flex-1">
-                       {[
-                         { l: "Nairobi Hub", v: 85, c: "bg-blue-500" },
-                         { l: "Mombasa Port", v: 62, c: "bg-emerald-500" },
-                         { l: "Kampala Transit", v: 45, c: "bg-amber-500" },
-                         { l: "Dar es Salaam", v: 38, c: "bg-purple-500" }
-                       ].map(r => (
-                         <div key={r.l}>
-                            <div className="flex justify-between text-[9px] font-black uppercase mb-1">
-                               <span>{r.l}</span>
-                               <span>{r.v}% Load</span>
-                            </div>
-                            <div className="h-1 bg-muted rounded-full overflow-hidden">
-                               <div className={cn("h-full rounded-full transition-all", r.c)} style={{ width: `${r.v}%` }} />
-                            </div>
+                       {routesLoading ? (
+                         <div className="space-y-4">
+                            {[1, 2, 3, 4].map(i => (
+                              <div key={i} className="animate-pulse">
+                                 <div className="h-2 w-24 bg-muted rounded mb-2" />
+                                 <div className="h-1.5 w-full bg-muted rounded" />
+                              </div>
+                            ))}
                          </div>
-                       ))}
+                       ) : routeStats && routeStats.length > 0 ? (
+                         routeStats.map(r => (
+                           <div key={r.l}>
+                              <div className="flex justify-between text-[9px] font-black uppercase mb-1">
+                                 <span className="truncate max-w-[150px]">{r.l}</span>
+                                 <span>{r.v}% Frequency</span>
+                              </div>
+                              <div className="h-1 bg-muted rounded-full overflow-hidden">
+                                 <div className={cn("h-full rounded-full transition-all duration-1000", r.c)} style={{ width: `${r.v}%` }} />
+                              </div>
+                           </div>
+                         ))
+                       ) : (
+                         <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
+                            <MapPin className="h-8 w-8 opacity-20 mb-2" />
+                            <p className="text-[10px] font-bold uppercase">No Route Data Found</p>
+                         </div>
+                       )}
                     </div>
                  </div>
                </div>

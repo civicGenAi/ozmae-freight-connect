@@ -4,6 +4,7 @@ import imageCompression from 'browser-image-compression';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
+import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
@@ -76,6 +77,7 @@ type JobFormValues = z.infer<typeof jobSchema>;
 export default function JobOrders() {
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [jobToDelete, setJobToDelete] = useState<string | null>(null);
 
   const { data: userProfile } = useQuery({
     queryKey: ["user-profile"],
@@ -341,6 +343,7 @@ export default function JobOrders() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job_orders"] });
       setSelectedJob(null);
+      setJobToDelete(null);
       toast.success("Job order deleted");
     },
   });
@@ -989,11 +992,7 @@ export default function JobOrders() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => {
-                    if (confirm("Delete this job order?")) {
-                      deleteJobMutation.mutate(displayJob.id);
-                    }
-                  }}
+                  onClick={() => setJobToDelete(displayJob.id)}
                   className="h-8 w-8 hover:bg-rose-500 hover:text-white transition-all rounded-full"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -1551,6 +1550,15 @@ export default function JobOrders() {
           )}
         </SheetContent>
       </Sheet>
+
+      <DeleteConfirmModal 
+        isOpen={!!jobToDelete}
+        onClose={() => setJobToDelete(null)}
+        onConfirm={() => jobToDelete && deleteJobMutation.mutate(jobToDelete)}
+        isDeleting={deleteJobMutation.isPending}
+        title="Delete Job Order?"
+        description="Are you absolutely sure you want to delete this job order? This will permanently erase the job and its entire history. This action cannot be reversed."
+      />
     </div>
   );
 }

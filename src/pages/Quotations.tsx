@@ -44,16 +44,7 @@ import { CreatableCombobox } from "@/components/CreatableCombobox";
 import { parseUnitQuantity, cleanAmount } from "@/lib/quotationUtils";
 import { useWatch } from "react-hook-form";
 import { TransportModeSelector, TransportModeBadge, TransportModeGroupHeader, type TransportMode } from "@/components/TransportModeSelector";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -98,6 +89,7 @@ type QuoteFormValues = z.infer<typeof quoteSchema>;
 export default function Quotations() {
   const [activeTab, setActiveTab] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [quoteToDelete, setQuoteToDelete] = useState<string | null>(null);
   const [viewQuote, setViewQuote] = useState<any>(null);
   const [selectedQuote, setSelectedQuote] = useState<any>(null);
   const [declineQuote, setDeclineQuote] = useState<any>(null);
@@ -402,6 +394,7 @@ export default function Quotations() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["quotations"] });
       setSelectedQuote(null);
+      setQuoteToDelete(null);
       toast.success("Quotation deleted successfully");
     },
     onError: (err: any) => toast.error(err.message),
@@ -743,7 +736,7 @@ export default function Quotations() {
                               <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                                 <Button size="icon" variant="ghost" onClick={() => { setViewQuote(quote); setIsPreviewOpen(true); }}><Eye className="h-4 w-4" /></Button>
                                 <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-foreground" onClick={() => setSelectedQuote(quote)}><Info className="h-4 w-4" /></Button>
-                                <Button size="icon" variant="ghost" className="text-red-500" onClick={() => deleteQuoteMutation.mutate(quote.id)}><Trash2 className="h-4 w-4" /></Button>
+                                <Button size="icon" variant="ghost" className="text-red-500" onClick={() => setQuoteToDelete(quote.id)}><Trash2 className="h-4 w-4" /></Button>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1256,35 +1249,24 @@ export default function Quotations() {
         />
       )}
 
-      <AlertDialog open={isAcceptConfirmOpen} onOpenChange={setIsAcceptConfirmOpen}>
-        <AlertDialogContent className="bg-white rounded-3xl border-2">
-          <AlertDialogHeader>
-            <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-            </div>
-            <AlertDialogTitle className="text-xl font-black uppercase tracking-tight">Confirm Acceptance</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm font-medium text-muted-foreground leading-relaxed">
-              Accepting this quotation will automatically:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Update status to <span className="text-emerald-600 font-bold uppercase">Accepted</span></li>
-                <li>Initialize a new <span className="text-emerald-600 font-bold uppercase">Job Order</span></li>
-                <li>Notify the <span className="text-emerald-600 font-bold uppercase">Operations Team</span> for fulfillment</li>
-              </ul>
-              Are you sure you want to proceed?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="mt-6">
-            <AlertDialogCancel className="rounded-xl font-bold uppercase text-[10px] tracking-widest h-11">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest h-11 px-6 shadow-lg shadow-emerald-200"
-              onClick={() => acceptQuoteMutation.mutate(selectedQuote)}
-              disabled={acceptQuoteMutation.isPending}
-            >
-              {acceptQuoteMutation.isPending ? "Initializing..." : "Confirm & Accept"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {isAcceptConfirmOpen && (
+        <DeleteConfirmModal 
+          isOpen={isAcceptConfirmOpen}
+          onClose={() => setIsAcceptConfirmOpen(false)}
+          onConfirm={() => acceptQuoteMutation.mutate(selectedQuote)}
+          isDeleting={acceptQuoteMutation.isPending}
+          title="Confirm Acceptance"
+          description="Accepting this quotation will automatically update status to Accepted, initialize a new Job Order, and notify the Operations Team for fulfillment. Are you sure you want to proceed?"
+        />
+      )}
+      <DeleteConfirmModal 
+        isOpen={!!quoteToDelete}
+        onClose={() => setQuoteToDelete(null)}
+        onConfirm={() => quoteToDelete && deleteQuoteMutation.mutate(quoteToDelete)}
+        isDeleting={deleteQuoteMutation.isPending}
+        title="Delete Quotation?"
+        description="Are you absolutely sure you want to delete this quotation? This will permanently erase the quote and its metadata. This action cannot be reversed."
+      />
     </div>
   );
 }

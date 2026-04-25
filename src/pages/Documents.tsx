@@ -43,6 +43,7 @@ import { DeliveryNotePDF } from "@/components/DeliveryNotePDF";
 import { InvoicePDF } from "@/components/InvoicePDF";
 import { QuotationPDFDocument } from "@/components/QuotationPDFDocument";
 import { Pagination } from "@/components/Pagination";
+import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
 
 const PAGE_SIZE = 15;
 
@@ -57,6 +58,7 @@ export default function Documents() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [previewDoc, setPreviewDoc] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [documentToDelete, setDocumentToDelete] = useState<any>(null);
 
   const queryClient = useQueryClient();
 
@@ -143,6 +145,7 @@ export default function Documents() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document_groups"] });
+      setDocumentToDelete(null);
       toast.success("Document removed");
     }
   });
@@ -265,7 +268,7 @@ export default function Documents() {
                                     >
                                        <ExternalLink className="h-3 w-3" />
                                     </button>
-                                    <button onClick={() => deleteMutation.mutate(doc)} className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-destructive transition-colors" title="Remove">
+                                    <button onClick={() => setDocumentToDelete(doc)} className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-destructive transition-colors" title="Remove">
                                        <Trash2 className="h-3 w-3" />
                                     </button>
                                   </div>
@@ -343,6 +346,15 @@ export default function Documents() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmModal 
+        isOpen={!!documentToDelete}
+        onClose={() => setDocumentToDelete(null)}
+        onConfirm={() => documentToDelete && deleteMutation.mutate(documentToDelete)}
+        isDeleting={deleteMutation.isPending}
+        title="Delete Document?"
+        description="Are you sure you want to completely erase this document from the vault? This will permanently delete the file and all associated tracking data."
+      />
     </div>
   );
 }
