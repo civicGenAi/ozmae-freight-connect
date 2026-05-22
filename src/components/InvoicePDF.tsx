@@ -1,6 +1,7 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Font, Image } from "@react-pdf/renderer";
 import { format } from "date-fns";
+import signatureImg from "@/assets/signature.png";
 
 const styles = StyleSheet.create({
   page: {
@@ -271,12 +272,17 @@ const styles = StyleSheet.create({
 
 interface Props {
   invoice: any;
+  customerOverride?: {
+    name: string;
+    address: string;
+    phone: string;
+  };
 }
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export const InvoicePDF = ({ invoice }: Props) => {
+export const InvoicePDF = ({ invoice, customerOverride }: Props) => {
   return (
     <Document title={`Invoice_${invoice?.invoice_number || 'Draft'}`}>
       <Page size="A4" style={styles.page}>
@@ -316,19 +322,19 @@ export const InvoicePDF = ({ invoice }: Props) => {
             <View style={styles.addressHeader}>
               <Text style={styles.addressHeaderText}>Invoice From</Text>
             </View>
-            <Text style={styles.addressTextBold}>OZMAE FREIGHT SOLUTIONS LIMITED</Text>
-            <Text style={styles.addressTextLine}>P.O. Box 804, Arusha</Text>
-            <Text style={styles.addressTextLine}>Tanzania</Text>
-            <Text style={styles.addressTextLine}>TIN: 123-456-789</Text>
+            <Text style={styles.addressTextBold}>OZMAE FREIGHT SOLUTIONS</Text>
+            <Text style={styles.addressTextLine}>P.O. Box 2699, Rita Tower Sim Road</Text>
+            <Text style={styles.addressTextLine}>Dar es Salaam, Tanzania</Text>
+            <Text style={styles.addressTextLine}>Mob: +255754757670</Text>
           </View>
           
           <View style={styles.addressBox}>
             <View style={styles.addressHeader}>
               <Text style={styles.addressHeaderText}>Invoice To / Customer</Text>
             </View>
-            <Text style={styles.addressTextBold}>{invoice?.job?.customer?.company_name || 'Valued Customer'}</Text>
-            <Text style={styles.addressTextLine}>Registered Logistics Partner</Text>
-            <Text style={styles.addressTextLine}>Route: {invoice?.job?.origin || 'N/A'} to {invoice?.job?.destination || 'N/A'}</Text>
+            <Text style={styles.addressTextBold}>{customerOverride?.name || invoice?.job?.customer?.company_name || 'Valued Customer'}</Text>
+            <Text style={styles.addressTextLine}>{customerOverride?.address || 'Registered Logistics Partner'}</Text>
+            <Text style={styles.addressTextLine}>{customerOverride?.phone || `Route: ${invoice?.job?.origin || 'N/A'} to ${invoice?.job?.destination || 'N/A'}`}</Text>
           </View>
         </View>
 
@@ -371,42 +377,44 @@ export const InvoicePDF = ({ invoice }: Props) => {
           </View>
         </View>
 
-        {/* BANK DETAILS (USD ONLY) COMPACT GRID */}
+        {/* BANK DETAILS COMPACT GRID */}
         <View style={styles.bankInfoContainer}>
           <View style={styles.bankInfoHeader}>
-            <Text style={styles.bankInfoHeaderText}>FUND TRANSFER INFORMATION (USD)</Text>
+            <Text style={styles.bankInfoHeaderText}>FUND TRANSFER INFORMATION</Text>
           </View>
           <View style={styles.bankInfoBody}>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              
               {/* Left Column */}
               <View style={{ width: "48%" }}>
                 <View style={styles.bankInfoRow}>
-                  <Text style={styles.bankInfoLabel}>BANK:</Text>
-                  <Text style={styles.bankInfoValueLineNormal}>KCB BANK TANZANIA LIMITED</Text>
-                </View>
-                <View style={styles.bankInfoRow}>
-                  <Text style={styles.bankInfoLabel}>SWIFT:</Text>
-                  <Text style={styles.bankInfoValueLine}>KCBLTZTZ</Text>
+                  <Text style={styles.bankInfoLabel}>FOR FINAL CREDIT TO:</Text>
+                  <Text style={styles.bankInfoValueLineNormal}>KCB BANK TANZANIA LIMITED{"\n"}ALI HASSAN MWINYI/KAUNDA DRIVE JUNCTION{"\n"}P.O.BOX 804{"\n"}DAR ES SALAAM, TANZANIA.{"\n"}SWIFT: KCBLTZTZ</Text>
                 </View>
               </View>
 
               {/* Right Column */}
               <View style={{ width: "48%" }}>
                 <View style={styles.bankInfoRow}>
-                  <Text style={styles.bankInfoLabel}>A/C NAME:</Text>
-                  <Text style={styles.bankInfoValueLine}>OZMAE FREIGHT SOLUTIONS LTD</Text>
+                  <Text style={styles.bankInfoLabel}>BENEFICIARY A/C NAME:</Text>
+                  <Text style={styles.bankInfoValueLine}>OZMAE FREIGHT SOLUTIONS LIMITED</Text>
                 </View>
                 <View style={styles.bankInfoRow}>
-                  <Text style={styles.bankInfoLabel}>A/C NO:</Text>
+                  <Text style={styles.bankInfoLabel}>BENEFICIARY A/C NUMBER:</Text>
                   <Text style={styles.bankInfoValueLine}>3391630086-USD</Text>
                 </View>
                 <View style={styles.bankInfoRow}>
-                  <Text style={styles.bankInfoLabel}>CURRENCY:</Text>
+                  <Text style={styles.bankInfoLabel}>ACCOUNT CURRENCY:</Text>
                   <Text style={styles.bankInfoValueLineNormal}>USD</Text>
                 </View>
+                <View style={styles.bankInfoRow}>
+                  <Text style={styles.bankInfoLabel}>BANK BRANCH:</Text>
+                  <Text style={styles.bankInfoValueLineNormal}>ARUSHA BRANCH</Text>
+                </View>
+                <View style={styles.bankInfoRow}>
+                  <Text style={styles.bankInfoLabel}>BENEFICIARY ADDRESS:</Text>
+                  <Text style={styles.bankInfoValueLineNormal}>ARUSHA, TANZANIA</Text>
+                </View>
               </View>
-
             </View>
           </View>
         </View>
@@ -415,17 +423,20 @@ export const InvoicePDF = ({ invoice }: Props) => {
         <View style={styles.signatureSection}>
           <View style={styles.sigBox}>
             <Text style={styles.sigTitle}>DELIVERED / ISSUED BY:</Text>
-            <Text style={styles.sigLine}>NAME: _____________________</Text>
+            <Text style={styles.sigLine}>NAME: OSMOND MOSHA</Text>
             <Text style={styles.sigLine}>DATE: {format(new Date(), "dd MMM yyyy")}</Text>
             <Text style={[styles.sigLine, { marginTop: 6 }]}>SIGNATURE:</Text>
-            <View style={styles.sigLineBorder} />
+            <Image src={signatureImg} style={[styles.sigLineBorder, { objectFit: "contain", height: 55, borderBottomWidth: 0, paddingBottom: 2, borderBottomColor: "transparent", marginLeft: -15, width: 160 }]} />
+            <View style={{ borderBottomWidth: 1, borderBottomColor: "#1E293B", width: "100%" }}></View>
           </View>
+
           <View style={styles.sigBox}>
             <Text style={styles.sigTitle}>RECEIVED / AUTHORIZED BY:</Text>
             <Text style={styles.sigLine}>NAME: _____________________</Text>
             <Text style={styles.sigLine}>DATE: _____________________</Text>
             <Text style={[styles.sigLine, { marginTop: 6 }]}>SIGNATURE:</Text>
-            <View style={styles.sigLineBorder} />
+            <View style={{ height: 55 }} />
+            <View style={{ borderBottomWidth: 1, borderBottomColor: "#1E293B", width: "100%" }}></View>
           </View>
         </View>
 

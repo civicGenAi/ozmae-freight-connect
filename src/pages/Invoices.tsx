@@ -25,6 +25,7 @@ const PAGE_SIZE = 15;
 
 export default function Invoices() {
   const [viewInvoice, setViewInvoice] = useState<any>(null);
+  const [customerOverride, setCustomerOverride] = useState({ name: "", address: "", phone: "" });
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
@@ -292,7 +293,11 @@ export default function Invoices() {
       </Dialog>
 
       {/* View Invoice Dialog */}
-      <Dialog open={!!viewInvoice} onOpenChange={() => setViewInvoice(null)}>
+      <Dialog open={!!viewInvoice} onOpenChange={(open) => {
+          if (!open) {
+              setViewInvoice(null);
+          }
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-white border-0 shadow-2xl flex flex-col">
           <DialogHeader className="bg-slate-900 px-8 py-6 text-white shrink-0">
              <div className="flex justify-between items-start w-full">
@@ -323,10 +328,29 @@ export default function Invoices() {
                     </div>
                  </div>
                  <div className="space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b pb-2">Attention To</h4>
-                    <div className="space-y-1">
-                       <p className="text-sm font-black text-slate-900">{viewInvoice.job?.customer?.company_name || 'N/A'}</p>
-                       <p className="text-xs text-slate-500 italic">Reference Job: JOB-{viewInvoice.job_order_id?.split('-')[0].toUpperCase()}</p>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b pb-2 flex justify-between items-center">
+                       <span>Attention To</span>
+                       <span className="text-[8px] text-accent/70 normal-case tracking-normal">Editable for PDF</span>
+                    </h4>
+                    <div className="space-y-2">
+                       <Input 
+                         placeholder={viewInvoice.job?.customer?.company_name || "Customer Name"} 
+                         value={customerOverride.name} 
+                         onChange={(e) => setCustomerOverride(p => ({...p, name: e.target.value}))}
+                         className="h-7 text-xs bg-slate-50 border-slate-200 shadow-none font-bold"
+                       />
+                       <Input 
+                         placeholder="Address (e.g. Registered Logistics Partner)" 
+                         value={customerOverride.address} 
+                         onChange={(e) => setCustomerOverride(p => ({...p, address: e.target.value}))}
+                         className="h-7 text-xs bg-slate-50 border-slate-200 shadow-none"
+                       />
+                       <Input 
+                         placeholder={`Route: ${viewInvoice.job?.origin || 'N/A'} to ${viewInvoice.job?.destination || 'N/A'}`} 
+                         value={customerOverride.phone} 
+                         onChange={(e) => setCustomerOverride(p => ({...p, phone: e.target.value}))}
+                         className="h-7 text-xs bg-slate-50 border-slate-200 shadow-none"
+                       />
                        <div className="flex items-center gap-2 pt-1">
                           <span className="text-[10px] font-black bg-accent/5 text-accent px-2 py-0.5 rounded border border-accent/10">DUE DATE: {viewInvoice.deposit_due_date && format(new Date(viewInvoice.deposit_due_date), "MMM dd, yyyy")}</span>
                        </div>
@@ -403,7 +427,7 @@ export default function Invoices() {
               {/* Action Buttons */}
               <div className="flex gap-4 pt-4 shrink-0">
                  <PDFDownloadLink 
-                    document={<InvoicePDF invoice={viewInvoice} />} 
+                    document={<InvoicePDF invoice={viewInvoice} customerOverride={customerOverride.name || customerOverride.address || customerOverride.phone ? customerOverride : undefined} />} 
                     fileName={`${viewInvoice.invoice_number}.pdf`}
                     className="flex-1"
                  >
