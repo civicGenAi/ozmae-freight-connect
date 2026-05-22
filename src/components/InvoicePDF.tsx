@@ -4,182 +4,268 @@ import { format } from "date-fns";
 
 const styles = StyleSheet.create({
   page: {
-    padding: 50,
+    padding: 30,
     backgroundColor: "#FFFFFF",
     fontFamily: "Helvetica",
   },
-  header: {
+  // TOP SECTION
+  topSection: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 40,
-    borderBottomWidth: 2,
-    borderBottomColor: "#0F172A",
-    paddingBottom: 20,
+    marginBottom: 15,
   },
-  companyInfo: {
+  logoBox: {
+    backgroundColor: "#1E293B",
+    padding: 12,
+    width: "45%",
+    justifyContent: "center",
+  },
+  logoText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+    fontFamily: "Helvetica-Bold",
+  },
+  docTitleBox: {
+    width: "45%",
+    alignItems: "flex-end",
+  },
+  docTitle: {
+    fontSize: 22,
+    color: "#EA6A38", // Brand Orange
+    fontFamily: "Helvetica-Bold",
+    fontWeight: "bold",
+    marginBottom: 5,
+    textTransform: "uppercase"
+  },
+  metaGrid: {
     flexDirection: "column",
+    width: "100%",
+    alignItems: "flex-end"
   },
-  companyName: {
-    fontSize: 20,
-    fontWeight: "heavy",
-    color: "#0F172A",
-    marginBottom: 4,
-  },
-  companySubtext: {
-    fontSize: 9,
-    color: "#64748B",
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
     marginBottom: 2,
   },
-  invoiceMeta: {
-    textAlign: "right",
-  },
-  invoiceTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#0F172A",
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  metaText: {
-    fontSize: 10,
+  metaLabel: {
+    fontSize: 9,
     color: "#475569",
-    marginBottom: 3,
+    width: 80,
+    textAlign: "right",
+    marginRight: 10,
   },
+  metaValue: {
+    fontSize: 9,
+    color: "#1E293B",
+    fontFamily: "Helvetica-Bold",
+    width: 100,
+  },
+  // COMPANY & CUSTOMER INFO
   addressSection: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 40,
+    marginBottom: 15,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    paddingTop: 10,
   },
   addressBox: {
-    width: "45%",
+    width: "48%",
   },
-  addressTitle: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: "#64748B",
-    textTransform: "uppercase",
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    paddingBottom: 4,
+  addressHeader: {
+    backgroundColor: "#1E293B", // Navy Blue
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 6,
   },
-  addressName: {
-    fontSize: 12,
+  addressHeaderText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontFamily: "Helvetica-Bold",
     fontWeight: "bold",
+  },
+  addressTextLine: {
+    fontSize: 8,
     color: "#1E293B",
-    marginBottom: 4,
-  },
-  addressDetail: {
-    fontSize: 10,
-    color: "#475569",
     marginBottom: 2,
+    paddingHorizontal: 8,
   },
+  addressTextBold: {
+    fontSize: 8,
+    color: "#1E293B",
+    fontFamily: "Helvetica-Bold",
+    fontWeight: "bold",
+    marginBottom: 2,
+    paddingHorizontal: 8,
+  },
+  // TABLE
   table: {
-    marginBottom: 30,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    backgroundColor: "#1E293B",
+    paddingVertical: 6,
+    paddingHorizontal: 8,
   },
   tableHeaderCell: {
     fontSize: 9,
+    color: "#FFFFFF",
+    fontFamily: "Helvetica-Bold",
     fontWeight: "bold",
-    color: "#475569",
-    textTransform: "uppercase",
   },
   tableRow: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    alignItems: "center",
+    borderBottomColor: "#E2E8F0",
+    paddingVertical: 6,
+    paddingHorizontal: 8,
   },
   tableCell: {
-    fontSize: 10,
+    fontSize: 9,
     color: "#1E293B",
   },
-  totalsSection: {
+  tableCellBold: {
+    fontSize: 9,
+    color: "#1E293B",
+    fontFamily: "Helvetica-Bold",
+    fontWeight: "bold",
+  },
+  // TOTALS
+  totalsContainer: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 20,
+    marginBottom: 15,
   },
   totalsBox: {
     width: "40%",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   totalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
   },
   totalLabel: {
-    fontSize: 10,
-    color: "#64748B",
+    fontSize: 9,
+    color: "#475569",
+    fontFamily: "Helvetica-Bold",
+    fontWeight: "bold",
   },
   totalValue: {
-    fontSize: 10,
-    fontWeight: "bold",
+    fontSize: 9,
     color: "#1E293B",
+    fontFamily: "Helvetica-Bold",
+    fontWeight: "bold",
   },
   grandTotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: "#0F172A",
-    padding: 12,
-    marginTop: 8,
-    borderRadius: 4,
+    backgroundColor: "#EA6A38", // Orange for Grand Total highlight
+    paddingVertical: 6,
+    paddingHorizontal: 8,
   },
   grandTotalLabel: {
-    fontSize: 12,
-    fontWeight: "bold",
+    fontSize: 10,
     color: "#FFFFFF",
+    fontFamily: "Helvetica-Bold",
+    fontWeight: "bold",
   },
   grandTotalValue: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
-  paymentTerms: {
-    marginTop: 40,
-    padding: 15,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  paymentTitle: {
     fontSize: 10,
+    color: "#FFFFFF",
+    fontFamily: "Helvetica-Bold",
     fontWeight: "bold",
+  },
+  // BANK INFO
+  bankInfoContainer: {
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: "#94A3B8",
+  },
+  bankInfoHeader: {
+    backgroundColor: "#E2E8F0",
+    paddingVertical: 4,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#94A3B8",
+  },
+  bankInfoHeaderText: {
+    fontSize: 9,
+    fontFamily: "Helvetica-Bold",
+    fontWeight: "bold",
+    color: "#1E293B",
+  },
+  bankInfoBody: {
+    padding: 8,
+    backgroundColor: "#F8FAFC",
+  },
+  bankInfoRow: {
+    flexDirection: "row",
+    marginBottom: 3,
+  },
+  bankInfoLabel: {
+    width: "35%",
+    fontSize: 8,
     color: "#475569",
     textTransform: "uppercase",
-    marginBottom: 6,
   },
-  paymentSplit: {
+  bankInfoValueLineNormal: {
+    width: "65%",
+    fontSize: 8,
+    color: "#1E293B",
+  },
+  bankInfoValueLine: {
+    width: "65%",
+    fontSize: 8,
+    color: "#1E293B",
+    fontFamily: "Helvetica-Bold",
+    fontWeight: "bold",
+  },
+  // SIGNATURES
+  signatureSection: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 4,
-  },
-  splitItem: {
-    fontSize: 9,
-    color: "#475569",
-  },
-  footer: {
-    position: "absolute",
-    bottom: 50,
-    left: 50,
-    right: 50,
-    textAlign: "center",
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
-    paddingTop: 20,
+  },
+  sigBox: {
+    width: "40%",
+  },
+  sigTitle: {
+    fontSize: 9,
+    fontFamily: "Helvetica-Bold",
+    fontWeight: "bold",
+    marginBottom: 10,
+    color: "#1E293B",
+  },
+  sigLine: {
+    fontSize: 8,
+    color: "#475569",
+    marginBottom: 4,
+  },
+  sigLineBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E293B",
+    width: "100%",
+    height: 10,
+    marginBottom: 4,
   },
   footerText: {
-    fontSize: 8,
-    color: "#94A3B8",
+    marginTop: 10,
+    textAlign: "center",
+    fontSize: 7,
+    color: "#64748B",
+    fontStyle: "italic",
   }
 });
 
@@ -192,93 +278,162 @@ const formatCurrency = (amount: number) =>
 
 export const InvoicePDF = ({ invoice }: Props) => {
   return (
-    <Document title={`${invoice.invoice_number}`}>
+    <Document title={`Invoice_${invoice?.invoice_number || 'Draft'}`}>
       <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.companyInfo}>
-            <Text style={styles.companyName}>Ozmae Freight Solutions</Text>
-            <Text style={styles.companySubtext}>Plot 14, Nyerere Road</Text>
-            <Text style={styles.companySubtext}>Dar es Salaam, Tanzania</Text>
-            <Text style={styles.companySubtext}>TIN: 123-456-789</Text>
+        
+        {/* TOP SECTION */}
+        <View style={styles.topSection}>
+          <View style={styles.logoBox}>
+            <Text style={styles.logoText}>OZMAE FREIGHT SOLUTIONS</Text>
+            <Text style={{ color: "#94A3B8", fontSize: 8, marginTop: 4 }}>Logistics & Supply Chain</Text>
           </View>
-          <View style={styles.invoiceMeta}>
-            <Text style={styles.invoiceTitle}>Invoice</Text>
-            <Text style={styles.metaText}>Number: {invoice.invoice_number}</Text>
-            <Text style={styles.metaText}>Date: {format(new Date(invoice.created_at), "MMM dd, yyyy")}</Text>
-            <Text style={styles.metaText}>Due: {invoice.deposit_due_date ? format(new Date(invoice.deposit_due_date), "MMM dd, yyyy") : 'N/A'}</Text>
+          <View style={styles.docTitleBox}>
+            <Text style={styles.docTitle}>INVOICE</Text>
+            <View style={styles.metaGrid}>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Invoice Date:</Text>
+                <Text style={styles.metaValue}>{invoice?.created_at ? format(new Date(invoice.created_at), "MMM dd, yyyy") : format(new Date(), "MMM dd, yyyy")}</Text>
+              </View>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Invoice #:</Text>
+                <Text style={styles.metaValue}>{invoice?.invoice_number || 'DRAFT'}</Text>
+              </View>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Job Reference:</Text>
+                <Text style={styles.metaValue}>{invoice?.job_order_id ? `JOB-${invoice.job_order_id.split('-')[0].toUpperCase()}` : 'N/A'}</Text>
+              </View>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Payment Terms:</Text>
+                <Text style={styles.metaValue}>Due on Receipt</Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Address Section */}
+        {/* ADDRESSES */}
         <View style={styles.addressSection}>
           <View style={styles.addressBox}>
-            <Text style={styles.addressTitle}>Bill To</Text>
-            <Text style={styles.addressName}>{invoice.job?.customer?.company_name || 'Valued Customer'}</Text>
-            <Text style={styles.addressDetail}>Registered Logistics Partner</Text>
+            <View style={styles.addressHeader}>
+              <Text style={styles.addressHeaderText}>Invoice From</Text>
+            </View>
+            <Text style={styles.addressTextBold}>OZMAE FREIGHT SOLUTIONS LIMITED</Text>
+            <Text style={styles.addressTextLine}>P.O. Box 804, Arusha</Text>
+            <Text style={styles.addressTextLine}>Tanzania</Text>
+            <Text style={styles.addressTextLine}>TIN: 123-456-789</Text>
           </View>
+          
           <View style={styles.addressBox}>
-             <Text style={styles.addressTitle}>Job Details</Text>
-             <Text style={styles.addressDetail}>Reference: JOB-{invoice.job_order_id?.split('-')[0].toUpperCase()}</Text>
-             <Text style={styles.addressDetail}>Route: {invoice.job?.origin} to {invoice.job?.destination}</Text>
+            <View style={styles.addressHeader}>
+              <Text style={styles.addressHeaderText}>Invoice To / Customer</Text>
+            </View>
+            <Text style={styles.addressTextBold}>{invoice?.job?.customer?.company_name || 'Valued Customer'}</Text>
+            <Text style={styles.addressTextLine}>Registered Logistics Partner</Text>
+            <Text style={styles.addressTextLine}>Route: {invoice?.job?.origin || 'N/A'} to {invoice?.job?.destination || 'N/A'}</Text>
           </View>
         </View>
 
-        {/* Table */}
+        {/* TABLE */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, { width: "60%" }]}>Description</Text>
-            <Text style={[styles.tableHeaderCell, { width: "10%", textAlign: "center" }]}>Qty</Text>
-            <Text style={[styles.tableHeaderCell, { width: "15%", textAlign: "right" }]}>Price</Text>
-            <Text style={[styles.tableHeaderCell, { width: "15%", textAlign: "right" }]}>Total</Text>
+            <Text style={[styles.tableHeaderCell, { width: "10%" }]}>Item #</Text>
+            <Text style={[styles.tableHeaderCell, { width: "50%" }]}>Description / Route</Text>
+            <Text style={[styles.tableHeaderCell, { width: "15%", textAlign: "center" }]}>Qty</Text>
+            <Text style={[styles.tableHeaderCell, { width: "25%", textAlign: "right" }]}>Total (USD)</Text>
           </View>
+          
           <View style={styles.tableRow}>
-            <Text style={[styles.tableCell, { width: "60%" }]}>Transport & Logistics Services - Heavy Cargo</Text>
-            <Text style={[styles.tableCell, { width: "10%", textAlign: "center" }]}>1</Text>
-            <Text style={[styles.tableCell, { width: "15%", textAlign: "right" }]}>{formatCurrency(invoice.total_amount_usd)}</Text>
-            <Text style={[styles.tableCell, { width: "15%", textAlign: "right", fontWeight: "bold" }]}>{formatCurrency(invoice.total_amount_usd)}</Text>
+            <Text style={[styles.tableCellBold, { width: "10%" }]}>1</Text>
+            <View style={{ width: "50%" }}>
+              <Text style={styles.tableCellBold}>Transport & Logistics Services</Text>
+              <Text style={[styles.tableCell, { marginTop: 4, color: "#475569" }]}>Origin: {invoice?.job?.origin || 'N/A'}</Text>
+              <Text style={[styles.tableCell, { marginTop: 2, color: "#475569" }]}>Destination: {invoice?.job?.destination || 'N/A'}</Text>
+            </View>
+            <Text style={[styles.tableCell, { width: "15%", textAlign: "center" }]}>1</Text>
+            <Text style={[styles.tableCellBold, { width: "25%", textAlign: "right" }]}>{formatCurrency(invoice?.total_amount_usd || 0)}</Text>
           </View>
         </View>
 
-        {/* Totals */}
-        <View style={styles.totalsSection}>
+        {/* TOTALS */}
+        <View style={styles.totalsContainer}>
           <View style={styles.totalsBox}>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Subtotal</Text>
-              <Text style={styles.totalValue}>{formatCurrency(invoice.subtotal_usd || invoice.total_amount_usd)}</Text>
+              <Text style={styles.totalValue}>{formatCurrency(invoice?.subtotal_usd || invoice?.total_amount_usd || 0)}</Text>
             </View>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>VAT (0%)</Text>
               <Text style={styles.totalValue}>$0.00</Text>
             </View>
             <View style={styles.grandTotalRow}>
-              <Text style={styles.grandTotalLabel}>Total Due</Text>
-              <Text style={styles.grandTotalValue}>{formatCurrency(invoice.total_amount_usd)}</Text>
+              <Text style={styles.grandTotalLabel}>Grand Total</Text>
+              <Text style={styles.grandTotalValue}>{formatCurrency(invoice?.total_amount_usd || 0)}</Text>
             </View>
           </View>
         </View>
 
-        {/* Payment Terms */}
-        <View style={styles.paymentTerms}>
-          <Text style={styles.paymentTitle}>Payment Schedule</Text>
-          <View style={styles.paymentSplit}>
-             <Text style={styles.splitItem}>First Installment (60% Deposit):</Text>
-             <Text style={[styles.splitItem, { fontWeight: "bold" }]}>{formatCurrency(invoice.deposit_amount_usd)}</Text>
+        {/* BANK DETAILS (USD ONLY) COMPACT GRID */}
+        <View style={styles.bankInfoContainer}>
+          <View style={styles.bankInfoHeader}>
+            <Text style={styles.bankInfoHeaderText}>FUND TRANSFER INFORMATION (USD)</Text>
           </View>
-          <View style={styles.paymentSplit}>
-             <Text style={styles.splitItem}>Final Installment (40% Balance):</Text>
-             <Text style={[styles.splitItem, { fontWeight: "bold" }]}>{formatCurrency(invoice.balance_amount_usd)}</Text>
-          </View>
-          <View style={[styles.paymentSplit, { marginTop: 10, borderTopWidth: 1, borderTopColor: "#E2E8F0", paddingTop: 8 }]}>
-             <Text style={[styles.splitItem, { fontSize: 8, fontStyle: "italic" }]}>Payment Terms: 60% Payable upfront, 40% upon completion.</Text>
+          <View style={styles.bankInfoBody}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              
+              {/* Left Column */}
+              <View style={{ width: "48%" }}>
+                <View style={styles.bankInfoRow}>
+                  <Text style={styles.bankInfoLabel}>BANK:</Text>
+                  <Text style={styles.bankInfoValueLineNormal}>KCB BANK TANZANIA LIMITED</Text>
+                </View>
+                <View style={styles.bankInfoRow}>
+                  <Text style={styles.bankInfoLabel}>SWIFT:</Text>
+                  <Text style={styles.bankInfoValueLine}>KCBLTZTZ</Text>
+                </View>
+              </View>
+
+              {/* Right Column */}
+              <View style={{ width: "48%" }}>
+                <View style={styles.bankInfoRow}>
+                  <Text style={styles.bankInfoLabel}>A/C NAME:</Text>
+                  <Text style={styles.bankInfoValueLine}>OZMAE FREIGHT SOLUTIONS LTD</Text>
+                </View>
+                <View style={styles.bankInfoRow}>
+                  <Text style={styles.bankInfoLabel}>A/C NO:</Text>
+                  <Text style={styles.bankInfoValueLine}>3391630086-USD</Text>
+                </View>
+                <View style={styles.bankInfoRow}>
+                  <Text style={styles.bankInfoLabel}>CURRENCY:</Text>
+                  <Text style={styles.bankInfoValueLineNormal}>USD</Text>
+                </View>
+              </View>
+
+            </View>
           </View>
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Thank you for choosing Ozmae Freight Solutions.</Text>
-          <Text style={[styles.footerText, { marginTop: 4 }]}>www.ozmaelogistics.com | info@ozmaelogistics.com</Text>
+        {/* SIGNATURES */}
+        <View style={styles.signatureSection}>
+          <View style={styles.sigBox}>
+            <Text style={styles.sigTitle}>DELIVERED / ISSUED BY:</Text>
+            <Text style={styles.sigLine}>NAME: _____________________</Text>
+            <Text style={styles.sigLine}>DATE: {format(new Date(), "dd MMM yyyy")}</Text>
+            <Text style={[styles.sigLine, { marginTop: 6 }]}>SIGNATURE:</Text>
+            <View style={styles.sigLineBorder} />
+          </View>
+          <View style={styles.sigBox}>
+            <Text style={styles.sigTitle}>RECEIVED / AUTHORIZED BY:</Text>
+            <Text style={styles.sigLine}>NAME: _____________________</Text>
+            <Text style={styles.sigLine}>DATE: _____________________</Text>
+            <Text style={[styles.sigLine, { marginTop: 6 }]}>SIGNATURE:</Text>
+            <View style={styles.sigLineBorder} />
+          </View>
         </View>
+
+        <Text style={styles.footerText}>
+          Notice must be given to us of any goods not received within 10 days taken from the date of despatch stated on Invoice.
+          {"\n"}Any Shortage or damage must be notified within 72 hours of receipt of goods.
+          {"\n"}Thank you for your business!
+        </Text>
       </Page>
     </Document>
   );

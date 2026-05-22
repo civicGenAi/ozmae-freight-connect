@@ -64,11 +64,11 @@ const jobSchema = z.object({
   driverRef: z.object({
     id: z.string().optional(),
     name: z.string().optional(),
-  }).refine(data => data.id || data.name, "Please select or type a driver"),
+  }).optional(),
   vehicleRef: z.object({
     id: z.string().optional(),
     plate: z.string().optional(),
-  }).refine(data => data.id || data.plate, "Please select or type a vehicle"),
+  }).optional(),
   amount: z.string().min(1, "Value is required"),
 });
 
@@ -118,7 +118,7 @@ export default function JobOrders() {
   const [currentPage, setCurrentPage] = useState(1);
   const [progressText, setProgressText] = useState("");
   const [newStatus, setNewStatus] = useState<string | null>(null);
-  
+
   const queryClient = useQueryClient();
 
   const form = useForm<JobFormValues>({
@@ -290,7 +290,7 @@ export default function JobOrders() {
       if (isAdminRole) {
         const { error } = await supabase
           .from("job_orders")
-          .update({ 
+          .update({
             draft_data: updates,
             has_pending_draft: true
           })
@@ -316,10 +316,10 @@ export default function JobOrders() {
   const publishJobMutation = useMutation({
     mutationFn: async (job: any) => {
       if (!job.draft_data) return;
-      
+
       const { error } = await supabase
         .from("job_orders")
-        .update({ 
+        .update({
           ...job.draft_data,
           draft_data: null,
           has_pending_draft: false
@@ -356,12 +356,12 @@ export default function JobOrders() {
     }
 
     const fileArray = Array.from(files);
-    
+
     for (const file of fileArray) {
       try {
         const fileId = Math.random().toString(36).substring(7);
         setUploadProgress(prev => ({ ...prev, [fileId]: 10 }));
-        
+
         let fileToUpload = file;
 
         // Smart Optimization: Compress images to save storage
@@ -399,7 +399,7 @@ export default function JobOrders() {
 
         if (dbError) throw dbError;
         setUploadProgress(prev => ({ ...prev, [fileId]: 100 }));
-        
+
         toast.success(`Successfully optimized and uploaded: ${file.name}`);
         setTimeout(() => {
           setUploadProgress(prev => {
@@ -425,7 +425,7 @@ export default function JobOrders() {
         reported_by: user?.id,
         status: status || selectedJob?.status
       };
-      
+
       const { error } = await supabase.from("job_progress_reports").insert([updateData]);
       if (error) throw error;
 
@@ -488,13 +488,13 @@ export default function JobOrders() {
       { key: "pickup_confirmation", label: "Pickup Confirmation" },
       { key: "delivery_note", label: "Delivery Note" }
     ];
-    
+
     const customTypes = (jobDocs || [])
       .map(d => d.document_type)
       .filter(type => !base.some(b => b.key === type) && type);
 
     const customObjs = Array.from(new Set(customTypes)).map(type => ({
-      key: type, 
+      key: type,
       label: type.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
     }));
 
@@ -517,8 +517,8 @@ export default function JobOrders() {
     try {
       let finalCustomerId = "";
       const { driverRef, vehicleRef, origin, destination, amount, selectedEntityId } = values;
-      let finalDriverId = driverRef.id || null;
-      let finalVehicleId = vehicleRef.id || null;
+      let finalDriverId = driverRef?.id || null;
+      let finalVehicleId = vehicleRef?.id || null;
 
       // 1. Handle Prospect Conversion
       const prospect = dataNeeded?.prospects.find(p => p.value === selectedEntityId);
@@ -545,7 +545,7 @@ export default function JobOrders() {
       }
 
       // 2. Handle New Driver (Hybrid)
-      if (!finalDriverId && driverRef.name) {
+      if (!finalDriverId && driverRef?.name) {
         const { data: newDriver, error: drvErr } = await supabase
           .from("drivers")
           .insert([{ full_name: driverRef.name, status: 'available', phone: 'Added via Job' }])
@@ -556,7 +556,7 @@ export default function JobOrders() {
       }
 
       // 3. Handle New Vehicle (Hybrid)
-      if (!finalVehicleId && vehicleRef.plate) {
+      if (!finalVehicleId && vehicleRef?.plate) {
         const { data: newVeh, error: vehErr } = await supabase
           .from("vehicles")
           .insert([{
@@ -745,7 +745,7 @@ export default function JobOrders() {
             ))}
           </TableBody>
         </Table>
-        <Pagination 
+        <Pagination
           currentPage={currentPage}
           totalCount={totalCount}
           pageSize={PAGE_SIZE}
@@ -1134,35 +1134,35 @@ export default function JobOrders() {
                         animate={{ opacity: 1, scale: 1 }}
                         className={cn(
                           "mb-8 p-6 rounded-2xl shadow-xl transition-all",
-                          displayJob.status === 'awaiting_deposit' 
-                            ? "bg-amber-100 border-2 border-amber-500 text-amber-900 shadow-amber-100" 
+                          displayJob.status === 'awaiting_deposit'
+                            ? "bg-amber-100 border-2 border-amber-500 text-amber-900 shadow-amber-100"
                             : "bg-emerald-600 text-white shadow-emerald-200"
                         )}
                       >
                         <div className="flex items-center gap-4 mb-4">
-                           <div className={cn(
-                             "h-12 w-12 rounded-xl flex items-center justify-center backdrop-blur-md",
-                             displayJob.status === 'awaiting_deposit' ? "bg-amber-500/20" : "bg-white/20"
-                           )}>
-                              {displayJob.status === 'awaiting_deposit' ? <Clock className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
-                           </div>
-                           <div>
-                              <h4 className="text-sm font-black uppercase tracking-tight">
-                                {displayJob.status === 'awaiting_deposit' ? "Financial Clearance Required" : "Ready for Activation"}
-                              </h4>
-                              <p className="text-[11px] opacity-80">
-                                {displayJob.status === 'awaiting_deposit' 
-                                  ? "Operating this job before deposit is confirmed is restricted." 
-                                  : "All requirements met. Confirm to notify Operations and Driver."}
-                              </p>
-                           </div>
+                          <div className={cn(
+                            "h-12 w-12 rounded-xl flex items-center justify-center backdrop-blur-md",
+                            displayJob.status === 'awaiting_deposit' ? "bg-amber-500/20" : "bg-white/20"
+                          )}>
+                            {displayJob.status === 'awaiting_deposit' ? <Clock className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black uppercase tracking-tight">
+                              {displayJob.status === 'awaiting_deposit' ? "Financial Clearance Required" : "Ready for Activation"}
+                            </h4>
+                            <p className="text-[11px] opacity-80">
+                              {displayJob.status === 'awaiting_deposit'
+                                ? "Operating this job before deposit is confirmed is restricted."
+                                : "All requirements met. Confirm to notify Operations and Driver."}
+                            </p>
+                          </div>
                         </div>
                         <Button
                           disabled={displayJob.status === 'awaiting_deposit' && !isAdmin}
                           className={cn(
                             "w-full h-11 text-[10px] font-black uppercase tracking-widest shadow-lg",
-                            displayJob.status === 'awaiting_deposit' 
-                              ? "bg-amber-500 text-white hover:bg-amber-600" 
+                            displayJob.status === 'awaiting_deposit'
+                              ? "bg-amber-500 text-white hover:bg-amber-600"
                               : "bg-white text-emerald-700 hover:bg-emerald-50"
                           )}
                           onClick={() => updateStageMutation.mutate({ id: displayJob.id, status: 'dispatched' })}
@@ -1272,7 +1272,7 @@ export default function JobOrders() {
                       <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b pb-1">Payment Controls</h5>
                       <div className="flex flex-col gap-2">
                         {selectedJob.status === 'awaiting_deposit' && (
-                          <Button 
+                          <Button
                             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-12 font-bold shadow-lg gap-2"
                             onClick={() => {
                               toast.loading("Recording deposit receipt...");
@@ -1309,12 +1309,12 @@ export default function JobOrders() {
                   <p className="text-[11px] text-muted-foreground mt-2 max-w-[220px]">
                     {canManageDocs ? "Securely store optimized BLs, permits, and invoices." : "Authority required to upload or manage documents."}
                   </p>
-                  
+
                   {canManageDocs && (
                     <div className="mt-6 w-full flex gap-3">
                       <div className="relative w-[220px]">
-                        <Input 
-                          placeholder="Type or Pick Category" 
+                        <Input
+                          placeholder="Type or Pick Category"
                           value={bulkCategory}
                           onChange={(e) => setBulkCategory(e.target.value)}
                           list="category-suggestions"
@@ -1338,17 +1338,17 @@ export default function JobOrders() {
                         )}>
                           <Plus className="h-3.5 w-3.5" /> Optimize & Upload
                         </div>
-                        <input 
-                          type="file" 
-                          multiple 
-                          className="hidden" 
+                        <input
+                          type="file"
+                          multiple
+                          className="hidden"
                           disabled={!bulkCategory}
                           onChange={(e) => {
                             if (bulkCategory) {
                               handleFileUpload(e.target.files, bulkCategory);
                               setBulkCategory("");
                             }
-                          }} 
+                          }}
                         />
                       </label>
                     </div>
@@ -1366,7 +1366,7 @@ export default function JobOrders() {
                           <span className="text-accent">{progress}%</span>
                         </div>
                         <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                          <motion.div 
+                          <motion.div
                             className="h-full bg-accent"
                             initial={{ width: 0 }}
                             animate={{ width: `${progress}%` }}
@@ -1403,10 +1403,10 @@ export default function JobOrders() {
                           <div className="flex items-center justify-center h-8 px-3 rounded-md text-[9px] font-black uppercase tracking-widest text-accent hover:bg-accent/5 transition-all">
                             {existingDoc ? "Replace" : "Upload"}
                           </div>
-                          <input 
-                            type="file" 
-                            className="hidden" 
-                            onChange={(e) => handleFileUpload(e.target.files, dt.key)} 
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => handleFileUpload(e.target.files, dt.key)}
                           />
                         </label>
                       </div>
@@ -1463,17 +1463,17 @@ export default function JobOrders() {
                       </Select>
                       <Input placeholder="Location (Optional)" className="h-10 text-[11px]" />
                     </div>
-                    <Textarea 
-                      placeholder="Describe the current milestone or situation..." 
+                    <Textarea
+                      placeholder="Describe the current milestone or situation..."
                       className="min-h-[80px] text-[11px] bg-muted/20"
                       value={progressText}
                       onChange={(e) => setProgressText(e.target.value)}
                     />
                     <div className="flex items-center justify-between py-2 border-t border-muted/50">
                       <div className="flex items-center gap-2">
-                        <input 
-                          type="checkbox" 
-                          id="wa-notify" 
+                        <input
+                          type="checkbox"
+                          id="wa-notify"
                           className="rounded border-muted text-accent focus:ring-accent"
                           checked={notifyWhatsApp}
                           onChange={(e) => setNotifyWhatsApp(e.target.checked)}
@@ -1488,7 +1488,7 @@ export default function JobOrders() {
                         </div>
                       )}
                     </div>
-                    <Button 
+                    <Button
                       className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-11 text-[10px] font-black uppercase tracking-widest gap-2"
                       onClick={() => {
                         addProgressMutation.mutate({ job_id: selectedJob.id, text: progressText, status: newStatus || undefined });
@@ -1498,7 +1498,7 @@ export default function JobOrders() {
                       }}
                       disabled={!progressText || addProgressMutation.isPending}
                     >
-                      {addProgressMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} 
+                      {addProgressMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                       Broadcast Update
                     </Button>
                   </div>
@@ -1508,8 +1508,8 @@ export default function JobOrders() {
                 <div className="relative pl-6 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-muted/50">
                   {progressReports?.length === 0 ? (
                     <div className="text-center py-12">
-                       <History className="h-10 w-10 text-muted/30 mx-auto mb-4" />
-                       <p className="text-[11px] text-muted-foreground font-medium">No live updates yet. Add one to start tracking.</p>
+                      <History className="h-10 w-10 text-muted/30 mx-auto mb-4" />
+                      <p className="text-[11px] text-muted-foreground font-medium">No live updates yet. Add one to start tracking.</p>
                     </div>
                   ) : (
                     progressReports?.map((report: any, idx: number) => (
@@ -1551,7 +1551,7 @@ export default function JobOrders() {
         </SheetContent>
       </Sheet>
 
-      <DeleteConfirmModal 
+      <DeleteConfirmModal
         isOpen={!!jobToDelete}
         onClose={() => setJobToDelete(null)}
         onConfirm={() => jobToDelete && deleteJobMutation.mutate(jobToDelete)}
