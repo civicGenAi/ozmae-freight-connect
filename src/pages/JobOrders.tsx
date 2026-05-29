@@ -16,6 +16,9 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import { DeliveryNotePDF } from "@/components/DeliveryNotePDF";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { HybridSelect } from "@/components/HybridSelect";
@@ -78,6 +81,18 @@ export default function JobOrders() {
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
+  const [deliveryNoteJob, setDeliveryNoteJob] = useState<any>(null);
+  const [deliveryOverrides, setDeliveryOverrides] = useState({
+    deliveredBy: "OSMOND MOSHA",
+    shippingAddress: "",
+    invoiceAddress: "",
+    despatchDate: "",
+    deliveryMethod: "ROAD",
+    itemDescription: "",
+    orderedQty: "1",
+    deliveredQty: "1",
+    outstandingQty: "0",
+  });
 
   const { data: userProfile } = useQuery({
     queryKey: ["user-profile"],
@@ -1282,6 +1297,13 @@ export default function JobOrders() {
                             <CheckCircle2 className="h-4 w-4" /> Confirm Deposit Received
                           </Button>
                         )}
+                        <Button 
+                          variant="outline" 
+                          className="w-full h-11 text-[10px] font-bold uppercase tracking-widest border-emerald-500 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                          onClick={() => setDeliveryNoteJob(selectedJob)}
+                        >
+                          <Truck className="h-4 w-4 mr-2" /> Generate Delivery Note
+                        </Button>
                         <Button variant="outline" className="w-full h-11 text-[10px] font-bold uppercase tracking-widest border-accent text-accent">
                           Generate Official Invoice
                         </Button>
@@ -1559,6 +1581,77 @@ export default function JobOrders() {
         title="Delete Job Order?"
         description="Are you absolutely sure you want to delete this job order? This will permanently erase the job and its entire history. This action cannot be reversed."
       />
+
+      {/* View Delivery Note Dialog */}
+      <Dialog open={!!deliveryNoteJob} onOpenChange={(open) => !open && setDeliveryNoteJob(null)}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Delivery Note Details</DialogTitle>
+            <DialogDescription>Modify fields before generating the PDF.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Delivered By</Label>
+                <Input value={deliveryOverrides.deliveredBy} onChange={e => setDeliveryOverrides(p => ({...p, deliveredBy: e.target.value}))} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Despatch Date</Label>
+                <Input value={deliveryOverrides.despatchDate} placeholder="e.g. September 13 2025" onChange={e => setDeliveryOverrides(p => ({...p, despatchDate: e.target.value}))} className="h-8 text-xs" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Shipping Address</Label>
+                <Input value={deliveryOverrides.shippingAddress} placeholder="Destination Address" onChange={e => setDeliveryOverrides(p => ({...p, shippingAddress: e.target.value}))} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Invoice Address</Label>
+                <Input value={deliveryOverrides.invoiceAddress} placeholder="P.O BOX, Attn..." onChange={e => setDeliveryOverrides(p => ({...p, invoiceAddress: e.target.value}))} className="h-8 text-xs" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Delivery Method</Label>
+                <Input value={deliveryOverrides.deliveryMethod} onChange={e => setDeliveryOverrides(p => ({...p, deliveryMethod: e.target.value}))} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Item Description</Label>
+                <Input value={deliveryOverrides.itemDescription} placeholder="Cargo Transport..." onChange={e => setDeliveryOverrides(p => ({...p, itemDescription: e.target.value}))} className="h-8 text-xs" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Ordered</Label>
+                <Input value={deliveryOverrides.orderedQty} onChange={e => setDeliveryOverrides(p => ({...p, orderedQty: e.target.value}))} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Delivered</Label>
+                <Input value={deliveryOverrides.deliveredQty} onChange={e => setDeliveryOverrides(p => ({...p, deliveredQty: e.target.value}))} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Outstanding</Label>
+                <Input value={deliveryOverrides.outstandingQty} onChange={e => setDeliveryOverrides(p => ({...p, outstandingQty: e.target.value}))} className="h-8 text-xs" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            {deliveryNoteJob && (
+              <PDFDownloadLink 
+                document={<DeliveryNotePDF job={deliveryNoteJob} overrides={deliveryOverrides} />} 
+                fileName={`Delivery_Note_JOB-${deliveryNoteJob.id?.split('-')[0].toUpperCase()}.pdf`}
+                className="w-full"
+              >
+                {({ loading }) => (
+                   <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-black uppercase text-xs" disabled={loading}>
+                      <Download className="h-4 w-4 mr-2" /> {loading ? "Preparing PDF..." : "Download Delivery Note"}
+                   </Button>
+                )}
+              </PDFDownloadLink>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
