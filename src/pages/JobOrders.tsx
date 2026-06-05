@@ -8,6 +8,7 @@ import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,9 +17,8 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PDFDownloadLink } from "@react-pdf/renderer";
+import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 import { DeliveryNotePDF } from "@/components/DeliveryNotePDF";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { HybridSelect } from "@/components/HybridSelect";
@@ -83,7 +83,7 @@ export default function JobOrders() {
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [deliveryNoteJob, setDeliveryNoteJob] = useState<any>(null);
   const [deliveryOverrides, setDeliveryOverrides] = useState({
-    deliveredBy: "OSMOND MOSHA",
+    deliveredBy: "",
     shippingAddress: "",
     invoiceAddress: "",
     despatchDate: "",
@@ -1584,72 +1584,97 @@ export default function JobOrders() {
 
       {/* View Delivery Note Dialog */}
       <Dialog open={!!deliveryNoteJob} onOpenChange={(open) => !open && setDeliveryNoteJob(null)}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Delivery Note Details</DialogTitle>
-            <DialogDescription>Modify fields before generating the PDF.</DialogDescription>
+        <DialogContent className="sm:max-w-6xl w-[90vw] h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="px-6 py-4 border-b shrink-0">
+            <DialogTitle>Live Delivery Note Preview</DialogTitle>
+            <DialogDescription>Modify fields on the left and see the changes instantly on the right.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs">Delivered By</Label>
-                <Input value={deliveryOverrides.deliveredBy} onChange={e => setDeliveryOverrides(p => ({...p, deliveredBy: e.target.value}))} className="h-8 text-xs" />
+          
+          <div className="flex flex-1 overflow-hidden">
+            {/* Editor Sidebar */}
+            <div className="w-1/3 border-r overflow-y-auto p-6 space-y-4 bg-slate-50/50 custom-scrollbar">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Delivered By</Label>
+                  <Input value={deliveryOverrides.deliveredBy} onChange={e => setDeliveryOverrides(p => ({...p, deliveredBy: e.target.value}))} className="h-9 text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Despatch Date</Label>
+                  <Input type="date" value={deliveryOverrides.despatchDate} onChange={e => setDeliveryOverrides(p => ({...p, despatchDate: e.target.value}))} className="h-9 text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Shipping Address</Label>
+                  <Input value={deliveryOverrides.shippingAddress} placeholder="Destination Address" onChange={e => setDeliveryOverrides(p => ({...p, shippingAddress: e.target.value}))} className="h-9 text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Invoice Address</Label>
+                  <Input value={deliveryOverrides.invoiceAddress} placeholder="P.O BOX, Attn..." onChange={e => setDeliveryOverrides(p => ({...p, invoiceAddress: e.target.value}))} className="h-9 text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Delivery Method</Label>
+                  <Select value={deliveryOverrides.deliveryMethod} onValueChange={v => setDeliveryOverrides(p => ({...p, deliveryMethod: v}))}>
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ROAD">ROAD</SelectItem>
+                      <SelectItem value="SEA">SEA</SelectItem>
+                      <SelectItem value="AIR">AIR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Item Description</Label>
+                  <Input value={deliveryOverrides.itemDescription} placeholder="Cargo Transport..." onChange={e => setDeliveryOverrides(p => ({...p, itemDescription: e.target.value}))} className="h-9 text-xs" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Despatch Date</Label>
-                <Input value={deliveryOverrides.despatchDate} placeholder="e.g. September 13 2025" onChange={e => setDeliveryOverrides(p => ({...p, despatchDate: e.target.value}))} className="h-8 text-xs" />
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Ordered</Label>
+                  <Input value={deliveryOverrides.orderedQty} onChange={e => setDeliveryOverrides(p => ({...p, orderedQty: e.target.value}))} className="h-9 text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Delivered</Label>
+                  <Input value={deliveryOverrides.deliveredQty} onChange={e => setDeliveryOverrides(p => ({...p, deliveredQty: e.target.value}))} className="h-9 text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Outstanding</Label>
+                  <Input value={deliveryOverrides.outstandingQty} onChange={e => setDeliveryOverrides(p => ({...p, outstandingQty: e.target.value}))} className="h-9 text-xs" />
+                </div>
               </div>
+
+              {deliveryNoteJob && (
+                <div className="pt-6 border-t mt-6">
+                  <PDFDownloadLink 
+                    document={<DeliveryNotePDF job={deliveryNoteJob} overrides={deliveryOverrides} />} 
+                    fileName={`Delivery_Note_JOB-${deliveryNoteJob.id?.split('-')[0].toUpperCase()}.pdf`}
+                    className="w-full block"
+                  >
+                    {({ loading }) => (
+                       <Button className="w-full h-12 bg-accent hover:bg-accent/90 text-accent-foreground font-black uppercase tracking-widest text-xs shadow-lg" disabled={loading}>
+                          <Download className="h-4 w-4 mr-2" /> {loading ? "Preparing PDF..." : "Download Original PDF"}
+                       </Button>
+                    )}
+                  </PDFDownloadLink>
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs">Shipping Address</Label>
-                <Input value={deliveryOverrides.shippingAddress} placeholder="Destination Address" onChange={e => setDeliveryOverrides(p => ({...p, shippingAddress: e.target.value}))} className="h-8 text-xs" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Invoice Address</Label>
-                <Input value={deliveryOverrides.invoiceAddress} placeholder="P.O BOX, Attn..." onChange={e => setDeliveryOverrides(p => ({...p, invoiceAddress: e.target.value}))} className="h-8 text-xs" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs">Delivery Method</Label>
-                <Input value={deliveryOverrides.deliveryMethod} onChange={e => setDeliveryOverrides(p => ({...p, deliveryMethod: e.target.value}))} className="h-8 text-xs" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Item Description</Label>
-                <Input value={deliveryOverrides.itemDescription} placeholder="Cargo Transport..." onChange={e => setDeliveryOverrides(p => ({...p, itemDescription: e.target.value}))} className="h-8 text-xs" />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs">Ordered</Label>
-                <Input value={deliveryOverrides.orderedQty} onChange={e => setDeliveryOverrides(p => ({...p, orderedQty: e.target.value}))} className="h-8 text-xs" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Delivered</Label>
-                <Input value={deliveryOverrides.deliveredQty} onChange={e => setDeliveryOverrides(p => ({...p, deliveredQty: e.target.value}))} className="h-8 text-xs" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Outstanding</Label>
-                <Input value={deliveryOverrides.outstandingQty} onChange={e => setDeliveryOverrides(p => ({...p, outstandingQty: e.target.value}))} className="h-8 text-xs" />
-              </div>
+
+            {/* Preview Section */}
+            <div className="w-2/3 bg-slate-100 p-6 flex flex-col">
+              {deliveryNoteJob ? (
+                <div className="flex-1 rounded-xl overflow-hidden border shadow-sm bg-white">
+                  <PDFViewer width="100%" height="100%" className="border-0">
+                    <DeliveryNotePDF job={deliveryNoteJob} overrides={deliveryOverrides} />
+                  </PDFViewer>
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                  Loading preview...
+                </div>
+              )}
             </div>
           </div>
-          <DialogFooter>
-            {deliveryNoteJob && (
-              <PDFDownloadLink 
-                document={<DeliveryNotePDF job={deliveryNoteJob} overrides={deliveryOverrides} />} 
-                fileName={`Delivery_Note_JOB-${deliveryNoteJob.id?.split('-')[0].toUpperCase()}.pdf`}
-                className="w-full"
-              >
-                {({ loading }) => (
-                   <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-black uppercase text-xs" disabled={loading}>
-                      <Download className="h-4 w-4 mr-2" /> {loading ? "Preparing PDF..." : "Download Delivery Note"}
-                   </Button>
-                )}
-              </PDFDownloadLink>
-            )}
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

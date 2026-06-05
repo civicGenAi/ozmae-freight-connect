@@ -2,6 +2,7 @@ import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import { format } from "date-fns";
 import signatureImg from "@/assets/signature.png";
+import logoImg from "@/assets/ozmae-logo.png";
 
 const styles = StyleSheet.create({
   page: {
@@ -16,22 +17,13 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   logoBox: {
-    backgroundColor: "#1E293B",
-    padding: 12,
     width: "45%",
     justifyContent: "center",
   },
-  logoText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "bold",
-    fontFamily: "Helvetica-Bold",
-  },
-  logoSubText: {
-    color: "#EA6A38", // Brand Orange
-    fontSize: 9,
-    marginTop: 4,
-    fontFamily: "Helvetica-Oblique",
+  logoImage: {
+    width: 150,
+    height: 60,
+    objectFit: "contain",
   },
   docTitleBox: {
     width: "45%",
@@ -203,13 +195,21 @@ interface DeliveryNoteProps {
     orderedQty?: string;
     deliveredQty?: string;
     outstandingQty?: string;
+    items?: Array<{
+      description: string;
+      ordered: string;
+      delivered: string;
+      outstanding: string;
+    }>;
+    orderId?: string;
+    customerId?: string;
   };
 }
 
 export const DeliveryNotePDF = ({ job, deliveryNoteNumber, overrides }: DeliveryNoteProps) => {
-  const noteNum = deliveryNoteNumber || `DN-${job?.id?.split('-')[0].toUpperCase()}`;
-  const deliveredBy = overrides?.deliveredBy || "OSMOND MOSHA";
-  const despatchDate = overrides?.despatchDate || format(new Date(), "MMMM dd, yyyy");
+  const noteNum = deliveryNoteNumber || (job?.id ? `DN-${job.id.split('-')[0].toUpperCase()}` : 'N/A');
+  const deliveredBy = overrides?.deliveredBy !== undefined ? overrides.deliveredBy : "";
+  const despatchDate = overrides?.despatchDate ? overrides.despatchDate : "";
   
   return (
     <Document title={`Delivery_Note_${noteNum}`}>
@@ -218,8 +218,7 @@ export const DeliveryNotePDF = ({ job, deliveryNoteNumber, overrides }: Delivery
         {/* TOP SECTION */}
         <View style={styles.topSection}>
           <View style={styles.logoBox}>
-            <Text style={styles.logoText}>OZMAE FREIGHT SOLUTIONS</Text>
-            <Text style={styles.logoSubText}>Professional Logistics Infrastructure</Text>
+            <Image src={logoImg} style={styles.logoImage} />
           </View>
           <View style={styles.docTitleBox}>
             <Text style={styles.docTitle}>Delivery Note</Text>
@@ -259,7 +258,10 @@ export const DeliveryNotePDF = ({ job, deliveryNoteNumber, overrides }: Delivery
               <Text style={styles.addressHeaderText}>Shipping Address</Text>
             </View>
             <Text style={styles.addressTextBold}>{job?.customer?.company_name || 'Customer Name'}</Text>
-            <Text style={styles.addressTextLine}>{overrides?.shippingAddress || job?.destination || 'Destination Address'}</Text>
+            <MultiLineText
+              text={overrides?.shippingAddress !== undefined ? overrides.shippingAddress : (job?.destination && job.destination !== "TBA" ? job.destination : "")}
+              style={styles.addressTextLine}
+            />
             <Text style={styles.addressTextLine}>Tanzania, East Africa</Text>
           </View>
           
@@ -268,8 +270,11 @@ export const DeliveryNotePDF = ({ job, deliveryNoteNumber, overrides }: Delivery
               <Text style={styles.addressHeaderText}>Invoice Address</Text>
             </View>
             <Text style={styles.addressTextBold}>{job?.customer?.company_name || 'Customer Name'}</Text>
-            <Text style={styles.addressTextLine}>{overrides?.invoiceAddress || 'P.O BOX, Registered Logistics Partner'}</Text>
-            <Text style={styles.addressTextLine}>Attn: Logistics Department</Text>
+            <MultiLineText
+              text={overrides?.invoiceAddress !== undefined ? overrides.invoiceAddress : ""}
+              style={styles.addressTextLine}
+            />
+            <Text style={styles.addressTextLine}></Text>
           </View>
         </View>
 
@@ -283,15 +288,32 @@ export const DeliveryNotePDF = ({ job, deliveryNoteNumber, overrides }: Delivery
             <Text style={[styles.tableHeaderCell, { width: "10%", textAlign: "center" }]}>Outstanding</Text>
           </View>
           
-          <View style={styles.tableRow}>
-            <Text style={[styles.tableCellBold, { width: "10%" }]}>1</Text>
-            <View style={{ width: "50%" }}>
-              <Text style={styles.tableCellBold}>{overrides?.itemDescription || `Cargo Transport: ${job?.origin} to ${job?.destination}`}</Text>
+          {overrides?.items && overrides.items.length > 0 ? (
+            overrides.items.map((item, idx) => (
+              <View style={styles.tableRow} key={idx}>
+                <Text style={[styles.tableCellBold, { width: "10%" }]}>{idx + 1}</Text>
+                <View style={{ width: "50%" }}>
+                  <MultiLineText text={item.description} style={styles.tableCellBold} />
+                </View>
+                <Text style={[styles.tableCell, { width: "15%", textAlign: "center" }]}>{item.ordered}</Text>
+                <Text style={[styles.tableCell, { width: "15%", textAlign: "center" }]}>{item.delivered}</Text>
+                <Text style={[styles.tableCell, { width: "10%", textAlign: "center" }]}>{item.outstanding}</Text>
+              </View>
+            ))
+          ) : (
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableCellBold, { width: "10%" }]}>1</Text>
+              <View style={{ width: "50%" }}>
+                <MultiLineText
+                  text={overrides?.itemDescription || `Cargo Transport: ${job?.origin} to ${job?.destination}`}
+                  style={styles.tableCellBold}
+                />
+              </View>
+              <Text style={[styles.tableCell, { width: "15%", textAlign: "center" }]}>{overrides?.orderedQty || "1"}</Text>
+              <Text style={[styles.tableCell, { width: "15%", textAlign: "center" }]}>{overrides?.deliveredQty || "1"}</Text>
+              <Text style={[styles.tableCell, { width: "10%", textAlign: "center" }]}>{overrides?.outstandingQty || "0"}</Text>
             </View>
-            <Text style={[styles.tableCell, { width: "15%", textAlign: "center" }]}>{overrides?.orderedQty || "1"}</Text>
-            <Text style={[styles.tableCell, { width: "15%", textAlign: "center" }]}>{overrides?.deliveredQty || "1"}</Text>
-            <Text style={[styles.tableCell, { width: "10%", textAlign: "center" }]}>{overrides?.outstandingQty || "0"}</Text>
-          </View>
+          )}
 
           {/* Add a few empty rows for styling, like the template */}
           <View style={styles.tableRowEven}>
@@ -314,10 +336,14 @@ export const DeliveryNotePDF = ({ job, deliveryNoteNumber, overrides }: Delivery
         <View style={styles.signatureSection}>
           <View style={styles.sigBox}>
             <Text style={styles.sigTitle}>DELIVERED BY:</Text>
-            <Text style={styles.sigLine}>NAME: {deliveredBy}</Text>
-            <Text style={styles.sigLine}>DATE: {format(new Date(), "dd MMMM yyyy")}</Text>
+            <Text style={styles.sigLine}>NAME: {deliveredBy ? deliveredBy : "_____________________"}</Text>
+            <Text style={styles.sigLine}>DATE: {deliveredBy ? format(new Date(), "dd MMMM yyyy") : "_____________________"}</Text>
             <Text style={[styles.sigLine, { marginTop: 6 }]}>SIGNATURE:</Text>
-            <Image src={signatureImg} style={{ objectFit: "contain", height: 55, marginLeft: -15, width: 160, paddingBottom: 2 }} />
+            {deliveredBy.toUpperCase().includes("OSMOND MOSHA") ? (
+              <Image src={signatureImg} style={{ objectFit: "contain", height: 55, marginLeft: -15, width: 160, paddingBottom: 2 }} />
+            ) : (
+              <View style={{ height: 55 }} />
+            )}
             <View style={styles.sigLineBorder}></View>
           </View>
           <View style={styles.sigBox}>

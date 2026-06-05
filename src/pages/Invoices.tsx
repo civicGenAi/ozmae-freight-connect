@@ -29,7 +29,7 @@ export default function Invoices() {
   const [customerOverride, setCustomerOverride] = useState({ name: "", address: "", phone: "" });
   const [deliveryNoteJob, setDeliveryNoteJob] = useState<any>(null);
   const [deliveryOverrides, setDeliveryOverrides] = useState({
-    deliveredBy: "OSMOND MOSHA",
+    deliveredBy: "",
     shippingAddress: "",
     invoiceAddress: "",
     despatchDate: "",
@@ -38,6 +38,8 @@ export default function Invoices() {
     orderedQty: "1",
     deliveredQty: "1",
     outstandingQty: "0",
+    orderId: "",
+    customerId: "",
   });
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -492,12 +494,20 @@ export default function Invoices() {
             <div className="w-1/3 border-r overflow-y-auto p-6 space-y-4 bg-slate-50/50 custom-scrollbar">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Order / Job ID</Label>
+                  <Input value={deliveryOverrides.orderId} placeholder={`e.g. JOB-${deliveryNoteJob?.id?.split('-')[0].toUpperCase()}`} onChange={e => setDeliveryOverrides(p => ({...p, orderId: e.target.value}))} className="h-9 text-xs" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Customer ID</Label>
+                  <Input value={deliveryOverrides.customerId} placeholder="e.g. CUST-1000" onChange={e => setDeliveryOverrides(p => ({...p, customerId: e.target.value}))} className="h-9 text-xs" />
+                </div>
+                <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Delivered By</Label>
                   <Input value={deliveryOverrides.deliveredBy} onChange={e => setDeliveryOverrides(p => ({...p, deliveredBy: e.target.value}))} className="h-9 text-xs" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Despatch Date</Label>
-                  <Input value={deliveryOverrides.despatchDate} placeholder="e.g. September 13 2025" onChange={e => setDeliveryOverrides(p => ({...p, despatchDate: e.target.value}))} className="h-9 text-xs" />
+                  <Input type="date" value={deliveryOverrides.despatchDate} onChange={e => setDeliveryOverrides(p => ({...p, despatchDate: e.target.value}))} className="h-9 text-xs" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Shipping Address</Label>
@@ -509,7 +519,16 @@ export default function Invoices() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Delivery Method</Label>
-                  <Input value={deliveryOverrides.deliveryMethod} onChange={e => setDeliveryOverrides(p => ({...p, deliveryMethod: e.target.value}))} className="h-9 text-xs" />
+                  <Select value={deliveryOverrides.deliveryMethod} onValueChange={v => setDeliveryOverrides(p => ({...p, deliveryMethod: v}))}>
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ROAD">ROAD</SelectItem>
+                      <SelectItem value="SEA">SEA</SelectItem>
+                      <SelectItem value="AIR">AIR</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Item Description</Label>
