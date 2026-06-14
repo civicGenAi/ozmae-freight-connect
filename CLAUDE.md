@@ -139,17 +139,25 @@ not break existing flows** — change one area at a time.
    now a **Source Quotation** chooser listing every quote for the selected
    business so any of them can be picked. (The Quotations *list* itself was fine
    — it keys by `quote.id`.)
-6. **Admin vault** — TODO. Decision made: **reuse the 4-digit `PinGate.tsx`** to
-   gate sensitive features after login (even for admins).
-7. **Job costing & central job file (new module)** — IN PROGRESS.
+6. **Admin vault** — DONE (for Job Costing). `VaultGuard.tsx` reuses
+   `PinGate.tsx` + `company_profile.resource_pin_hash`/`resource_pin_enabled`
+   to gate the `/job-costing` route behind the 4-digit company PIN (even for
+   admins); unlocked for the browser session via sessionStorage. The PIN is
+   set up in My Account. To gate more areas, wrap their route in `<VaultGuard>`.
+7. **Job costing & central job file (new module)**.
    - Phase 1 DONE: top-level **Job Costing** page (`src/pages/JobCosting.tsx`,
      route `/job-costing`, Finance nav). Per-job cost line items
-     (`job_costs` table, migration `20260614130000_job_costs.sql`) → true cost,
-     profit/loss & margin; revenue derived from linked quotation or
-     `job_orders.total_amount`. **Run the migration in Supabase to use it.**
-   - Phase 2+ (TODO): extra billable charges (revenue side), payables status
-     (paid vs owed per cost), and per-job document filing under a serial number
-     to replace the physical file.
+     (`job_costs` table) → true cost, profit/loss & margin; revenue from linked
+     quotation or `job_orders.total_amount`.
+   - Phase 2 DONE: **extra billable charges** (`job_charges` table, revenue
+     side) and **payables tracking** (`job_costs.payment_status`/`paid_on`,
+     paid/owed toggle + "Payables Owed" summary). Migrations
+     `20260614130000_job_costs.sql` + `20260614140000_job_costing_phase2.sql`.
+   - Documents: enhanced the existing **Document Vault** (`Documents.tsx`) with
+     search, document-type filter, and in-page upload (files stored in the
+     `logistic-files` bucket, rows in `documents`; migration
+     `20260614150000_documents_policies.sql`). The job number is the serial.
+   - **All the above migrations must be applied in Supabase.**
 
 ## Git workflow
 
