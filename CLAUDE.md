@@ -122,20 +122,23 @@ not break existing flows** — change one area at a time.
 3. **Dashboard** — most role dashboards (`*DashboardMockup` in `Dashboard.tsx`)
    render **hardcoded mock numbers**. Needs a real, clean, graph-driven central
    overview where every figure is backed by a query.
-4. **Job Orders cards/status** —
-   - Stat cards (`stageCounts`) count *all* jobs, not the filtered view.
-   - Status-change mutation (`updateStageMutation`) has no `onError`, and the
-     open drawer's `selectedJob` state isn't refreshed after invalidation, so a
-     change can show a success toast while the visible status looks unchanged.
-     Verify each stat card matches its create-form definition.
-5. **Quotations / "business entry"** — the customer picker is a plain `Select`
-   with no search (must scroll). Needs a searchable combobox. Also investigate
-   the reported bug where two different quotes for the same customer only show
-   one (rendering keys by `quote.id` look correct — check the create flow /
-   customer find-or-create / any name-keyed dedup).
-6. **Admin vault** — sensitive features should require a second password/PIN
-   *after* login, even for admins. `PinGate.tsx` exists (4-digit SHA-256 PIN)
-   as a starting point.
+4. **Job Orders cards/status** — DONE. Status-change mutation now detects a
+   silent 0-row no-op (the real cause: **`job_orders` had RLS enabled with only
+   a SELECT policy**, so UPDATEs were blocked but returned no error → fake
+   success toast). Added `onError`, refresh of the open drawer, and a migration
+   (`20260614120000_job_orders_write_policies.sql`) granting authenticated
+   write. Pipeline stat cards now count across ALL jobs via the
+   `["job_stage_counts"]` query, not just the current page.
+   **The migration must be applied in Supabase for status changes to persist.**
+5. **Quotations / "business entry"** — DONE. The "business entry" the owner
+   meant is the **Business Entity picker in Job Order creation**
+   (`JobOrders.tsx`), now a searchable `HybridSelect`. The "two quotes, only one
+   shows" bug was the auto-pull that always used `accepted || latest`; there's
+   now a **Source Quotation** chooser listing every quote for the selected
+   business so any of them can be picked. (The Quotations *list* itself was fine
+   — it keys by `quote.id`.)
+6. **Admin vault** — TODO. Decision made: **reuse the 4-digit `PinGate.tsx`** to
+   gate sensitive features after login (even for admins).
 7. **Job costing & central job file (new module)** — per job: capture all real
    costs / extra charges / payables to compute true cost and profit/loss; a
    single place holding everything for a job from inception → delivery
