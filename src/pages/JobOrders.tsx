@@ -237,6 +237,17 @@ export default function JobOrders() {
     gcTime: 30 * 60 * 1000,   // Keep in memory for 30 minutes
   });
 
+  // Status of ALL job orders (not just the current page) so the pipeline stat
+  // cards reflect the whole pipeline rather than the 15 rows on screen.
+  const { data: allJobStatuses } = useQuery({
+    queryKey: ["job_stage_counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("job_orders").select("status");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const [suggestedAmount, setSuggestedAmount] = useState<string | null>(null);
 
   // Combined searchable options for the Business Entity picker
@@ -294,6 +305,7 @@ export default function JobOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["job_stage_counts"] });
       setIsNewModalOpen(false);
       toast.success("Job order created successfully");
     },
@@ -302,15 +314,32 @@ export default function JobOrders() {
 
   const updateStageMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase
+      // .select() lets us confirm the row was actually changed. A row count of 0
+      // (with no error) means the update was silently blocked — almost always a
+      // missing RLS UPDATE policy on job_orders — which previously showed a
+      // false "success" toast while nothing changed.
+      const { data, error } = await supabase
         .from("job_orders")
         .update({ status })
-        .eq("id", id);
+        .eq("id", id)
+        .select();
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Status was not saved (no rows updated). You may not have permission to change this job — check the Supabase RLS update policy on job_orders."
+        );
+      }
+      return data[0];
     },
-    onSuccess: () => {
+    onSuccess: (updated: any) => {
       queryClient.invalidateQueries({ queryKey: ["job_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["job_stage_counts"] });
+      // Reflect the change immediately in the open detail drawer
+      setSelectedJob((prev: any) => (prev && prev.id === updated.id ? { ...prev, status: updated.status } : prev));
       toast.success("Job status updated");
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to update job status");
     },
   });
 
@@ -375,6 +404,7 @@ export default function JobOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["job_stage_counts"] });
       setSelectedJob(null);
       setJobToDelete(null);
       toast.success("Job order deleted");
@@ -544,7 +574,7 @@ export default function JobOrders() {
 
   const stageCounts = stages.map((s) => ({
     stage: s,
-    count: jobOrders?.filter((j: any) => (j.status || "").toLowerCase() === s.toLowerCase()).length || 0,
+    count: (allJobStatuses || []).filter((j: any) => (j.status || "").toLowerCase() === s.toLowerCase()).length,
   }));
   const handleCreateJob = async (values: JobFormValues) => {
     try {
