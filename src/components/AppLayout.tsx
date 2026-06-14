@@ -6,7 +6,7 @@ import {
   CreditCard, FolderOpen, Settings, Building2, UserCog, Bell,
   ClipboardList, Receipt, Menu, X, LogOut, AlertTriangle,
   Activity, Phone, CheckSquare, TrendingDown, ChevronDown, 
-  ChevronRight, PanelLeft, PanelLeftClose, BarChart3
+  ChevronRight, PanelLeft, PanelLeftClose, BarChart3, Calculator
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -96,6 +96,7 @@ const navSections: NavSection[] = [
     items: [
       { title: "Invoices", path: "/invoices", icon: Receipt },
       { title: "Payments", path: "/payments", icon: CreditCard },
+      { title: "Job Costing", path: "/job-costing", icon: Calculator, roles: ["Admin", "Finance"] },
     ],
   },
   {
