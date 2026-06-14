@@ -55,21 +55,29 @@ export default function MyAccount() {
    });
 
    return (
-      <div className="space-y-6">
-         <PageHeader title="Management & Security" />
+      <div className="space-y-8 max-w-6xl mx-auto">
+         {/* Modern hero header */}
+         <div className="relative overflow-hidden rounded-3xl bg-[#0f1d35] text-white p-8 shadow-[0_8px_30px_rgba(20,41,76,0.12)]">
+            <div className="absolute -right-6 -bottom-8 h-40 w-40 bg-accent rounded-full blur-[70px] opacity-20" />
+            <div className="relative z-10">
+               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent">Account Center</p>
+               <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase mt-1">Management & Security</h1>
+               <p className="text-white/50 text-xs font-medium mt-1">Manage your profile, security, sessions and company settings.</p>
+            </div>
+         </div>
 
-         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid grid-cols-2 md:grid-cols-4 h-12 bg-muted/50 p-1 rounded-xl">
-               <TabsTrigger value="profile" className="rounded-lg font-bold uppercase text-[10px] tracking-widest gap-2">
+         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+            <TabsList className="grid grid-cols-2 md:grid-cols-4 h-12 bg-muted/50 p-1 rounded-2xl border shadow-sm w-full">
+               <TabsTrigger value="profile" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
                   <User className="h-3.5 w-3.5" /> Profile
                </TabsTrigger>
-               <TabsTrigger value="security" className="rounded-lg font-bold uppercase text-[10px] tracking-widest gap-2">
+               <TabsTrigger value="security" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
                   <Shield className="h-3.5 w-3.5" /> Security
                </TabsTrigger>
-               <TabsTrigger value="sessions" className="rounded-lg font-bold uppercase text-[10px] tracking-widest gap-2">
+               <TabsTrigger value="sessions" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
                   <Laptop className="h-3.5 w-3.5" /> Sessions
                </TabsTrigger>
-               <TabsTrigger value="company" className="rounded-lg font-bold uppercase text-[10px] tracking-widest gap-2">
+               <TabsTrigger value="company" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
                   <Building2 className="h-3.5 w-3.5" /> Company
                </TabsTrigger>
             </TabsList>
@@ -151,15 +159,18 @@ function ProfileTab({ profile }: { profile: any }) {
    return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
          <div className="md:col-span-1 space-y-6">
-            <div className="bg-card rounded-2xl border p-6 text-center space-y-4">
-               <FileUpload
-                  onUpload={onAvatarUpload}
-                  defaultValue={profile?.avatar_url}
-                  label="Profile Avatar"
-               />
-               <div>
-                  <h3 className="font-bold text-lg">{profile?.full_name}</h3>
-                  <p className="text-[10px] font-black uppercase text-accent tracking-widest">{profile?.role}</p>
+            <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
+               <div className="h-16 bg-gradient-to-r from-[#0f1d35] to-[#1c3358]" />
+               <div className="px-6 pb-6 -mt-10 text-center space-y-4">
+                  <FileUpload
+                     onUpload={onAvatarUpload}
+                     defaultValue={profile?.avatar_url}
+                     label="Profile Avatar"
+                  />
+                  <div>
+                     <h3 className="font-black text-lg tracking-tight">{profile?.full_name}</h3>
+                     <p className="text-[10px] font-black uppercase text-accent tracking-widest mt-0.5">{profile?.role}</p>
+                  </div>
                </div>
             </div>
          </div>
