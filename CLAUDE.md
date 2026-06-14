@@ -181,6 +181,13 @@ not break existing flows** — change one area at a time.
 - **HybridSelect:** each item now has a unique `value` (label collisions made
   duplicate-named options select together); supports an optional `hint`.
 - **My Account:** visual-only modern refresh (hero header, tab bar, profile card).
+  Now 6 tabs incl. **Notifications** (`NotificationsPanel.tsx` — filters by
+  status/type, date grouping, mark read/delete; uses the `read` column) and
+  **Status** (`SystemStatusPanel.tsx`, shared with `/status`).
+- **Quotations pagination:** client-side, 20/page over the filtered list
+  (`PAGE_SIZE`), so search still spans everything; grouped view per page.
+- **Skeletons:** CRM pages (Interactions, Tasks, Health, Lost Deals) now show
+  skeletons instead of plain "Loading…" text.
 
 - **Merge duplicate customers:** `MergeDuplicatesDialog.tsx` + "Merge Duplicates"
   button on `crm/Customers.tsx`. Calls the `merge_customers(p_primary, p_dupes)`
