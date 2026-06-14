@@ -17,6 +17,7 @@ import Invoices from "@/pages/Invoices";
 import Payments from "@/pages/Payments";
 import JobCosting from "@/pages/JobCosting";
 import StatusPage from "@/pages/StatusPage";
+import SecurityLogs from "@/pages/SecurityLogs";
 import { VaultGuard } from "@/components/VaultGuard";
 import Documents from "@/pages/Documents";
 import CompanyProfile from "@/pages/CompanyProfile";
@@ -195,6 +196,12 @@ const App = () => (
               <AppLayout><MyAccount /></AppLayout>
             </AuthGuard>
           } path="/settings/profile" />
+
+          <Route element={
+            <AuthGuard>
+              <AppLayout><SecurityLogs /></AppLayout>
+            </AuthGuard>
+          } path="/settings/security-logs" />
           
           <Route path="/track" element={<PublicTracking />} />
           <Route path="/track/:code" element={<PublicTracking />} />

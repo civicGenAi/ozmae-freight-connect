@@ -108,7 +108,6 @@ const navSections: NavSection[] = [
     label: "INSIGHTS",
     items: [
       { title: "Reports", path: "/reports", icon: BarChart3, roles: ["Admin", "Sales", "Finance"] },
-      { title: "System Status", path: "/status", icon: Activity, roles: ["Admin"] },
     ],
   },
   {

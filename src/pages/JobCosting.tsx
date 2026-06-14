@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
 import { supabase } from "@/lib/supabase";
@@ -13,7 +15,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Search, Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Wallet, ArrowRight, Clock, CheckCircle2 } from "lucide-react";
+import { Search, Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Wallet, ArrowRight, Clock, CheckCircle2, Layers, X } from "lucide-react";
 
 const fmt = (n: number) => `$${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num = (v: any) => Number(v) || 0;
@@ -31,6 +33,11 @@ export default function JobCosting() {
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [costToDelete, setCostToDelete] = useState<string | null>(null);
   const [chargeToDelete, setChargeToDelete] = useState<string | null>(null);
+  // Combine-jobs (joint costing) selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [combineOpen, setCombineOpen] = useState(false);
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const [costForm, setCostForm] = useState({ category: "trucking", description: "", amount: "", payee: "", incurred_on: new Date().toISOString().split("T")[0] });
   const [chargeForm, setChargeForm] = useState({ category: "freight", description: "", amount: "", incurred_on: new Date().toISOString().split("T")[0] });
@@ -124,6 +131,15 @@ export default function JobCosting() {
     () => rows.reduce((acc: any, r: any) => ({ revenue: acc.revenue + r.revenue, cost: acc.cost + r.cost, profit: acc.profit + r.profit }), { revenue: 0, cost: 0, profit: 0 }),
     [rows]
   );
+
+  // Joint costing for the selected jobs
+  const combinedRows = useMemo(() => rows.filter((r: any) => selectedIds.has(r.id)), [rows, selectedIds]);
+  const combinedTotals = useMemo(
+    () => combinedRows.reduce((acc: any, r: any) => ({ revenue: acc.revenue + r.revenue, cost: acc.cost + r.cost, profit: acc.profit + r.profit }), { revenue: 0, cost: 0, profit: 0 }),
+    [combinedRows]
+  );
+  const combinedMargin = combinedTotals.revenue > 0 ? (combinedTotals.profit / combinedTotals.revenue) * 100 : 0;
+  const distinctClients = useMemo(() => new Set(combinedRows.map((r: any) => r.customer?.company_name || "—")), [combinedRows]);
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["job_costs", selectedJob?.id] });
@@ -221,15 +237,29 @@ export default function JobCosting() {
         </div>
       </div>
 
-      <div className="relative w-full md:w-72">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search job, customer or route..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search job, customer or route..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        {selectedIds.size > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-muted-foreground">{selectedIds.size} selected</span>
+            <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())} className="h-9 text-[10px] font-black uppercase tracking-widest">Clear</Button>
+            <Button size="sm" disabled={selectedIds.size < 2} onClick={() => setCombineOpen(true)} className="h-9 gap-2 bg-accent hover:bg-accent/90 text-accent-foreground text-[10px] font-black uppercase tracking-widest">
+              <Layers className="h-3.5 w-3.5" /> Combine ({selectedIds.size})
+            </Button>
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground font-medium hidden sm:block">Tick jobs to combine them into a joint profit/loss.</p>
+        )}
       </div>
 
       <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
         <Table className="min-w-[900px]">
           <TableHeader className="bg-muted/50">
             <TableRow>
+              <TableHead className="w-10"></TableHead>
               <TableHead>Job #</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Route</TableHead>
@@ -242,11 +272,14 @@ export default function JobCosting() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={8}><div className="h-10 bg-muted/50 animate-pulse rounded" /></TableCell></TableRow>))
+              Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={9}><div className="h-10 bg-muted/50 animate-pulse rounded" /></TableCell></TableRow>))
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No job orders found.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No job orders found.</TableCell></TableRow>
             ) : rows.map((j: any) => (
-              <TableRow key={j.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setSelectedJob(j)}>
+              <TableRow key={j.id} className={cn("cursor-pointer hover:bg-muted/30 transition-colors", selectedIds.has(j.id) && "bg-accent/5")} onClick={() => setSelectedJob(j)}>
+                <TableCell onClick={(e) => e.stopPropagation()} className="w-10">
+                  <Checkbox checked={selectedIds.has(j.id)} onCheckedChange={() => toggleSelect(j.id)} aria-label="Select job for combine" />
+                </TableCell>
                 <TableCell className="font-mono text-[10px] font-bold text-accent uppercase">{(j.job_number || j.id).toString().split("-")[0]}</TableCell>
                 <TableCell className="font-medium text-sm whitespace-nowrap">{j.customer?.company_name || "—"}</TableCell>
                 <TableCell className="text-xs whitespace-nowrap"><span className="inline-flex items-center gap-1">{j.origin} <ArrowRight className="h-3 w-3" /> {j.destination}</span></TableCell>
@@ -389,6 +422,83 @@ export default function JobCosting() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Combined / joint costing view */}
+      <Dialog open={combineOpen} onOpenChange={setCombineOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 uppercase tracking-tight font-black">
+              <Layers className="h-5 w-5 text-accent" /> Combined Job Costing
+            </DialogTitle>
+            <DialogDescription>
+              Joint profit/loss across {combinedRows.length} jobs
+              {distinctClients.size === 1 ? ` for ${Array.from(distinctClients)[0]}` : ` across ${distinctClients.size} clients`}.
+              Nothing is changed — each job is still tracked on its own.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Combined totals */}
+          <div className="grid grid-cols-3 gap-3 my-2">
+            <div className="bg-blue-50 rounded-xl p-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-blue-600">Revenue</p>
+              <p className="text-base font-black tabular-nums mt-1">{fmt(combinedTotals.revenue)}</p>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">Cost</p>
+              <p className="text-base font-black tabular-nums mt-1">{fmt(combinedTotals.cost)}</p>
+            </div>
+            <div className={cn("rounded-xl p-3", combinedTotals.profit >= 0 ? "bg-emerald-50" : "bg-rose-50")}>
+              <p className={cn("text-[9px] font-black uppercase tracking-widest", combinedTotals.profit >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                {combinedTotals.profit >= 0 ? "Profit" : "Loss"}
+              </p>
+              <p className="text-base font-black tabular-nums mt-1">{fmt(combinedTotals.profit)}</p>
+              <p className={cn("text-[9px] font-bold mt-0.5", combinedTotals.profit >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                {combinedTotals.revenue > 0 ? `${combinedMargin.toFixed(1)}% margin` : ""}
+              </p>
+            </div>
+          </div>
+
+          {/* Per-job breakdown */}
+          <div className="border rounded-xl overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="text-[9px] uppercase">Job</TableHead>
+                  <TableHead className="text-[9px] uppercase text-right">Revenue</TableHead>
+                  <TableHead className="text-[9px] uppercase text-right">Cost</TableHead>
+                  <TableHead className="text-[9px] uppercase text-right">P/L</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {combinedRows.map((j: any) => (
+                  <TableRow key={j.id}>
+                    <TableCell className="text-[11px]">
+                      <span className="font-mono font-bold text-accent uppercase">{(j.job_number || j.id).toString().split("-")[0]}</span>
+                      <span className="block text-[9px] text-muted-foreground truncate max-w-[160px]">{j.customer?.company_name || "—"}</span>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-xs font-bold">{fmt(j.revenue)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-xs font-bold text-amber-600">{fmt(j.cost)}</TableCell>
+                    <TableCell className={cn("text-right tabular-nums text-xs font-black", j.profit >= 0 ? "text-emerald-600" : "text-rose-600")}>{fmt(j.profit)}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="bg-muted/30 font-black">
+                  <TableCell className="text-[11px] font-black uppercase">Combined</TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">{fmt(combinedTotals.revenue)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-xs text-amber-600">{fmt(combinedTotals.cost)}</TableCell>
+                  <TableCell className={cn("text-right tabular-nums text-xs", combinedTotals.profit >= 0 ? "text-emerald-600" : "text-rose-600")}>{fmt(combinedTotals.profit)}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className={cn("mt-2 rounded-xl p-4 text-center", combinedTotals.profit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")}>
+            <p className="text-[10px] font-black uppercase tracking-widest">Verdict</p>
+            <p className="text-lg font-black">
+              {combinedTotals.profit >= 0 ? "Profitable" : "Loss-making"} · {fmt(combinedTotals.profit)}
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <DeleteConfirmModal isOpen={!!costToDelete} onClose={() => setCostToDelete(null)} onConfirm={() => costToDelete && deleteCost.mutate(costToDelete)} isDeleting={deleteCost.isPending} title="Remove this cost?" description="This cost line will be permanently deleted and the job's profit/loss recalculated." />
       <DeleteConfirmModal isOpen={!!chargeToDelete} onClose={() => setChargeToDelete(null)} onConfirm={() => chargeToDelete && deleteCharge.mutate(chargeToDelete)} isDeleting={deleteCharge.isPending} title="Remove this charge?" description="This billable charge will be permanently deleted and revenue recalculated." />
