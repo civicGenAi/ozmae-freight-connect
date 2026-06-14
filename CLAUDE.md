@@ -206,6 +206,17 @@ not break existing flows** — change one area at a time.
   reassigns all child records then deletes the dupes. **Run the migration in
   Supabase.**
 
+- **Self-learning categories:** Job Costing cost/charge category pickers use
+  `CreatableCombobox`; options = defaults ∪ distinct categories already used
+  (`["job_cost_categories"]`/`["job_charge_categories"]` queries), so a typed
+  category is available next time. Pattern to reuse for other free-text pickers.
+- **Theme switching:** `next-themes` `ThemeProvider` in `App.tsx`
+  (`attribute="class"`, light/dark/system); dark CSS vars in `index.css`. Header
+  avatar dropdown (`AppLayout.tsx`) is a round menu with My Account + theme
+  switcher + Log out (no more name/email). NOTE: many pages still hardcode
+  `bg-white`/`text-slate-*`/`#0f1d35`, so dark mode is partial — migrate those to
+  tokens (`bg-card`, `text-foreground`, `bg-background`) for full dark support.
+
 ## CRM assessment (open)
 
 CRM works (Customers/Interactions/Tasks/Health/Lost Deals) and is wired to
