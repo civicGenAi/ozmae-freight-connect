@@ -62,6 +62,7 @@ const stages = [
 
 const jobSchema = z.object({
   selectedEntityId: z.string().min(1, "Please select a customer or prospect"),
+  quotationId: z.string().optional(),
   origin: z.string().min(2, "Origin is required"),
   destination: z.string().min(2, "Destination is required"),
   driverRef: z.object({
@@ -140,6 +141,7 @@ export default function JobOrders() {
     resolver: zodResolver(jobSchema),
     defaultValues: {
       selectedEntityId: "",
+      quotationId: "",
       origin: "",
       destination: "",
       driverRef: {},
@@ -155,6 +157,7 @@ export default function JobOrders() {
   });
 
   const selectedEntityId = form.watch("selectedEntityId");
+  const quotationId = form.watch("quotationId");
   const origin = form.watch("origin");
   const destination = form.watch("destination");
   const amount = form.watch("amount");
@@ -234,40 +237,66 @@ export default function JobOrders() {
     gcTime: 30 * 60 * 1000,   // Keep in memory for 30 minutes
   });
 
+  // Status of ALL job orders (not just the current page) so the pipeline stat
+  // cards reflect the whole pipeline rather than the 15 rows on screen.
+  const { data: allJobStatuses } = useQuery({
+    queryKey: ["job_stage_counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("job_orders").select("status");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const [suggestedAmount, setSuggestedAmount] = useState<string | null>(null);
 
-  // Auto-fill route logic
+  // Combined searchable options for the Business Entity picker
+  const entityOptions = React.useMemo(() => [
+    ...(dataNeeded?.customers || []),
+    ...(dataNeeded?.prospects || []),
+  ], [dataNeeded]);
+
+  // All quotations belonging to the currently selected business entity.
+  // A single business can have several quotes — we surface ALL of them so the
+  // user can pick the right one instead of silently using only one.
+  const entityQuotes = React.useMemo(() => {
+    if (!selectedEntityId || !dataNeeded) return [] as any[];
+    return dataNeeded.quotations.filter((q: any) =>
+      q.customer_id === selectedEntityId || q.lead_id === selectedEntityId
+    );
+  }, [selectedEntityId, dataNeeded]);
+
+  // When the entity changes, default to a sensible quote (accepted > most recent)
+  // but keep the user's choice if it's still valid for this entity.
   useEffect(() => {
-    if (selectedEntityId && dataNeeded) {
-      // 1. Find best quotation for this entity (Priority: Accepted > Most Recent)
-      const entityQuotes = dataNeeded.quotations.filter((q: any) =>
-        q.customer_id === selectedEntityId || q.lead_id === selectedEntityId
-      );
-
-      const acceptedQuote = entityQuotes.find((q: any) => q.status === 'accepted');
-      const latestQuote = entityQuotes[0];
-      const targetQuote = acceptedQuote || latestQuote;
-
-      if (targetQuote) {
-        // Quotation is the primary source of truth for all entities
-        const val = targetQuote.total_amount_usd.toString();
-        form.setValue("amount", val);
-        setSuggestedAmount(val);
-
-        // Auto-provision route from quote
-        if (targetQuote.origin) form.setValue("origin", targetQuote.origin);
-        if (targetQuote.destination) form.setValue("destination", targetQuote.destination);
-      } else {
-        // Fallback for Prospects if no quote exists yet
-        const prospect = dataNeeded.prospects.find(p => p.value === selectedEntityId);
-        if (prospect) {
-          form.setValue("origin", prospect.origin);
-          form.setValue("destination", prospect.destination);
-        }
-        setSuggestedAmount(null);
-      }
+    if (!selectedEntityId) return;
+    const current = form.getValues("quotationId");
+    const stillValid = entityQuotes.some((q: any) => q.id === current);
+    if (!stillValid) {
+      const def = entityQuotes.find((q: any) => q.status === 'accepted')?.id || entityQuotes[0]?.id || "";
+      form.setValue("quotationId", def);
     }
-  }, [selectedEntityId, dataNeeded, form]);
+  }, [selectedEntityId, entityQuotes, form]);
+
+  // Fill route + amount from the chosen quote (or prospect fallback when none).
+  useEffect(() => {
+    if (!selectedEntityId || !dataNeeded) return;
+    const chosen = entityQuotes.find((q: any) => q.id === quotationId);
+    if (chosen) {
+      const val = (chosen.total_amount_usd ?? "").toString();
+      form.setValue("amount", val);
+      setSuggestedAmount(val);
+      if (chosen.origin) form.setValue("origin", chosen.origin);
+      if (chosen.destination) form.setValue("destination", chosen.destination);
+    } else {
+      const prospect = dataNeeded.prospects.find((p: any) => p.value === selectedEntityId);
+      if (prospect) {
+        form.setValue("origin", prospect.origin);
+        form.setValue("destination", prospect.destination);
+      }
+      setSuggestedAmount(null);
+    }
+  }, [quotationId, selectedEntityId, dataNeeded, entityQuotes, form]);
 
   const createJobMutation = useMutation({
     mutationFn: async (newJob: any) => {
@@ -276,6 +305,7 @@ export default function JobOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["job_stage_counts"] });
       setIsNewModalOpen(false);
       toast.success("Job order created successfully");
     },
@@ -284,15 +314,32 @@ export default function JobOrders() {
 
   const updateStageMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase
+      // .select() lets us confirm the row was actually changed. A row count of 0
+      // (with no error) means the update was silently blocked — almost always a
+      // missing RLS UPDATE policy on job_orders — which previously showed a
+      // false "success" toast while nothing changed.
+      const { data, error } = await supabase
         .from("job_orders")
         .update({ status })
-        .eq("id", id);
+        .eq("id", id)
+        .select();
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Status was not saved (no rows updated). You may not have permission to change this job — check the Supabase RLS update policy on job_orders."
+        );
+      }
+      return data[0];
     },
-    onSuccess: () => {
+    onSuccess: (updated: any) => {
       queryClient.invalidateQueries({ queryKey: ["job_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["job_stage_counts"] });
+      // Reflect the change immediately in the open detail drawer
+      setSelectedJob((prev: any) => (prev && prev.id === updated.id ? { ...prev, status: updated.status } : prev));
       toast.success("Job status updated");
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to update job status");
     },
   });
 
@@ -357,6 +404,7 @@ export default function JobOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["job_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["job_stage_counts"] });
       setSelectedJob(null);
       setJobToDelete(null);
       toast.success("Job order deleted");
@@ -526,7 +574,7 @@ export default function JobOrders() {
 
   const stageCounts = stages.map((s) => ({
     stage: s,
-    count: jobOrders?.filter((j: any) => (j.status || "").toLowerCase() === s.toLowerCase()).length || 0,
+    count: (allJobStatuses || []).filter((j: any) => (j.status || "").toLowerCase() === s.toLowerCase()).length,
   }));
   const handleCreateJob = async (values: JobFormValues) => {
     try {
@@ -586,11 +634,15 @@ export default function JobOrders() {
         finalVehicleId = newVeh.id;
       }
 
-      // 4. Identify Quotation Link
-      const entityQuotes = dataNeeded?.quotations.filter((q: any) =>
+      // 4. Identify Quotation Link — honour the quote the user explicitly chose,
+      // falling back to accepted > most recent for this entity.
+      const candidateQuotes = dataNeeded?.quotations.filter((q: any) =>
         q.customer_id === finalCustomerId || q.lead_id === selectedEntityId
-      );
-      const targetQuote = entityQuotes?.find((q: any) => q.status === 'accepted') || entityQuotes?.[0];
+      ) || [];
+      const targetQuote =
+        candidateQuotes.find((q: any) => q.id === values.quotationId) ||
+        candidateQuotes.find((q: any) => q.status === 'accepted') ||
+        candidateQuotes[0];
 
       const data = {
         customer_id: finalCustomerId,
@@ -818,25 +870,57 @@ export default function JobOrders() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Business Entity (Customer/Prospect)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="h-12">
-                          <SelectValue placeholder="Select customer or prospect" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {dataNeeded?.customers.map((c: any) => (
-                          <SelectItem key={c.value} value={c.value} className="font-bold">{c.label}</SelectItem>
-                        ))}
-                        {dataNeeded?.prospects.map((p: any) => (
-                          <SelectItem key={p.value} value={p.value} className="text-purple-700 font-medium">{p.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <HybridSelect
+                        options={entityOptions}
+                        value={field.value}
+                        onChange={(val) => field.onChange(val)}
+                        placeholder="Search customer or prospect..."
+                        emptyMessage="No matching business found."
+                        className="h-12"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {entityQuotes.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="quotationId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        Source Quotation
+                        {entityQuotes.length > 1 && (
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
+                            {entityQuotes.length} available — choose one
+                          </span>
+                        )}
+                      </FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Select the quotation to base this job on" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {entityQuotes.map((q: any) => (
+                            <SelectItem key={q.id} value={q.id}>
+                              <span className="font-mono font-bold text-accent uppercase mr-1">{q.id.split('-')[0]}</span>
+                              · {formatCurrency(Number(q.total_amount_usd) || 0)}
+                              · <span className="uppercase">{q.status}</span>
+                              {(q.origin || q.destination) && ` · ${q.origin || '?'} → ${q.destination || '?'}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField
