@@ -16,6 +16,7 @@ import Tracking from "@/pages/Tracking";
 import Invoices from "@/pages/Invoices";
 import Payments from "@/pages/Payments";
 import JobCosting from "@/pages/JobCosting";
+import StatusPage from "@/pages/StatusPage";
 import { VaultGuard } from "@/components/VaultGuard";
 import Documents from "@/pages/Documents";
 import CompanyProfile from "@/pages/CompanyProfile";
@@ -34,7 +35,17 @@ import Tasks from "@/pages/crm/Tasks";
 import CustomerHealth from "@/pages/crm/CustomerHealth";
 import LostDeals from "@/pages/crm/LostDeals";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Cache aggressively so we don't re-hit Supabase on every navigation.
+      staleTime: 60 * 1000, // 1 min: data is considered fresh, no refetch
+      gcTime: 30 * 60 * 1000, // keep cached data 30 min after unused
+      refetchOnWindowFocus: false, // don't refetch just because the tab regained focus
+      retry: 1,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -56,6 +67,12 @@ const App = () => (
               <AppLayout><Reports /></AppLayout>
             </AuthGuard>
           } path="/reports" />
+
+          <Route element={
+            <AuthGuard>
+              <AppLayout><StatusPage /></AppLayout>
+            </AuthGuard>
+          } path="/status" />
           
           <Route element={
             <AuthGuard>

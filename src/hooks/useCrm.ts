@@ -104,7 +104,17 @@ export function useCustomerHealth(customerId?: string) {
         customerQuery = customerQuery.eq("id", customerId);
         const { data, error } = await customerQuery.single();
         if (error && error.code !== 'PGRST116') throw error;
-        return data ? { ...data, type: 'customer' } : null;
+        if (!data) return null;
+        // Normalise to the SAME shape as the list below: health metrics spread at
+        // the top level and the customer row under `customer` (CustomerProfile
+        // reads `health.customer`, which was previously undefined → crash).
+        const { health, ...customerRow } = data as any;
+        return {
+          ...((health as any)?.[0] || {}),
+          customer: customerRow,
+          customer_id: customerRow.id,
+          type: 'customer',
+        };
       }
 
       const [customersResult, leadsResult] = await Promise.all([customerQuery, leadQuery]);

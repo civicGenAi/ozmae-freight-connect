@@ -35,3 +35,26 @@ export function cleanAmount(val: any): number {
   const cleaned = String(val).replace(/[^\d.-]/g, '');
   return parseFloat(cleaned) || 0;
 }
+
+/**
+ * The true total of a quotation.
+ *
+ * Prefers the stored `total_amount_usd`, but many quotes have it saved as 0 even
+ * though the PDF shows a real total. In that case we recompute it the same way
+ * the PDF does — summing the primary amount column of the table rows (item rows
+ * only) from `metadata.tableRows`.
+ */
+export function getQuoteTotal(quote: any): number {
+  const stored = Number(quote?.total_amount_usd) || 0;
+  if (stored > 0) return stored;
+
+  const rows = quote?.metadata?.tableRows;
+  if (Array.isArray(rows)) {
+    const sum = rows.reduce((acc: number, row: any) => {
+      if (row?.type && row.type !== 'item') return acc; // skip headers/sections
+      return acc + cleanAmount(row?.amount);
+    }, 0);
+    if (sum > 0) return sum;
+  }
+  return stored; // 0
+}

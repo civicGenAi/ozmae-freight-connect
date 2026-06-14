@@ -1,414 +1,256 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  BarChart3, 
-  Download, 
-  FileSpreadsheet, 
-  FileText, 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  Truck, 
-  Users,
-  Calendar,
-  Layers,
-  PieChart as PieChartIcon
+import {
+  Download, TrendingUp, TrendingDown, DollarSign, Truck, Briefcase, Target, Wallet, Percent, MapPin,
 } from "lucide-react";
-import { 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  BarChart, 
-  Bar, 
-  Cell, 
-  PieChart, 
-  Pie,
-  Legend
+import {
+  ResponsiveContainer, ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import * as XLSX from 'xlsx';
+import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
-import { 
-  format, 
-  startOfWeek, 
-  endOfWeek, 
-  eachDayOfInterval, 
-  subDays, 
-  isSameDay, 
-  isSameMonth, 
-  parseISO,
-  eachMonthOfInterval,
-  startOfYear,
-  endOfYear,
-  isSameWeek,
-  eachWeekOfInterval
+import {
+  format, eachDayOfInterval, eachMonthOfInterval, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfDay, endOfDay,
 } from "date-fns";
 
-const formatCurrency = (val: number) => `$${val.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+const fmt = (v: number) => `$${(v || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+const num = (v: any) => Number(v) || 0;
+const PERIODS = [
+  { key: "weekly", label: "7 Days" },
+  { key: "monthly", label: "6 Months" },
+  { key: "yearly", label: "12 Months" },
+] as const;
+
+const STATUS_COLORS = ["#F26B2A", "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", "#14b8a6", "#ef4444", "#64748b"];
 
 export default function Reports() {
-  const [activeTab, setActiveTab] = useState("monthly");
+  const [period, setPeriod] = useState<(typeof PERIODS)[number]["key"]>("monthly");
 
-  // Fetch Invoices
-  const { data: invoices } = useQuery({
-    queryKey: ["reports_invoices"],
+  const { data, isLoading } = useQuery({
+    queryKey: ["reports_data"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("invoices").select("total_amount_usd, created_at");
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Fetch Jobs
-  const { data: jobs } = useQuery({
-    queryKey: ["reports_jobs"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("job_orders").select("id, created_at");
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Fetch Drivers
-  const { data: drivers } = useQuery({
-    queryKey: ["reports_drivers"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("drivers").select("status");
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Fetch Vehicles
-  const { data: vehicles } = useQuery({
-    queryKey: ["reports_vehicles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("vehicles").select("status");
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Aggregation Logic
-  const getWeeklyData = () => {
-    const days = eachDayOfInterval({ start: subDays(new Date(), 6), end: new Date() });
-    return days.map(day => {
-      const dayInvoices = invoices?.filter(inv => isSameDay(parseISO(inv.created_at), day)) || [];
+      const [payments, jobs, costs, quotes, vehicles] = await Promise.all([
+        supabase.from("payments").select("amount_usd, payment_date, status"),
+        supabase.from("job_orders").select("id, total_amount, created_at, status, origin, destination, customer:customers(company_name)"),
+        supabase.from("job_costs").select("amount_usd, incurred_on"),
+        supabase.from("quotations").select("status"),
+        supabase.from("vehicles").select("status"),
+      ]);
       return {
-        name: format(day, 'EEE'),
-        revenue: dayInvoices.reduce((acc, inv) => acc + (inv.total_amount_usd || 0), 0),
-        jobs: jobs?.filter(j => isSameDay(parseISO(j.created_at), day)).length || 0
+        payments: payments.data || [],
+        jobs: jobs.data || [],
+        costs: costs.data || [],
+        quotes: quotes.data || [],
+        vehicles: vehicles.data || [],
       };
-    });
+    },
+  });
+
+  const range = useMemo(() => {
+    const now = new Date();
+    if (period === "weekly") return { start: startOfDay(subDays(now, 6)), end: endOfDay(now) };
+    if (period === "monthly") return { start: startOfMonth(subMonths(now, 5)), end: endOfMonth(now) };
+    return { start: startOfMonth(subMonths(now, 11)), end: endOfMonth(now) };
+  }, [period]);
+
+  const within = (d?: string) => {
+    if (!d) return false;
+    try { return isWithinInterval(parseISO(d), range); } catch { return false; }
   };
 
-  const getMonthlyData = () => {
-    const weeks = eachWeekOfInterval({ start: subDays(new Date(), 28), end: new Date() });
-    return weeks.map((week, i) => {
-      const weekInvoices = invoices?.filter(inv => isSameWeek(parseISO(inv.created_at), week)) || [];
-      const revenue = weekInvoices.reduce((acc, inv) => acc + (inv.total_amount_usd || 0), 0);
-      return {
-        name: `Week ${i + 1}`,
-        revenue: revenue,
-        profit: revenue * 0.2 // Estimated 20% margin
-      };
+  const trend = useMemo(() => {
+    if (!data) return [];
+    const revOf = (d: Date, gran: "day" | "month") =>
+      data.payments.filter((p: any) => (p.status || "completed") === "completed" && p.payment_date &&
+        (gran === "day" ? format(parseISO(p.payment_date), "yyyy-MM-dd") === format(d, "yyyy-MM-dd")
+                        : format(parseISO(p.payment_date), "yyyy-MM") === format(d, "yyyy-MM")))
+        .reduce((a: number, p: any) => a + num(p.amount_usd), 0);
+    const costOf = (d: Date, gran: "day" | "month") =>
+      data.costs.filter((c: any) => c.incurred_on &&
+        (gran === "day" ? format(parseISO(c.incurred_on), "yyyy-MM-dd") === format(d, "yyyy-MM-dd")
+                        : format(parseISO(c.incurred_on), "yyyy-MM") === format(d, "yyyy-MM")))
+        .reduce((a: number, c: any) => a + num(c.amount_usd), 0);
+
+    if (period === "weekly") {
+      return eachDayOfInterval(range).map((d) => {
+        const revenue = revOf(d, "day"); const cost = costOf(d, "day");
+        return { name: format(d, "EEE"), revenue, cost, profit: revenue - cost };
+      });
+    }
+    return eachMonthOfInterval(range).map((d) => {
+      const revenue = revOf(d, "month"); const cost = costOf(d, "month");
+      return { name: format(d, "MMM"), revenue, cost, profit: revenue - cost };
     });
+  }, [data, period, range]);
+
+  const kpis = useMemo(() => {
+    const revenue = trend.reduce((a, t) => a + t.revenue, 0);
+    const cost = trend.reduce((a, t) => a + t.cost, 0);
+    const profit = revenue - cost;
+    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+    const jobsInPeriod = (data?.jobs || []).filter((j: any) => within(j.created_at)).length;
+    const accepted = (data?.quotes || []).filter((q: any) => q.status === "accepted").length;
+    const decided = (data?.quotes || []).filter((q: any) => ["accepted", "declined"].includes(q.status)).length;
+    const winRate = decided > 0 ? (accepted / decided) * 100 : 0;
+    return { revenue, cost, profit, margin, jobsInPeriod, winRate };
+  }, [trend, data, range]);
+
+  const topCustomers = useMemo(() => {
+    const map: Record<string, number> = {};
+    (data?.jobs || []).forEach((j: any) => {
+      const name = j.customer?.company_name || "Unknown";
+      map[name] = (map[name] || 0) + num(j.total_amount);
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
+  }, [data]);
+
+  const topRoutes = useMemo(() => {
+    const map: Record<string, number> = {};
+    (data?.jobs || []).forEach((j: any) => {
+      if (!j.origin && !j.destination) return;
+      const key = `${(j.origin || "?").split(",")[0]} → ${(j.destination || "?").split(",")[0]}`;
+      map[key] = (map[key] || 0) + 1;
+    });
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
+  }, [data]);
+
+  const fleet = useMemo(() => {
+    const labelMap: Record<string, string> = { available: "Standby", on_job: "Active", maintenance: "Maintenance", retired: "Retired" };
+    const colorMap: Record<string, string> = { available: "#3b82f6", on_job: "#22c55e", maintenance: "#f59e0b", retired: "#94a3b8" };
+    const counts: Record<string, number> = {};
+    (data?.vehicles || []).forEach((v: any) => { counts[v.status] = (counts[v.status] || 0) + 1; });
+    return Object.entries(counts).map(([s, value]) => ({ name: labelMap[s] || s, value, color: colorMap[s] || "#cbd5e1" }));
+  }, [data]);
+
+  const handleExport = () => {
+    const ws = XLSX.utils.json_to_sheet(trend);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Profit & Loss");
+    if (topCustomers.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(topCustomers), "Top Customers");
+    XLSX.writeFile(wb, `Ozmae_${period}_Report.xlsx`);
+    toast.success("Excel report generated");
   };
 
-  const getYearlyData = () => {
-    const months = eachMonthOfInterval({ start: startOfYear(new Date()), end: endOfYear(new Date()) });
-    return months.map(month => {
-      const monthInvoices = invoices?.filter(inv => isSameMonth(parseISO(inv.created_at), month)) || [];
-      return {
-        name: format(month, 'MMM'),
-        revenue: monthInvoices.reduce((acc, inv) => acc + (inv.total_amount_usd || 0), 0)
-      };
-    });
-  };
-
-  const getFleetData = () => {
-    if (!vehicles) return [];
-    const statusMap: any = {
-      'available': { name: 'Standby', color: '#3b82f6' },
-      'on_job': { name: 'Active', color: '#10b981' },
-      'maintenance': { name: 'Maintenance', color: '#f59e0b' },
-      'retired': { name: 'Retired', color: '#ef4444' }
-    };
-    const counts: any = {};
-    vehicles.forEach(v => {
-      counts[v.status] = (counts[v.status] || 0) + 1;
-    });
-    return Object.keys(counts).map(status => ({
-      name: statusMap[status]?.name || status,
-      value: counts[status],
-      color: statusMap[status]?.color || '#cbd5e1'
-    }));
-  };
-
-  const weeklyData = getWeeklyData();
-  const monthlyData = getMonthlyData();
-  const yearlyData = getYearlyData();
-  const fleetUtilization = getFleetData();
-
-  const isLoadingData = !invoices || !jobs || !drivers || !vehicles;
-
-  // KPI Calculations
-  const currentData = activeTab === 'weekly' ? weeklyData : activeTab === 'monthly' ? monthlyData : yearlyData;
-  const totalRevenue = currentData.reduce((acc, d) => acc + d.revenue, 0);
-  const totalJobs = activeTab === 'weekly' ? jobs?.filter(j => isSameWeek(parseISO(j.created_at), new Date())).length : jobs?.length;
-  const activeDriversCount = drivers?.filter(d => d.status === 'on_duty').length || 0;
-
-  if (isLoadingData) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="flex flex-col items-center gap-4">
-           <div className="h-12 w-12 border-4 border-accent border-t-transparent animate-spin rounded-full" />
-           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Intelligence...</p>
+          <div className="h-12 w-12 border-4 border-accent border-t-transparent animate-spin rounded-full" />
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Intelligence...</p>
         </div>
       </div>
     );
   }
 
-  const handleExportExcel = () => {
-    const data = activeTab === "weekly" ? weeklyData : activeTab === "monthly" ? monthlyData : yearlyData;
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
-    XLSX.writeFile(workbook, `Ozmae_${activeTab}_Report.xlsx`);
-    toast.success("Excel report generated successfully");
-  };
-
-  const handleExportPDF = () => {
-    toast.info("Preparing PDF document...");
-    // In a real app, we'd render a dedicated PDF component
-    setTimeout(() => {
-      toast.success("PDF report downloaded");
-    }, 1500);
-  };
+  const kpiCards = [
+    { label: "Revenue", value: fmt(kpis.revenue), icon: DollarSign, color: "text-blue-500", bg: "bg-blue-50" },
+    { label: "Costs", value: fmt(kpis.cost), icon: Wallet, color: "text-amber-500", bg: "bg-amber-50" },
+    { label: kpis.profit >= 0 ? "Net Profit" : "Net Loss", value: fmt(kpis.profit), icon: kpis.profit >= 0 ? TrendingUp : TrendingDown, color: kpis.profit >= 0 ? "text-emerald-600" : "text-rose-600", bg: kpis.profit >= 0 ? "bg-emerald-50" : "bg-rose-50" },
+    { label: "Profit Margin", value: `${kpis.margin.toFixed(1)}%`, icon: Percent, color: "text-purple-500", bg: "bg-purple-50" },
+    { label: "Jobs (period)", value: kpis.jobsInPeriod.toString(), icon: Briefcase, color: "text-accent", bg: "bg-accent/10" },
+    { label: "Quote Win Rate", value: `${kpis.winRate.toFixed(0)}%`, icon: Target, color: "text-teal-500", bg: "bg-teal-50" },
+  ];
 
   return (
-    <div className="space-y-8 pb-10">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <PageHeader title="Operational Intelligence" />
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="outline" 
-            onClick={handleExportExcel}
-            className="bg-white border-slate-200 hover:bg-slate-50 text-slate-700 font-bold uppercase text-[10px] tracking-widest gap-2 shadow-sm"
-          >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Export Excel
-          </Button>
-          <Button 
-            variant="outline"
-            onClick={handleExportPDF}
-            className="bg-white border-slate-200 hover:bg-slate-50 text-slate-700 font-bold uppercase text-[10px] tracking-widest gap-2 shadow-sm"
-          >
-            <FileText className="h-4 w-4 text-rose-600" /> Export PDF
-          </Button>
-        </div>
-      </div>
-
-      <Tabs defaultValue="monthly" onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center justify-between mb-6">
-          <TabsList className="bg-slate-100 p-1 h-11 rounded-xl">
-            <TabsTrigger value="weekly" className="rounded-lg px-6 font-bold uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">Weekly</TabsTrigger>
-            <TabsTrigger value="monthly" className="rounded-lg px-6 font-bold uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">Monthly</TabsTrigger>
-            <TabsTrigger value="yearly" className="rounded-lg px-6 font-bold uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">Yearly</TabsTrigger>
-          </TabsList>
-          
-          <div className="hidden md:flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 tracking-tighter">
-            <Calendar className="h-3 w-3" /> Reporting Period: {new Date().getFullYear()}
+    <div className="space-y-6">
+      <PageHeader title="Reports & Intelligence">
+        <div className="flex items-center gap-2">
+          <div className="flex bg-muted p-1 rounded-lg">
+            {PERIODS.map((p) => (
+              <button key={p.key} onClick={() => setPeriod(p.key)}
+                className={cn("px-3 py-1.5 text-[11px] font-bold rounded-md transition-all", period === p.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+                {p.label}
+              </button>
+            ))}
           </div>
+          <Button onClick={handleExport} className="gap-2 h-9 bg-accent hover:bg-accent/90 text-accent-foreground"><Download className="h-4 w-4" /> Export</Button>
         </div>
+      </PageHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-           <KPICard 
-              label="Gross Revenue" 
-              value={formatCurrency(totalRevenue)} 
-              trend="+12.5%" 
-              isUp={true} 
-              icon={DollarSign}
-           />
-           <KPICard 
-              label="Est. Net Profit" 
-              value={formatCurrency(totalRevenue * 0.2)} 
-              trend="+8.2%" 
-              isUp={true} 
-              icon={TrendingUp}
-           />
-           <KPICard 
-              label="Job Volume" 
-              value={totalJobs?.toString() || "0"} 
-              trend="-2.1%" 
-              isUp={false} 
-              icon={Truck}
-           />
-           <KPICard 
-              label="Active Drivers" 
-              value={activeDriversCount.toString()} 
-              trend="+4" 
-              isUp={true} 
-              icon={Users}
-           />
-        </div>
-
-        <TabsContent value="weekly" className="space-y-8 mt-0 animate-in fade-in slide-in-from-bottom-2">
-           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <Card className="lg:col-span-2 border-slate-200 shadow-sm rounded-2xl overflow-hidden">
-                <CardHeader className="bg-slate-50/50 border-b">
-                   <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                      <BarChart3 className="h-4 w-4 text-accent" /> Weekly Revenue Distribution
-                   </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-8">
-                   <div className="h-[350px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                         <AreaChart data={weeklyData}>
-                            <defs>
-                              <linearGradient id="colorWeekly" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#ADFA1D" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#ADFA1D" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
-                            <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Area type="monotone" dataKey="revenue" stroke="#ADFA1D" strokeWidth={3} fillOpacity={1} fill="url(#colorWeekly)" />
-                         </AreaChart>
-                      </ResponsiveContainer>
-                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-slate-200 shadow-sm rounded-2xl">
-                <CardHeader>
-                   <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                      <Layers className="h-4 w-4 text-blue-500" /> Fleet Status
-                   </CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col items-center justify-center h-[350px]">
-                   <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                         <Pie
-                            data={fleetUtilization}
-                            innerRadius={70}
-                            outerRadius={100}
-                            paddingAngle={8}
-                            dataKey="value"
-                         >
-                            {fleetUtilization.map((entry, index) => (
-                               <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                         </Pie>
-                         <Tooltip />
-                         <Legend verticalAlign="bottom" height={36}/>
-                      </PieChart>
-                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
-           </div>
-        </TabsContent>
-
-        <TabsContent value="monthly" className="space-y-8 mt-0 animate-in fade-in slide-in-from-bottom-2">
-           <Card className="border-slate-200 shadow-sm rounded-2xl">
-              <CardHeader className="bg-slate-50/50 border-b">
-                 <CardTitle className="text-xs font-black uppercase tracking-widest">Monthly Growth Performance</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-8">
-                 <div className="h-[400px] w-full font-bold">
-                    <ResponsiveContainer width="100%" height="100%">
-                       <BarChart data={monthlyData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                          <YAxis axisLine={false} tickLine={false} />
-                          <Tooltip content={<CustomTooltip />} />
-                          <Bar dataKey="revenue" fill="#0f1d35" radius={[6, 6, 0, 0]} barSize={40} />
-                          <Bar dataKey="profit" fill="#ADFA1D" radius={[6, 6, 0, 0]} barSize={40} />
-                       </BarChart>
-                    </ResponsiveContainer>
-                 </div>
-              </CardContent>
-           </Card>
-        </TabsContent>
-
-        <TabsContent value="yearly" className="space-y-8 mt-0 animate-in fade-in slide-in-from-bottom-2">
-           <Card className="border-slate-200 shadow-sm rounded-2xl">
-              <CardHeader className="bg-slate-900 text-white rounded-t-2xl">
-                 <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center justify-between">
-                    <span>Annual Strategic Revenue View</span>
-                    <TrendingUp className="h-5 w-5 text-accent" />
-                 </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-10">
-                 <div className="h-[400px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                       <AreaChart data={yearlyData}>
-                          <defs>
-                            <linearGradient id="colorYearly" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#0f1d35" stopOpacity={0.8}/>
-                              <stop offset="95%" stopColor="#0f1d35" stopOpacity={0.1}/>
-                            </linearGradient>
-                          </defs>
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                          <Tooltip content={<CustomTooltip />} />
-                          <Area type="step" dataKey="revenue" stroke="#0f1d35" strokeWidth={4} fill="url(#colorYearly)" />
-                       </AreaChart>
-                    </ResponsiveContainer>
-                 </div>
-              </CardContent>
-           </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}
-
-function KPICard({ label, value, trend, isUp, icon: Icon }: any) {
-  return (
-    <Card className="border-slate-200 shadow-sm rounded-2xl hover:shadow-md transition-all group">
-      <CardContent className="p-6">
-        <div className="flex justify-between items-start mb-4">
-          <div className="p-3 bg-slate-50 rounded-xl group-hover:bg-primary group-hover:text-white transition-colors">
-            <Icon className="h-5 w-5" />
-          </div>
-          <div className={cn(
-            "flex items-center gap-0.5 text-[10px] font-black px-2 py-1 rounded-full",
-            isUp ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-          )}>
-            {isUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {trend}
-          </div>
-        </div>
-        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{label}</p>
-        <p className="text-2xl font-black text-slate-900 mt-1">{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CustomTooltip({ active, payload, label }: any) {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white p-4 border rounded-xl shadow-xl space-y-2">
-        <p className="text-[10px] font-black uppercase text-slate-400 border-b pb-1 mb-2">{label}</p>
-        {payload.map((p: any, i: number) => (
-          <div key={i} className="flex items-center justify-between gap-8">
-            <span className="text-[10px] font-bold uppercase text-slate-600">{p.name}</span>
-            <span className="text-sm font-black text-slate-900">{formatCurrency(p.value)}</span>
+      {/* KPI grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {kpiCards.map((k) => (
+          <div key={k.label} className="bg-white rounded-2xl border shadow-sm p-4">
+            <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center mb-2", k.bg, k.color)}><k.icon className="h-4 w-4" /></div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{k.label}</p>
+            <p className="text-lg font-black tabular-nums mt-0.5">{k.value}</p>
           </div>
         ))}
       </div>
-    );
-  }
-  return null;
+
+      {/* Profit & Loss trend */}
+      <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <h3 className="font-black text-[10px] uppercase tracking-widest text-foreground flex items-center gap-2 mb-4">
+          <TrendingUp className="h-4 w-4 text-accent" /> Revenue · Cost · Profit
+        </h3>
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={trend}>
+              <defs>
+                <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} /></linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
+              <Tooltip contentStyle={{ borderRadius: 12, fontSize: 11, fontWeight: "bold", border: "1px solid #E2E8F0" }} formatter={(v: any, n: any) => [fmt(v), n]} />
+              <Legend wrapperStyle={{ fontSize: 10, textTransform: "uppercase", fontWeight: 700 }} />
+              <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={2} fill="url(#rev)" />
+              <Bar dataKey="cost" name="Cost" fill="#f59e0b" radius={[3, 3, 0, 0]} barSize={14} />
+              <Bar dataKey="profit" name="Profit" fill="#22c55e" radius={[3, 3, 0, 0]} barSize={14} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top customers */}
+        <div className="bg-white rounded-2xl border shadow-sm p-5">
+          <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2"><DollarSign className="h-3.5 w-3.5" /> Top Customers by Value</h3>
+          <div className="space-y-3">
+            {topCustomers.length === 0 ? <p className="text-xs text-muted-foreground py-6 text-center">No data</p> : topCustomers.map((c, i) => {
+              const max = topCustomers[0].value || 1;
+              return (
+                <div key={c.name}>
+                  <div className="flex justify-between text-[10px] font-bold uppercase mb-1"><span className="truncate max-w-[200px]">{c.name}</span><span className="tabular-nums">{fmt(c.value)}</span></div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.max(4, (c.value / max) * 100)}%`, backgroundColor: STATUS_COLORS[i % STATUS_COLORS.length] }} /></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Fleet + routes */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="bg-white rounded-2xl border shadow-sm p-5">
+            <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-2"><Truck className="h-3.5 w-3.5" /> Fleet</h3>
+            <div className="h-[170px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={fleet} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={62}>
+                    {fleet.map((e, i) => <Cell key={i} fill={e.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 12, fontSize: 11 }} />
+                  <Legend iconSize={8} formatter={(v: any) => <span style={{ fontSize: 9, fontWeight: 700 }}>{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border shadow-sm p-5">
+            <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><MapPin className="h-3.5 w-3.5" /> Top Routes</h3>
+            <div className="space-y-2">
+              {topRoutes.length === 0 ? <p className="text-xs text-muted-foreground py-6 text-center">No data</p> : topRoutes.map((r) => (
+                <div key={r.name} className="flex justify-between items-center text-[10px] font-bold">
+                  <span className="truncate max-w-[140px] uppercase">{r.name}</span>
+                  <span className="tabular-nums bg-muted px-2 py-0.5 rounded-full">{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
