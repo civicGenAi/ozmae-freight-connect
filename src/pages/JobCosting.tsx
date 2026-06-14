@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CreatableCombobox } from "@/components/CreatableCombobox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
@@ -20,8 +21,8 @@ import { Search, Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Wallet, Arr
 const fmt = (n: number) => `$${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num = (v: any) => Number(v) || 0;
 
-const COST_CATEGORIES = ["trucking", "fuel", "customs_clearing", "port_terminal", "handling", "documentation", "insurance", "demurrage", "agent_fee", "labour", "other"];
-const CHARGE_CATEGORIES = ["freight", "handling", "documentation", "storage", "insurance", "customs", "demurrage", "other"];
+const COST_CATEGORIES = ["Trucking", "Fuel", "Customs Clearing", "Port/Terminal", "Handling", "Documentation", "Insurance", "Demurrage", "Agent Fee", "Labour", "Other"];
+const CHARGE_CATEGORIES = ["Freight", "Handling", "Documentation", "Storage", "Insurance", "Customs", "Demurrage", "Other"];
 const catLabel = (c: string) => (c || "").replace(/_/g, " ");
 
 // base revenue for a job: prefer the linked quotation, fall back to job total
@@ -40,8 +41,8 @@ export default function JobCosting() {
   const toggleSelect = (id: string) =>
     setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
-  const [costForm, setCostForm] = useState({ category: "trucking", description: "", amount: "", payee: "", incurred_on: new Date().toISOString().split("T")[0] });
-  const [chargeForm, setChargeForm] = useState({ category: "freight", description: "", amount: "", incurred_on: new Date().toISOString().split("T")[0] });
+  const [costForm, setCostForm] = useState({ category: "Trucking", description: "", amount: "", payee: "", incurred_on: new Date().toISOString().split("T")[0] });
+  const [chargeForm, setChargeForm] = useState({ category: "Freight", description: "", amount: "", incurred_on: new Date().toISOString().split("T")[0] });
 
   const { data: jobs, isLoading } = useQuery({
     queryKey: ["job_costing_jobs"],
@@ -82,6 +83,25 @@ export default function JobCosting() {
       return data || [];
     },
   });
+
+  // Self-learning category lists: defaults + any categories already used, so a
+  // category typed once shows up next time. Free text on job_costs/job_charges.
+  const { data: usedCostCats } = useQuery({
+    queryKey: ["job_cost_categories"],
+    queryFn: async () => {
+      const { data } = await supabase.from("job_costs").select("category");
+      return Array.from(new Set((data || []).map((d: any) => d.category).filter(Boolean)));
+    },
+  });
+  const { data: usedChargeCats } = useQuery({
+    queryKey: ["job_charge_categories"],
+    queryFn: async () => {
+      const { data } = await supabase.from("job_charges").select("category");
+      return Array.from(new Set((data || []).map((d: any) => d.category).filter(Boolean)));
+    },
+  });
+  const costCatOptions = useMemo(() => Array.from(new Set([...COST_CATEGORIES, ...((usedCostCats as string[]) || [])])), [usedCostCats]);
+  const chargeCatOptions = useMemo(() => Array.from(new Set([...CHARGE_CATEGORIES, ...((usedChargeCats as string[]) || [])])), [usedChargeCats]);
 
   const costByJob = useMemo(() => {
     const map: Record<string, number> = {};
@@ -157,6 +177,8 @@ export default function JobCosting() {
     queryClient.invalidateQueries({ queryKey: ["job_charges", selectedJob?.id] });
     queryClient.invalidateQueries({ queryKey: ["all_job_costs"] });
     queryClient.invalidateQueries({ queryKey: ["all_job_charges"] });
+    queryClient.invalidateQueries({ queryKey: ["job_cost_categories"] });
+    queryClient.invalidateQueries({ queryKey: ["job_charge_categories"] });
   };
 
   const addCost = useMutation({
@@ -400,10 +422,13 @@ export default function JobCosting() {
                 </Table>
               </div>
               <div className="grid grid-cols-2 gap-2 mb-6">
-                <Select value={chargeForm.category} onValueChange={(v) => setChargeForm({ ...chargeForm, category: v })}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>{CHARGE_CATEGORIES.map((c) => <SelectItem key={c} value={c} className="capitalize">{catLabel(c)}</SelectItem>)}</SelectContent>
-                </Select>
+                <CreatableCombobox
+                  options={chargeCatOptions}
+                  value={chargeForm.category}
+                  onChange={(v) => setChargeForm({ ...chargeForm, category: v })}
+                  placeholder="Category — type to add"
+                  className="h-9 text-xs"
+                />
                 <Input type="number" step="0.01" min="0" value={chargeForm.amount} onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })} placeholder="Amount" className="h-9 text-xs" />
                 <Input value={chargeForm.description} onChange={(e) => setChargeForm({ ...chargeForm, description: e.target.value })} placeholder="Description" className="h-9 text-xs col-span-2" />
                 <Button onClick={() => addCharge.mutate()} disabled={addCharge.isPending} variant="outline" className="col-span-2 h-9 gap-2 text-[10px] font-black uppercase tracking-widest border-emerald-500/40 text-emerald-700 hover:bg-emerald-50">
@@ -448,10 +473,13 @@ export default function JobCosting() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-[10px] uppercase font-bold">Category</Label>
-                    <Select value={costForm.category} onValueChange={(v) => setCostForm({ ...costForm, category: v })}>
-                      <SelectTrigger className="h-10 mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>{COST_CATEGORIES.map((c) => <SelectItem key={c} value={c} className="capitalize">{catLabel(c)}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <CreatableCombobox
+                      options={costCatOptions}
+                      value={costForm.category}
+                      onChange={(v) => setCostForm({ ...costForm, category: v })}
+                      placeholder="Category — type to add"
+                      className="h-10 mt-1"
+                    />
                   </div>
                   <div>
                     <Label className="text-[10px] uppercase font-bold">Amount (USD)</Label>
