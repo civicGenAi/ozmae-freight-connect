@@ -159,6 +159,38 @@ not break existing flows** — change one area at a time.
      `20260614150000_documents_policies.sql`). The job number is the serial.
    - **All the above migrations must be applied in Supabase.**
 
+## Recent changes (latest iteration)
+
+- **Quote totals:** `getQuoteTotal(quote)` in `quotationUtils.ts` is the source of
+  truth — falls back to summing `metadata.tableRows[].amount` (item rows) when
+  `total_amount_usd` is stored as 0 (common). Used in Quotations list, Job Order
+  entity hints / source-quote chooser / autofill / creation. Prefer it over
+  reading `total_amount_usd` directly.
+- **Caching:** global react-query defaults set in `App.tsx`
+  (`staleTime` 60s, `gcTime` 30m, `refetchOnWindowFocus: false`).
+- **Nav order** (`AppLayout.tsx`): Overview → Sales → Operations → Finance →
+  Documents → CRM → **INSIGHTS** (Reports, System Status) → Settings.
+- **Reports** (`Reports.tsx`) rebuilt: real revenue (payments) vs real cost
+  (`job_costs`) vs real profit per period; top customers/routes, win rate,
+  Excel export. No more fake 20% margin.
+- **System Status** (`StatusPage.tsx`, route `/status`): live DB/Auth/Storage/
+  network health checks with latency, auto-refresh.
+- **CRM crash fixed:** `useCustomerHealth(id)` now returns the same shape as the
+  list (`{ ...metrics, customer }`) so `CustomerProfile` (`health.customer`)
+  doesn't crash.
+- **HybridSelect:** each item now has a unique `value` (label collisions made
+  duplicate-named options select together); supports an optional `hint`.
+- **My Account:** visual-only modern refresh (hero header, tab bar, profile card).
+
+## CRM assessment (open)
+
+CRM works (Customers/Interactions/Tasks/Health/Lost Deals) and is wired to
+`useCrm.ts`. It IS linked to the pipeline (timeline pulls leads/quotes/jobs/
+invoices/interactions). Likely improvements if asked: surface CRM tasks/health
+on the customer-facing flows, dedupe duplicate customer records (the app has
+several same-named customers — see Job Order name-aware quote matching), and
+add quick "create quote/job" actions from the customer profile.
+
 ## Git workflow
 
 - Active development branch: **`claude/bold-davinci-9hjgaw`**. Develop and push
