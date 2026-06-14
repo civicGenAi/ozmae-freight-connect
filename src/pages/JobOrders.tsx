@@ -43,6 +43,24 @@ const PAGE_SIZE = 15;
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Quotes may store their route/commodity in metadata.leftFields rather than the
+// dedicated columns, so these helpers read the column first and fall back to
+// metadata — used both for autofill and for building a distinguishable label.
+const quoteMetaField = (q: any, labelIncludes: string) =>
+  q?.metadata?.leftFields?.find((f: any) => (f.label || "").toLowerCase().includes(labelIncludes))?.value;
+const quoteOrigin = (q: any) => q?.origin || quoteMetaField(q, "origin") || "";
+const quoteDestination = (q: any) => q?.destination || quoteMetaField(q, "destination") || "";
+const quoteCommodity = (q: any) => quoteMetaField(q, "commodity") || q?.cargo_description || "";
+// A short human marker for a quote: route if known, else commodity, else ref.
+const quoteMarker = (q: any) => {
+  const o = quoteOrigin(q);
+  const d = quoteDestination(q);
+  if (o || d) return `${o || "?"} → ${d || "?"}`;
+  const c = quoteCommodity(q);
+  if (c) return c;
+  return (q?.quote_number || q?.id || "Quotation").toString().split("-")[0];
+};
+
 const stages = [
   "planning",
   "approved",
@@ -215,7 +233,7 @@ export default function JobOrders() {
         supabase.from("drivers").select("id, full_name"),
         supabase.from("vehicles").select("id, plate_number"),
         supabase.from("quotations")
-          .select("id, customer_id, lead_id, total_amount_usd, status, created_at, origin, destination")
+          .select("id, quote_number, customer_id, lead_id, total_amount_usd, status, created_at, origin, destination, cargo_description, metadata")
           .order("created_at", { ascending: false })
       ]);
       return {
@@ -286,8 +304,10 @@ export default function JobOrders() {
       const val = (chosen.total_amount_usd ?? "").toString();
       form.setValue("amount", val);
       setSuggestedAmount(val);
-      if (chosen.origin) form.setValue("origin", chosen.origin);
-      if (chosen.destination) form.setValue("destination", chosen.destination);
+      const o = quoteOrigin(chosen);
+      const d = quoteDestination(chosen);
+      if (o) form.setValue("origin", o);
+      if (d) form.setValue("destination", d);
     } else {
       const prospect = dataNeeded.prospects.find((p: any) => p.value === selectedEntityId);
       if (prospect) {
@@ -908,10 +928,14 @@ export default function JobOrders() {
                         <SelectContent>
                           {entityQuotes.map((q: any) => (
                             <SelectItem key={q.id} value={q.id}>
-                              <span className="font-mono font-bold text-accent uppercase mr-1">{q.id.split('-')[0]}</span>
-                              · {formatCurrency(Number(q.total_amount_usd) || 0)}
-                              · <span className="uppercase">{q.status}</span>
-                              {(q.origin || q.destination) && ` · ${q.origin || '?'} → ${q.destination || '?'}`}
+                              <span className="inline-flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono font-bold text-accent uppercase">
+                                  {(q.quote_number || q.id).toString().split('-')[0]}
+                                </span>
+                                <span className="text-muted-foreground">{quoteMarker(q)}</span>
+                                <span className="font-black tabular-nums">— {formatCurrency(Number(q.total_amount_usd) || 0)}</span>
+                                <span className="text-[9px] font-bold uppercase text-muted-foreground/70">({q.status})</span>
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>
