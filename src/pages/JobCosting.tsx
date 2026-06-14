@@ -36,6 +36,7 @@ export default function JobCosting() {
   // Combine-jobs (joint costing) selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [combineOpen, setCombineOpen] = useState(false);
+  const [groupName, setGroupName] = useState("");
   const toggleSelect = (id: string) =>
     setSelectedIds((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
@@ -68,6 +69,16 @@ export default function JobCosting() {
     queryFn: async () => {
       const { data, error } = await supabase.from("job_charges").select("job_order_id, amount_usd");
       if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Optional saved groupings (consolidated shipments) — additive convenience.
+  const { data: savedGroups } = useQuery({
+    queryKey: ["job_groups"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("job_groups").select("*").order("created_at", { ascending: false });
+      if (error) return []; // table may not be migrated yet — fail soft
       return data || [];
     },
   });
@@ -204,6 +215,32 @@ export default function JobCosting() {
     onError: (err: any) => toast.error(err?.message || "Failed to remove charge"),
   });
 
+  const saveGroup = useMutation({
+    mutationFn: async () => {
+      const name = groupName.trim();
+      if (!name) throw new Error("Give this combination a name");
+      if (selectedIds.size < 2) throw new Error("Select at least two jobs");
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("job_groups").insert([{ name, job_ids: Array.from(selectedIds), created_by: user?.id || null }]).select();
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Not saved (no rows). Check the job_groups RLS policy in Supabase.");
+      return data[0];
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["job_groups"] }); setGroupName(""); toast.success("Combination saved"); },
+    onError: (e: any) => toast.error(e?.message || "Failed to save combination"),
+  });
+
+  const deleteGroup = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from("job_groups").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["job_groups"] }); toast.success("Combination removed"); },
+    onError: (e: any) => toast.error(e?.message || "Failed to remove"),
+  });
+
+  const openSavedGroup = (g: any) => {
+    setSelectedIds(new Set((g.job_ids || []) as string[]));
+    setCombineOpen(true);
+  };
+
   // open-job P&L
   const baseRev = selectedJob ? jobBaseRevenue(selectedJob) : 0;
   const extraRev = (jobCharges || []).reduce((a: number, c: any) => a + num(c.amount_usd), 0);
@@ -254,6 +291,27 @@ export default function JobCosting() {
           <p className="text-[11px] text-muted-foreground font-medium hidden sm:block">Tick jobs to combine them into a joint profit/loss.</p>
         )}
       </div>
+
+      {/* Saved combinations (optional) — only shows when some exist */}
+      {(savedGroups || []).length > 0 && (
+        <div className="bg-white rounded-2xl border shadow-sm p-4">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+            <Layers className="h-3.5 w-3.5 text-accent" /> Saved Combinations
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(savedGroups || []).map((g: any) => (
+              <div key={g.id} className="inline-flex items-center gap-2 bg-muted/40 hover:bg-muted/70 border rounded-full pl-3 pr-1.5 py-1 transition-colors">
+                <button onClick={() => openSavedGroup(g)} className="text-[11px] font-bold">
+                  {g.name} <span className="text-muted-foreground font-medium">· {(g.job_ids || []).length} jobs</span>
+                </button>
+                <button onClick={() => deleteGroup.mutate(g.id)} className="h-5 w-5 rounded-full hover:bg-rose-100 text-muted-foreground hover:text-rose-600 flex items-center justify-center" title="Delete combination">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
         <Table className="min-w-[900px]">
@@ -496,6 +554,18 @@ export default function JobCosting() {
             <p className="text-lg font-black">
               {combinedTotals.profit >= 0 ? "Profitable" : "Loss-making"} · {fmt(combinedTotals.profit)}
             </p>
+          </div>
+
+          {/* Optional: persist this combination for later */}
+          <div className="mt-4 border-t pt-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Save this combination (optional)</p>
+            <div className="flex gap-2">
+              <Input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="e.g. Consolidated container — Mombasa run" className="h-10" />
+              <Button onClick={() => saveGroup.mutate()} disabled={saveGroup.isPending || !groupName.trim()} className="h-10 gap-2 bg-accent hover:bg-accent/90 text-accent-foreground text-[10px] font-black uppercase tracking-widest shrink-0">
+                <Plus className="h-3.5 w-3.5" /> Save
+              </Button>
+            </div>
+            <p className="text-[9px] text-muted-foreground mt-1.5">Saved combinations appear above the table and can be reopened anytime. This does not change the individual jobs.</p>
           </div>
         </DialogContent>
       </Dialog>
