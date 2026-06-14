@@ -22,6 +22,7 @@ import { DeliveryNotePDF } from "@/components/DeliveryNotePDF";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { HybridSelect } from "@/components/HybridSelect";
+import { getQuoteTotal } from "@/lib/quotationUtils";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -278,7 +279,7 @@ export default function JobOrders() {
       const qs = quotes.filter((q: any) => q.customer_id === id || q.lead_id === id);
       if (qs.length === 0) return "no quotes";
       const latest = qs[0]; // quotations are ordered newest-first
-      return `${qs.length} quote${qs.length > 1 ? "s" : ""} · ${formatCurrency(Number(latest.total_amount_usd) || 0)}`;
+      return `${qs.length} quote${qs.length > 1 ? "s" : ""} · ${formatCurrency(getQuoteTotal(latest))}`;
     };
     const customers = (dataNeeded.customers || []).map((c: any) => ({ ...c, hint: hintFor(c.value) }));
     const prospects = (dataNeeded.prospects || []).map((p: any) => ({ ...p, hint: hintFor(p.value) }));
@@ -321,7 +322,8 @@ export default function JobOrders() {
     if (!selectedEntityId || !dataNeeded) return;
     const chosen = entityQuotes.find((q: any) => q.id === quotationId);
     if (chosen) {
-      const val = (chosen.total_amount_usd ?? "").toString();
+      const total = getQuoteTotal(chosen);
+      const val = total ? String(total) : "";
       form.setValue("amount", val);
       setSuggestedAmount(val);
       const o = quoteOrigin(chosen);
@@ -692,7 +694,7 @@ export default function JobOrders() {
         quotation_id: targetQuote?.id || null,
         origin,
         destination,
-        total_amount: targetQuote ? targetQuote.total_amount_usd : parseFloat(amount) || 0,
+        total_amount: targetQuote ? getQuoteTotal(targetQuote) : parseFloat(amount) || 0,
         status: "planning",
       };
 
@@ -954,7 +956,7 @@ export default function JobOrders() {
                                   {(q.quote_number || q.id).toString().split('-')[0]}
                                 </span>
                                 <span className="text-muted-foreground">{quoteMarker(q)}</span>
-                                <span className="font-black tabular-nums">— {formatCurrency(Number(q.total_amount_usd) || 0)}</span>
+                                <span className="font-black tabular-nums">— {formatCurrency(getQuoteTotal(q))}</span>
                                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70">({q.status})</span>
                               </span>
                             </SelectItem>

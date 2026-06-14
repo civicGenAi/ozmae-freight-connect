@@ -94,7 +94,7 @@ export default function CustomerProfile() {
     return <div className="p-12 text-center text-muted-foreground">Customer data not found.</div>;
   }
 
-  const c = health.customer!;
+  const c = (health.customer || {}) as any;
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-80px)]">

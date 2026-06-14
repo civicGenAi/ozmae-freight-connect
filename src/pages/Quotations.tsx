@@ -41,7 +41,7 @@ import ozmaeLogoImg from "@/assets/ozmae-logo.png";
 import signatureImg from "@/assets/signature.png";
 import memberImg from "@/assets/member.jpg";
 import { CreatableCombobox } from "@/components/CreatableCombobox";
-import { parseUnitQuantity, cleanAmount } from "@/lib/quotationUtils";
+import { parseUnitQuantity, cleanAmount, getQuoteTotal } from "@/lib/quotationUtils";
 import { useWatch } from "react-hook-form";
 import { TransportModeSelector, TransportModeBadge, TransportModeGroupHeader, type TransportMode } from "@/components/TransportModeSelector";
 import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
@@ -723,7 +723,8 @@ export default function Quotations() {
                                   <span className="text-[10px] text-muted-foreground">$</span>
                                   <input
                                     type="number" step="0.01"
-                                    defaultValue={quote.total_amount_usd || 0}
+                                    key={`amt-${quote.id}-${getQuoteTotal(quote)}`}
+                                    defaultValue={getQuoteTotal(quote) || 0}
                                     onBlur={(e) => { const newVal = parseFloat(e.target.value) || 0; updateQuoteMutation.mutate({ id: quote.id, metadata: quote.metadata, totalAmount: newVal }); }}
                                     className="bg-transparent border-b border-transparent hover:border-accent/40 focus:border-accent focus:outline-none font-bold text-sm w-24 tabular-nums transition-all text-accent"
                                   />

@@ -58,18 +58,6 @@ const navSections: NavSection[] = [
     label: "OVERVIEW",
     items: [
       { title: "Dashboard", path: "/", icon: LayoutDashboard },
-      { title: "Reports", path: "/reports", icon: BarChart3, roles: ["Admin", "Sales"] },
-    ],
-  },
-  {
-    label: "CRM & RELATIONSHIPS",
-    roles: ["Admin", "Leads", "Sales", "Operations"],
-    items: [
-      { title: "Customers", path: "/crm/customers", icon: Users },
-      { title: "Interactions", path: "/crm/interactions", icon: Phone },
-      { title: "Tasks Queue", path: "/crm/tasks", icon: CheckSquare },
-      { title: "Health Metrics", path: "/crm/health", icon: Activity, roles: ["Admin", "Sales"] },
-      { title: "Lost Deals", path: "/crm/lost-deals", icon: TrendingDown, roles: ["Admin", "Sales"] },
     ],
   },
   {
@@ -103,6 +91,24 @@ const navSections: NavSection[] = [
     label: "DOCUMENTS",
     items: [
       { title: "Document Vault", path: "/documents", icon: FolderOpen },
+    ],
+  },
+  {
+    label: "CRM & RELATIONSHIPS",
+    roles: ["Admin", "Leads", "Sales", "Operations"],
+    items: [
+      { title: "Customers", path: "/crm/customers", icon: Users },
+      { title: "Interactions", path: "/crm/interactions", icon: Phone },
+      { title: "Tasks Queue", path: "/crm/tasks", icon: CheckSquare },
+      { title: "Health Metrics", path: "/crm/health", icon: Activity, roles: ["Admin", "Sales"] },
+      { title: "Lost Deals", path: "/crm/lost-deals", icon: TrendingDown, roles: ["Admin", "Sales"] },
+    ],
+  },
+  {
+    label: "INSIGHTS",
+    items: [
+      { title: "Reports", path: "/reports", icon: BarChart3, roles: ["Admin", "Sales", "Finance"] },
+      { title: "System Status", path: "/status", icon: Activity, roles: ["Admin"] },
     ],
   },
   {
