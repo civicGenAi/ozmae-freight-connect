@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,15 @@ import { NotificationsPanel } from "@/components/NotificationsPanel";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
+
+const TAB_META: Record<string, { title: string; desc: string; icon: any }> = {
+   profile: { title: "Profile", desc: "Your personal details and avatar.", icon: User },
+   security: { title: "Security", desc: "Password, two-factor and audit log.", icon: Shield },
+   notifications: { title: "Notifications", desc: "Your alerts and updates.", icon: Bell },
+   sessions: { title: "Active Sessions", desc: "Devices signed into your account.", icon: Laptop },
+   status: { title: "System Status", desc: "Live health of platform services.", icon: Activity },
+   company: { title: "Company", desc: "Organisation profile and resources.", icon: Building2 },
+};
 
 export default function MyAccount() {
    const [activeTab, setActiveTab] = useState("profile");
@@ -56,19 +66,22 @@ export default function MyAccount() {
       }
    });
 
+   const meta = TAB_META[activeTab] || TAB_META.profile;
+
    return (
-      <div className="space-y-8 max-w-6xl mx-auto">
-         {/* Modern hero header */}
-         <div className="relative overflow-hidden rounded-3xl bg-[#0f1d35] text-white p-8 shadow-[0_8px_30px_rgba(20,41,76,0.12)]">
-            <div className="absolute -right-6 -bottom-8 h-40 w-40 bg-accent rounded-full blur-[70px] opacity-20" />
-            <div className="relative z-10">
-               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent">Account Center</p>
-               <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase mt-1">Management & Security</h1>
-               <p className="text-white/50 text-xs font-medium mt-1">Manage your profile, security, sessions and company settings.</p>
+      <div className="space-y-6 max-w-6xl mx-auto">
+         {/* Compact dynamic header — reflects the active tab */}
+         <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-2xl bg-accent/10 text-accent flex items-center justify-center shrink-0">
+               <meta.icon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+               <h1 className="text-xl font-black tracking-tight uppercase text-foreground leading-tight">{meta.title}</h1>
+               <p className="text-xs text-muted-foreground font-medium">{meta.desc}</p>
             </div>
          </div>
 
-         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid grid-cols-3 md:grid-cols-6 h-auto md:h-12 bg-muted/50 p-1 rounded-2xl border shadow-sm w-full gap-1">
                <TabsTrigger value="profile" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
                   <User className="h-3.5 w-3.5" /> Profile
@@ -176,7 +189,7 @@ function ProfileTab({ profile }: { profile: any }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
          <div className="md:col-span-1 space-y-6">
             <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-               <div className="h-16 bg-gradient-to-r from-[#0f1d35] to-[#1c3358]" />
+               <div className="h-16 bg-gradient-to-r from-accent to-[#FF925E]" />
                <div className="px-6 pb-6 -mt-10 text-center space-y-4">
                   <FileUpload
                      onUpload={onAvatarUpload}
@@ -388,7 +401,7 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
                      <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="rounded-xl h-11" />
                   </div>
                </div>
-               <Button className="w-full h-11 bg-slate-900 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest">
+               <Button className="w-full h-11 bg-accent hover:bg-accent/90 text-accent-foreground font-black uppercase text-[10px] tracking-widest">
                   Update Password
                </Button>
             </form>
@@ -544,43 +557,45 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
             </div>
          </div>
 
-         <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between mb-8">
+         <div className="bg-card rounded-3xl p-6 border shadow-sm flex flex-col">
+            <div className="flex items-center justify-between mb-6">
                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center">
+                  <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center">
                      <Clock className="h-5 w-5 text-accent" />
                   </div>
                   <div>
-                     <h3 className="text-sm font-bold">Security Audit Log</h3>
-                     <p className="text-[10px] text-slate-500 uppercase font-black">Past 10 Activities</p>
+                     <h3 className="text-sm font-bold text-foreground">Security Audit Log</h3>
+                     <p className="text-[10px] text-muted-foreground uppercase font-black">Latest 10 activities</p>
                   </div>
                </div>
+               <Link to="/settings/security-logs" className="text-[10px] font-black uppercase tracking-widest text-accent hover:underline shrink-0">View all</Link>
             </div>
-            <div className="flex-1 space-y-4">
-               {logs?.map((log: any) => (
-                  <div key={log.id} className="group p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all flex items-start gap-4">
-                     <div className="p-2 rounded-lg bg-white/5 group-hover:bg-accent/20 transition-colors">
+            <div className="flex-1 space-y-3">
+               {(logs || []).slice(0, 10).map((log: any) => (
+                  <div key={log.id} className="group p-4 bg-muted/30 rounded-2xl border hover:bg-muted/50 transition-all flex items-start gap-4">
+                     <div className="p-2 rounded-lg bg-accent/10 shrink-0">
                         <Shield className="h-3 w-3 text-accent" />
                      </div>
-                     <div className="flex-1">
-                        <p className="text-xs font-bold">
+                     <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-foreground">
                            {log.event_type === 'login_success' ? 'Sign In Success' :
                             log.event_type === 'password_change' ? 'Password Updated' :
                             log.event_type === 'mfa_enabled' ? '2FA Activated' :
                             log.event_type.replace('_', ' ')}
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-1 italic">
+                        <p className="text-[10px] text-muted-foreground mt-1 italic break-words">
                            {log.event_type === 'login_success' ? `Authenticated via ${log.details?.method || 'Standard login'}` :
                             log.event_type === 'password_change' ? 'Changed from Settings' :
                             log.details?.details || log.details ? JSON.stringify(log.details) : 'Security update verified'}
                         </p>
-                        <div className="flex justify-between items-center mt-3 text-[9px] text-slate-500 font-black uppercase tracking-tighter">
+                        <div className="flex justify-between items-center mt-3 text-[9px] text-muted-foreground font-black uppercase tracking-tighter">
                            <span>{log.ip_address || "Unknown IP"}</span>
                            <span>{new Date(log.created_at).toLocaleString()}</span>
                         </div>
                      </div>
                   </div>
                ))}
+               {(!logs || logs.length === 0) && <p className="text-xs text-muted-foreground text-center py-8">No recent activity.</p>}
             </div>
          </div>
       </div>
@@ -606,9 +621,9 @@ function SessionsTab() {
    };
 
    return (
-      <div className="max-w-3xl mx-auto space-y-8">
-         <div className="bg-card rounded-2xl border p-8 space-y-6">
-            <div className="flex justify-between items-center">
+      <div className="space-y-6">
+         <div className="bg-card rounded-2xl border shadow-sm p-6 md:p-8 space-y-6">
+            <div className="flex flex-wrap gap-3 justify-between items-center">
                <h3 className="font-black text-xs uppercase tracking-widest text-foreground flex items-center gap-2">
                   <Laptop className="h-4 w-4 text-accent" /> Active Device Sessions
                </h3>
@@ -703,7 +718,7 @@ function CompanyTab({ company, profile }: { company: any, profile: any }) {
 
    return (
       <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-         <div className="bg-slate-900 border-b p-8 flex justify-between items-center text-white">
+         <div className="bg-gradient-to-r from-accent to-[#FF925E] border-b p-8 flex justify-between items-center text-white">
             <div className="flex items-center gap-5">
                <div className="h-20 w-32 rounded-2xl bg-white/10 flex items-center justify-center overflow-hidden border border-white/20 relative group">
                   {formData.logo_url ? <img src={formData.logo_url} className="h-full w-full object-contain p-2" /> : <Building2 className="h-8 w-8 text-accent" />}
@@ -870,7 +885,7 @@ function CompanyTab({ company, profile }: { company: any, profile: any }) {
                            }
                         }}
                         variant="outline" 
-                        className="h-10 px-6 font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-slate-900 hover:text-white border-2"
+                        className="h-10 px-6 font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-accent hover:text-accent-foreground border-2"
                      >
                         {company?.resource_pin_enabled ? "Disable" : "Enable"}
                      </Button>
@@ -936,7 +951,7 @@ function CompanyTab({ company, profile }: { company: any, profile: any }) {
                                     queryClient.invalidateQueries({ queryKey: ["company_profile"] });
                                  }
                               }}
-                              className="h-10 bg-slate-900 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest px-6 rounded-xl"
+                              className="h-10 bg-accent hover:bg-accent/90 text-accent-foreground font-black uppercase text-[10px] tracking-widest px-6 rounded-xl"
                            >
                               Confirm
                            </Button>
