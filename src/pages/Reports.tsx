@@ -139,7 +139,7 @@ export default function Reports() {
       <div className="flex items-center justify-center h-96">
         <div className="flex flex-col items-center gap-4">
           <div className="h-12 w-12 border-4 border-accent border-t-transparent animate-spin rounded-full" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Intelligence...</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Loading Intelligence...</p>
         </div>
       </div>
     );
@@ -173,7 +173,7 @@ export default function Reports() {
       {/* KPI grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {kpiCards.map((k) => (
-          <div key={k.label} className="bg-white rounded-2xl border shadow-sm p-4">
+          <div key={k.label} className="bg-card rounded-2xl border shadow-sm p-4">
             <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center mb-2", k.bg, k.color)}><k.icon className="h-4 w-4" /></div>
             <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{k.label}</p>
             <p className="text-lg font-black tabular-nums mt-0.5">{k.value}</p>
@@ -182,7 +182,7 @@ export default function Reports() {
       </div>
 
       {/* Profit & Loss trend */}
-      <div className="bg-white rounded-2xl border shadow-sm p-5">
+      <div className="bg-card rounded-2xl border shadow-sm p-5">
         <h3 className="font-black text-[10px] uppercase tracking-widest text-foreground flex items-center gap-2 mb-4">
           <TrendingUp className="h-4 w-4 text-accent" /> Revenue · Cost · Profit
         </h3>
@@ -207,7 +207,7 @@ export default function Reports() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top customers */}
-        <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <div className="bg-card rounded-2xl border shadow-sm p-5">
           <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2"><DollarSign className="h-3.5 w-3.5" /> Top Customers by Value</h3>
           <div className="space-y-3">
             {topCustomers.length === 0 ? <p className="text-xs text-muted-foreground py-6 text-center">No data</p> : topCustomers.map((c, i) => {
@@ -224,7 +224,7 @@ export default function Reports() {
 
         {/* Fleet + routes */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="bg-white rounded-2xl border shadow-sm p-5">
+          <div className="bg-card rounded-2xl border shadow-sm p-5">
             <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-2"><Truck className="h-3.5 w-3.5" /> Fleet</h3>
             <div className="h-[170px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -238,7 +238,7 @@ export default function Reports() {
               </ResponsiveContainer>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border shadow-sm p-5">
+          <div className="bg-card rounded-2xl border shadow-sm p-5">
             <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><MapPin className="h-3.5 w-3.5" /> Top Routes</h3>
             <div className="space-y-2">
               {topRoutes.length === 0 ? <p className="text-xs text-muted-foreground py-6 text-center">No data</p> : topRoutes.map((r) => (

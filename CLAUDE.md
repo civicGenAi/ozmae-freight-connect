@@ -213,9 +213,46 @@ not break existing flows** — change one area at a time.
 - **Theme switching:** `next-themes` `ThemeProvider` in `App.tsx`
   (`attribute="class"`, light/dark/system); dark CSS vars in `index.css`. Header
   avatar dropdown (`AppLayout.tsx`) is a round menu with My Account + theme
-  switcher + Log out (no more name/email). NOTE: many pages still hardcode
-  `bg-white`/`text-slate-*`/`#0f1d35`, so dark mode is partial — migrate those to
-  tokens (`bg-card`, `text-foreground`, `bg-background`) for full dark support.
+  switcher + Log out (no more name/email).
+- **Dark mode pass (DONE):** swept the app shell + most pages, converting
+  hardcoded light-mode colors to theme tokens so Light/Dark/System actually
+  look right everywhere, not just in the editor preview:
+  - `AppLayout.tsx`: sidebar (desktop + mobile + collapsed tooltip) and header
+    moved from `bg-primary`/`bg-white`/`bg-[#F8F9FA]`/`bg-[#0f1d35]` to
+    `bg-sidebar`/`text-sidebar-foreground` (NOT `bg-primary` — that token
+    intentionally flips light in dark mode, which broke the sidebar) and
+    `bg-card`/`bg-background`.
+  - `PinGate.tsx`, `VaultGuard.tsx`: header/icon blocks use `bg-sidebar` (always
+    dark, keeps hardcoded white icons readable); inputs/labels/borders →
+    `bg-card`/`text-foreground`/`text-muted-foreground`/`border-border`.
+  - Converted `bg-white`→`bg-card`, `bg-slate-50/100`→`bg-muted`/`bg-muted/30`,
+    `text-slate-*`→`text-foreground`/`text-muted-foreground`,
+    `border-slate-*`/`border-white`→`border-border`, and admin/segmented-control
+    "active" pills (`bg-slate-900 text-white`)→`bg-primary text-primary-foreground`
+    across `MyAccount.tsx`, `CompanyResources.tsx`, `NotificationsPanel.tsx`,
+    `SystemStatusPanel.tsx`, `FileUpload.tsx`, `Dashboard.tsx`,
+    `JobOrders.tsx`, `Documents.tsx`, `Reports.tsx`, `JobCosting.tsx`,
+    `Quotations.tsx`, `Leads.tsx`, `QuotationTemplateEditor.tsx` (editor chrome
+    only), `LogisticsLoader.tsx`, `CargoItemsTable.tsx`, `StringArrayInput.tsx`,
+    `TransportModeSelector.tsx`, and the CRM pages (`CustomerProfile.tsx`,
+    `CustomerHealth.tsx`, `InteractionsLog.tsx`, `Tasks.tsx`, `LostDeals.tsx`,
+    `Customers.tsx`).
+  - **Left intentionally unchanged** (still hardcoded, by design):
+    - Always-dark brand blocks (`bg-[#0f1d35]`/`bg-sidebar` heroes, Dashboard's
+      "Business Snapshot" card, Login/Verify2FA dark panels) — these stay dark
+      navy with `text-white` in both themes.
+    - "Document/paper preview" UI: Invoice view dialog, Delivery Note preview
+      pane + PDF viewer, Quotation Template's print canvas (`#quotation-print-area`),
+      QR codes — these render printable documents and must stay white.
+    - Semantic status badges/chips (`bg-emerald-50 text-emerald-700`,
+      `bg-amber-100 text-amber-800`, `bg-rose-50`, etc.) and fixed
+      multi-color legends (e.g. health/priority color maps with a `slate`
+      "neutral" entry) — left as-is, they read fine in both themes.
+    - `Index.tsx` (dead/unrouted), `PublicTracking.tsx` (45 occurrences, public
+      branded tracking page), `Login.tsx`/`Verify2FA.tsx` (pre-auth, mostly
+      always-dark already) — not swept; lower priority if revisited.
+  - `npm run build` passes; remaining `npm run lint` errors are pre-existing
+    `@typescript-eslint/no-explicit-any` issues, unrelated to this pass.
 
 ## CRM assessment (open)
 

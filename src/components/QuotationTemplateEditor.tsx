@@ -311,15 +311,15 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
         className={cn(
-          "relative w-[95%] max-w-[1200px] h-[92vh] bg-gray-100 rounded-xl shadow-2xl flex flex-col overflow-hidden border border-white/20",
+          "relative w-[95%] max-w-[1200px] h-[92vh] bg-muted rounded-xl shadow-2xl flex flex-col overflow-hidden border border-white/20",
           printMode && "bg-white"
         )}
       >
         {!printMode && (
-          <div className="flex-none bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm z-10 sticky top-0">
+          <div className="flex-none bg-card border-b px-6 py-4 flex items-center justify-between shadow-sm z-10 sticky top-0">
             <div>
-              <h2 className="text-xl font-black text-[#0a1e3f]">Quotation Designer</h2>
-              <p className="text-xs text-gray-500 font-medium">Click any text block to customize the dynamic template</p>
+              <h2 className="text-xl font-black text-foreground">Quotation Designer</h2>
+              <p className="text-xs text-muted-foreground font-medium">Click any text block to customize the dynamic template</p>
             </div>
             <div className="flex items-center gap-3">
               {onClose && (
@@ -327,7 +327,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
                   <X className="h-5 w-5" />
                 </Button>
               )}
-              <div className="w-px h-6 bg-gray-200 mx-2" />
+              <div className="w-px h-6 bg-border mx-2" />
               <Button variant="secondary" onClick={handlePrint} className="gap-2 bg-[#0a1e3f] text-white hover:bg-[#0a1e3f]/90 h-10 px-6 rounded-lg font-bold">
                 <FileText className="h-4 w-4" /> Export PDF
               </Button>
@@ -338,7 +338,7 @@ export function QuotationTemplateEditor({ initialData, onSave, onEmail, onClose,
               )}
               {renderActions && (
                 <>
-                  <div className="w-px h-6 bg-gray-300 mx-1" />
+                  <div className="w-px h-6 bg-border mx-1" />
                   {renderActions(meta)}
                 </>
               )}

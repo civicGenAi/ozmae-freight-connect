@@ -62,7 +62,7 @@ export function StringArrayInput({ values = [], onChange, placeholder = "Add ite
           <Button 
             type="button" 
             variant="secondary" 
-            className="h-9 shrink-0 border border-slate-200" 
+            className="h-9 shrink-0 border border-border"
             onClick={handleAdd}
             disabled={!inputValue.trim()}
           >

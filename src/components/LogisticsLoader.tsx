@@ -6,7 +6,7 @@ import { Truck } from "lucide-react";
  */
 export const LogisticsLoader = ({ message = "Loading..." }: { message?: string }) => {
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-6 bg-white">
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-6 bg-background">
       {/* Brand mark with a quiet pulse */}
       <div className="relative flex items-center justify-center">
         <div className="absolute h-16 w-16 rounded-2xl bg-accent/10 animate-ping" />

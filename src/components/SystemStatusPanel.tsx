@@ -55,7 +55,7 @@ export function SystemStatusPanel() {
   const partial = downCount > 0 && downCount < services.length;
 
   const overall = !data
-    ? { label: "Checking systems…", cls: "bg-slate-100 text-slate-600 border-slate-200", Icon: Activity }
+    ? { label: "Checking systems…", cls: "bg-muted text-muted-foreground border-border", Icon: Activity }
     : allUp
     ? { label: "All Systems Operational", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: CheckCircle2 }
     : partial
@@ -79,7 +79,7 @@ export function SystemStatusPanel() {
             <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Avg latency</p>
             <p className="text-2xl font-black tabular-nums">{avgLatency}ms</p>
           </div>
-          <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} className="bg-white/60 h-10 w-10 shrink-0">
+          <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} className="bg-card/60 h-10 w-10 shrink-0">
             <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
           </Button>
         </div>
@@ -90,18 +90,18 @@ export function SystemStatusPanel() {
           const h = s.health;
           const status = !h ? "checking" : h.ok ? "operational" : "down";
           return (
-            <div key={s.key} className="bg-white rounded-2xl border shadow-sm p-5 flex items-start gap-4">
+            <div key={s.key} className="bg-card rounded-2xl border shadow-sm p-5 flex items-start gap-4">
               <div className={cn("h-11 w-11 rounded-xl flex items-center justify-center shrink-0",
-                status === "operational" ? "bg-emerald-50 text-emerald-600" : status === "down" ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-400")}>
+                status === "operational" ? "bg-emerald-50 text-emerald-600" : status === "down" ? "bg-rose-50 text-rose-600" : "bg-muted text-muted-foreground")}>
                 <s.icon className="h-5 w-5" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="font-black text-sm text-foreground">{s.label}</h3>
                   <span className={cn("inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
-                    status === "operational" ? "bg-emerald-100 text-emerald-700" : status === "down" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-500")}>
+                    status === "operational" ? "bg-emerald-100 text-emerald-700" : status === "down" ? "bg-rose-100 text-rose-700" : "bg-muted text-muted-foreground")}>
                     <span className={cn("h-1.5 w-1.5 rounded-full",
-                      status === "operational" ? "bg-emerald-500 animate-pulse" : status === "down" ? "bg-rose-500" : "bg-slate-400")} />
+                      status === "operational" ? "bg-emerald-500 animate-pulse" : status === "down" ? "bg-rose-500" : "bg-muted-foreground")} />
                     {status === "operational" ? "Operational" : status === "down" ? "Down" : "Checking"}
                   </span>
                 </div>

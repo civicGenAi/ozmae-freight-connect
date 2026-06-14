@@ -301,7 +301,7 @@ export default function Dashboard() {
           {/* KPI row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {kpis.map((kpi) => (
-              <div key={kpi.label} className="bg-white rounded-2xl border shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-all group">
+              <div key={kpi.label} className="bg-card rounded-2xl border shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-all group">
                 <div className="flex justify-between items-start">
                   <div className={cn("p-2 rounded-lg shadow-inner", kpi.bg, kpi.color)}>
                     <kpi.icon className="h-4 w-4" />
@@ -319,7 +319,7 @@ export default function Dashboard() {
 
           {/* Revenue trend + Pipeline funnel */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            <div className="lg:col-span-3 bg-white rounded-2xl border shadow-sm p-5 space-y-4">
+            <div className="lg:col-span-3 bg-card rounded-2xl border shadow-sm p-5 space-y-4">
               <h3 className="font-black text-[10px] uppercase tracking-widest text-foreground flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-accent" /> Revenue & Jobs · Last 14 Days
               </h3>
@@ -345,7 +345,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="lg:col-span-2 bg-white rounded-2xl border shadow-sm p-5 space-y-4">
+            <div className="lg:col-span-2 bg-card rounded-2xl border shadow-sm p-5 space-y-4">
               <h3 className="font-black text-[10px] uppercase tracking-widest text-foreground flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-blue-500" /> Pipeline Funnel
               </h3>
@@ -371,7 +371,7 @@ export default function Dashboard() {
 
           {/* Distributions: Job status + Quote status + Fleet */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="bg-white rounded-2xl border shadow-sm p-5">
+            <div className="bg-card rounded-2xl border shadow-sm p-5">
               <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Job Status</h3>
               <div className="h-[180px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -393,7 +393,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border shadow-sm p-5">
+            <div className="bg-card rounded-2xl border shadow-sm p-5">
               <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Quotation Status</h3>
               <div className="space-y-2 pt-2">
                 {(ov?.quoteStatus || []).length === 0 && <p className="text-[10px] text-muted-foreground py-8 text-center uppercase font-bold">No quotations yet</p>}
@@ -415,7 +415,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border shadow-sm p-5">
+            <div className="bg-card rounded-2xl border shadow-sm p-5">
               <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-2">
                 <Truck className="h-3.5 w-3.5" /> Fleet · {fleetTotal} vehicles
               </h3>
@@ -435,7 +435,7 @@ export default function Dashboard() {
 
           {/* Routes + recent jobs */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl border shadow-sm p-6">
+            <div className="bg-card rounded-2xl border shadow-sm p-6">
               <div className="flex items-center gap-2 mb-4">
                 <MapPin className="h-4 w-4 text-accent" />
                 <h3 className="font-black text-[10px] uppercase tracking-widest text-foreground/70">Top Shipping Routes</h3>
@@ -464,7 +464,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+            <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b flex justify-between items-center bg-muted/10">
                 <h3 className="font-black text-[10px] uppercase tracking-widest text-foreground flex items-center gap-2">
                   <Briefcase className="h-3.5 w-3.5 text-accent" /> Recent Jobs
@@ -499,7 +499,7 @@ export default function Dashboard() {
 
         {/* Right column */}
         <div className="space-y-8">
-          <div className="bg-white rounded-3xl border shadow-sm p-6 space-y-6">
+          <div className="bg-card rounded-3xl border shadow-sm p-6 space-y-6">
             <div className="flex justify-between items-center">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground">Awaiting Your Action</h4>
               <div className="bg-[#F26B2A] text-white text-[9px] font-black px-1.5 py-0.5 rounded animate-pulse">LIVE</div>
@@ -508,13 +508,13 @@ export default function Dashboard() {
               {tasksLoading ? (
                 <div className="h-20 animate-pulse bg-muted rounded-2xl" />
               ) : crmTasks?.length === 0 ? (
-                <div className="text-center py-6 bg-slate-50 border border-dashed rounded-2xl">
+                <div className="text-center py-6 bg-muted/30 border border-dashed rounded-2xl">
                   <CheckCircle className="h-6 w-6 text-emerald-500 mx-auto mb-2 opacity-50" />
                   <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">No Pending Actions</p>
                 </div>
               ) : (
                 crmTasks?.map((t: any) => (
-                  <motion.div key={t.id} whileHover={{ scale: 1.02 }} className="p-4 bg-slate-50 border hover:border-accent group rounded-2xl flex items-center gap-3 transition-all cursor-pointer">
+                  <motion.div key={t.id} whileHover={{ scale: 1.02 }} className="p-4 bg-muted/30 border hover:border-accent group rounded-2xl flex items-center gap-3 transition-all cursor-pointer">
                     <div className={cn("h-10 w-10 shrink-0 rounded-xl flex items-center justify-center", t.priority === "urgent" ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600")}>
                       <Shield className="h-5 w-5" />
                     </div>
@@ -566,7 +566,7 @@ export default function Dashboard() {
               { label: "Settings", path: "/settings/profile", icon: Shield },
             ].map((item) => (
               <Link key={item.label} to={item.path} className="group">
-                <div className="p-4 bg-white border border-transparent group-hover:border-accent/40 rounded-2xl text-center transition-all shadow-sm hover:shadow-md">
+                <div className="p-4 bg-card border border-transparent group-hover:border-accent/40 rounded-2xl text-center transition-all shadow-sm hover:shadow-md">
                   <item.icon className="h-5 w-5 mx-auto mb-2 text-muted-foreground group-hover:text-accent transition-colors" />
                   <p className="text-[9px] font-black uppercase tracking-tighter text-muted-foreground group-hover:text-foreground">{item.label}</p>
                 </div>

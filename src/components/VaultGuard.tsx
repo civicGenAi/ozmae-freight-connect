@@ -65,7 +65,7 @@ export function VaultGuard({ children, title = "Protected Vault" }: { children: 
   // Locked screen
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <div className="h-16 w-16 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg mb-6">
+      <div className="h-16 w-16 rounded-2xl bg-sidebar flex items-center justify-center shadow-lg mb-6">
         <Lock className="h-8 w-8 text-accent" />
       </div>
       <h2 className="text-xl font-black uppercase tracking-tight text-foreground">{title}</h2>

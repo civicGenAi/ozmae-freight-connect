@@ -278,11 +278,11 @@ export default function JobCosting() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <div className="bg-card rounded-2xl border shadow-sm p-5">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground"><DollarSign className="h-4 w-4 text-blue-500" /> Total Revenue</div>
           <p className="text-2xl font-black mt-2 tabular-nums">{fmt(totals.revenue)}</p>
         </div>
-        <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <div className="bg-card rounded-2xl border shadow-sm p-5">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground"><Wallet className="h-4 w-4 text-amber-500" /> Total Cost</div>
           <p className="text-2xl font-black mt-2 tabular-nums">{fmt(totals.cost)}</p>
         </div>
@@ -290,7 +290,7 @@ export default function JobCosting() {
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/70">{totals.profit >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />} Net {totals.profit >= 0 ? "Profit" : "Loss"}</div>
           <p className="text-2xl font-black mt-2 tabular-nums">{fmt(totals.profit)}</p>
         </div>
-        <div className="bg-white rounded-2xl border shadow-sm p-5">
+        <div className="bg-card rounded-2xl border shadow-sm p-5">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground"><Clock className="h-4 w-4 text-rose-500" /> Payables Owed</div>
           <p className="text-2xl font-black mt-2 tabular-nums text-rose-600">{fmt(payablesOwedTotal)}</p>
         </div>
@@ -316,7 +316,7 @@ export default function JobCosting() {
 
       {/* Saved combinations (optional) — only shows when some exist */}
       {(savedGroups || []).length > 0 && (
-        <div className="bg-white rounded-2xl border shadow-sm p-4">
+        <div className="bg-card rounded-2xl border shadow-sm p-4">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
             <Layers className="h-3.5 w-3.5 text-accent" /> Saved Combinations
           </p>

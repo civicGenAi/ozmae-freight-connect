@@ -131,7 +131,7 @@ export default function CustomerProfile() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border rounded-xl rounded-tl-none relative">
+          <div className="flex flex-col items-center justify-center p-4 bg-muted/30 border rounded-xl rounded-tl-none relative">
             <div className="absolute top-0 left-0 w-2 h-full rounded-l-xl" style={{ backgroundColor: health.health_label === 'lost' ? '#ef4444' : health.health_label === 'at_risk' ? '#f59e0b' : '#10b981' }} />
             <h4 className="text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-4 w-full text-center">Relationship Health</h4>
             <HealthRing score={health.health_score} label={health.health_label} />
@@ -189,17 +189,17 @@ export default function CustomerProfile() {
         </div>
 
         {/* Tab Content Area */}
-        <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6">
+        <div className="flex-1 overflow-y-auto bg-muted/30 p-6">
           {activeTab === "Activity" && (
             <div className="max-w-2xl mx-auto">
-              <div className="flex gap-2 mb-8 bg-white p-1.5 rounded-xl border shadow-sm sticky top-0 z-10 overflow-x-auto">
+              <div className="flex gap-2 mb-8 bg-card p-1.5 rounded-xl border shadow-sm sticky top-0 z-10 overflow-x-auto">
                 {["All", "Calls & Meetings", "Quotes", "Jobs", "Payments"].map(f => (
                   <button 
                     key={f} 
                     onClick={() => setTimelineFilter(f)}
                     className={cn(
                       "px-4 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-colors",
-                      timelineFilter === f ? "bg-slate-900 text-white" : "text-muted-foreground hover:bg-muted"
+                      timelineFilter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
                     )}
                   >
                     {f}
@@ -212,13 +212,13 @@ export default function CustomerProfile() {
                   {[1,2,3].map(i => <div key={i} className="flex gap-4"><div className="w-4 h-4 rounded-full bg-muted"/><div className="h-16 flex-1 bg-muted rounded-xl"/></div>)}
                 </div>
               ) : filteredTimeline?.length === 0 ? (
-                <div className="text-center py-20 bg-white border border-dashed rounded-2xl">
+                <div className="text-center py-20 bg-card border border-dashed rounded-2xl">
                   <Activity className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
                   <h3 className="text-sm font-bold mb-1">No Activity Found</h3>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto">Log your first interaction or create a quote to start tracking this customer's history.</p>
                 </div>
               ) : (
-                <div className="relative border-l-2 border-slate-200 ml-4 space-y-12 pb-12">
+                <div className="relative border-l-2 border-border ml-4 space-y-12 pb-12">
                   {filteredTimeline?.map((evt, idx) => {
                     const colorMap: Record<string, string> = {
                       blue: "bg-blue-500 ring-blue-100",
@@ -235,12 +235,12 @@ export default function CustomerProfile() {
                       <div key={evt.id} className="relative pl-8 group">
                         <div className={cn("absolute -left-[9px] top-1 w-4 h-4 rounded-full ring-4 shadow-sm transition-transform group-hover:scale-125", dotClass)} />
                         
-                        <div className="bg-white border rounded-xl p-4 shadow-sm hover:shadow-md transition-all group-hover:border-slate-300">
+                        <div className="bg-card border rounded-xl p-4 shadow-sm hover:shadow-md transition-all group-hover:border-muted-foreground/30">
                           <div className="flex justify-between items-start mb-1">
-                            <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                            <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
                               {evt.title}
                               {evt.linked_record_label && (
-                                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[9px] font-mono tracking-wider cursor-pointer hover:bg-slate-200">
+                                <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded text-[9px] font-mono tracking-wider cursor-pointer hover:bg-muted/70">
                                   {evt.linked_record_label}
                                 </span>
                               )}
@@ -250,7 +250,7 @@ export default function CustomerProfile() {
                             </span>
                           </div>
                           
-                          {evt.detail && <p className="text-sm text-slate-600 mb-2">{evt.detail}</p>}
+                          {evt.detail && <p className="text-sm text-muted-foreground mb-2">{evt.detail}</p>}
                           
                           {evt.actor_name && (
                             <div className="flex items-center gap-2 mt-3 pt-3 border-t">
@@ -281,21 +281,21 @@ export default function CustomerProfile() {
               </div>
               
               {!tasks || tasks.length === 0 ? (
-                <div className="text-center py-20 bg-white border border-dashed rounded-2xl">
+                <div className="text-center py-20 bg-card border border-dashed rounded-2xl">
                   <CheckCircle className="h-10 w-10 text-emerald-500/30 mx-auto mb-3" />
                   <h3 className="text-sm font-bold">All caught up!</h3>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {tasks.map(t => (
-                    <div key={t.id} className={cn("bg-white border p-4 rounded-xl flex justify-between items-center", t.status === 'done' ? 'opacity-60' : '')}>
+                    <div key={t.id} className={cn("bg-card border p-4 rounded-xl flex justify-between items-center", t.status === 'done' ? 'opacity-60' : '')}>
                       <div className="flex items-center gap-4">
                         <div className={cn("w-2 h-10 rounded-full", t.status === 'done' ? 'bg-emerald-500' : t.priority === 'urgent' ? 'bg-rose-500' : t.priority === 'high' ? 'bg-amber-500' : 'bg-blue-500')} />
                         <div>
                           <p className={cn("font-bold text-sm", t.status === 'done' ? 'line-through text-muted-foreground' : '')}>{t.title}</p>
                           <p className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
                             <Calendar className="h-3 w-3" /> Due: {formatDate(t.due_date)}
-                            <span className="ml-2 inline-block px-1.5 py-0.5 bg-slate-100 rounded text-[9px] uppercase font-bold tracking-widest">{t.priority}</span>
+                            <span className="ml-2 inline-block px-1.5 py-0.5 bg-muted rounded text-[9px] uppercase font-bold tracking-widest">{t.priority}</span>
                           </p>
                         </div>
                       </div>

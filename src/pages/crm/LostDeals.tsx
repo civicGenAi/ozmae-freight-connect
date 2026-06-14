@@ -91,11 +91,11 @@ export default function LostDeals() {
           <div className="space-y-4">
             {sortedReasons.map(r => (
               <div key={r.category} className="space-y-1.5">
-                <div className="flex justify-between text-xs font-bold text-slate-700">
+                <div className="flex justify-between text-xs font-bold text-foreground">
                   <span>{humanizeReason(r.category)}</span>
                   <span>{r.count} ({r.pct}%)</span>
                 </div>
-                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
                   <div className="h-full bg-rose-400 rounded-full" style={{ width: `${r.pct}%` }} />
                 </div>
               </div>

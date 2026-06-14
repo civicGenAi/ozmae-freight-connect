@@ -118,7 +118,7 @@ export function NotificationsPanel() {
           {STATUS_FILTERS.map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
               className={cn("px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors",
-                statusFilter === s ? "bg-slate-900 text-white" : "bg-muted text-muted-foreground hover:text-foreground")}>
+                statusFilter === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground")}>
               {s}{s === "Unread" && counts.unread > 0 ? ` (${counts.unread})` : ""}
             </button>
           ))}
@@ -143,14 +143,14 @@ export function NotificationsPanel() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex gap-3 items-center bg-white border rounded-2xl p-4">
+            <div key={i} className="flex gap-3 items-center bg-card border rounded-2xl p-4">
               <Skeleton className="h-10 w-10 rounded-xl" />
               <div className="flex-1 space-y-2"><Skeleton className="h-3 w-1/3" /><Skeleton className="h-2.5 w-2/3" /></div>
             </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-dashed rounded-2xl">
+        <div className="text-center py-16 bg-card border border-dashed rounded-2xl">
           <Bell className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
           <p className="text-sm font-bold">No notifications</p>
           <p className="text-xs text-muted-foreground mt-1">Nothing matches the current filters.</p>
@@ -164,7 +164,7 @@ export function NotificationsPanel() {
                 {group.items.map((n) => {
                   const m = metaFor(n.type || "info");
                   return (
-                    <div key={n.id} className={cn("flex gap-3 items-start bg-white border rounded-2xl p-4 transition-colors group", !n.read && "border-accent/40 bg-accent/[0.03]")}>
+                    <div key={n.id} className={cn("flex gap-3 items-start bg-card border rounded-2xl p-4 transition-colors group", !n.read && "border-accent/40 bg-accent/[0.03]")}>
                       <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center shrink-0", m.cls)}>
                         <m.icon className="h-5 w-5" />
                       </div>
