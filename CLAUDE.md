@@ -119,9 +119,11 @@ not break existing flows** — change one area at a time.
    7 days and nagged "expires soon" from day 1. Fixed to sane thresholds
    (`PASSWORD_EXPIRY_DAYS` / `PASSWORD_REMINDER_DAYS`); banner copy in
    `AppLayout.tsx` now shows days remaining.
-3. **Dashboard** — most role dashboards (`*DashboardMockup` in `Dashboard.tsx`)
-   render **hardcoded mock numbers**. Needs a real, clean, graph-driven central
-   overview where every figure is backed by a query.
+3. **Dashboard** — DONE. The old `*DashboardMockup` hardcoded panels were
+   replaced with one central, all-real summary (`["dashboard_overview"]` query
+   derives KPIs, 14-day revenue/jobs trend, pipeline funnel, job/quote status
+   distributions, fleet utilization, top routes, recent jobs, snapshot).
+   Everything is query-backed and degrades to empty states.
 4. **Job Orders cards/status** — DONE. Status-change mutation now detects a
    silent 0-row no-op (the real cause: **`job_orders` had RLS enabled with only
    a SELECT policy**, so UPDATEs were blocked but returned no error → fake
