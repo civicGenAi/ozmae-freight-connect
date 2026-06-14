@@ -188,6 +188,14 @@ not break existing flows** — change one area at a time.
   (`PAGE_SIZE`), so search still spans everything; grouped view per page.
 - **Skeletons:** CRM pages (Interactions, Tasks, Health, Lost Deals) now show
   skeletons instead of plain "Loading…" text.
+- **Job Costing combine:** tick multiple jobs → "Combine" opens a joint
+  profit/loss view (per-job breakdown + combined totals + verdict),
+  non-destructive. Works for one client or across clients.
+- **Sidebar:** System Status removed (lives in My Account → Status tab).
+- **My Account:** compact header that changes per active tab; navy replaced with
+  brand accent everywhere. Security audit log is a light card capped at 10 with
+  a "View all" link to the full **Security Audit Log** page
+  (`SecurityLogs.tsx`, `/settings/security-logs`). Sessions tab is full-width.
 
 - **Merge duplicate customers:** `MergeDuplicatesDialog.tsx` + "Merge Duplicates"
   button on `crm/Customers.tsx`. Calls the `merge_customers(p_primary, p_dupes)`
