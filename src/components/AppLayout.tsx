@@ -279,7 +279,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const { user: profile, roles, loading: authLoading, mustChangePassword, shouldShowPasswordReminder, isUsingDefaultPassword } = useAuth();
+  const { user: profile, roles, loading: authLoading, mustChangePassword, shouldShowPasswordReminder, isUsingDefaultPassword, passwordDaysRemaining } = useAuth();
 
   useEffect(() => {
     if (!authLoading && mustChangePassword && location.pathname !== "/reset-password") {
@@ -443,9 +443,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   {isUsingDefaultPassword ? "MANDATORY SECURITY UPDATE" : "SECURITY RECOMMENDATION"}
                 </p>
                 <p className={cn("text-[9px] font-bold opacity-90", isUsingDefaultPassword ? "text-rose-100" : "text-amber-700")}>
-                  {isUsingDefaultPassword 
-                    ? "You are currently using a default password. System access is restricted until updated." 
-                    : "Your password will expire soon. Please update it to maintain system access."}
+                  {isUsingDefaultPassword
+                    ? "You are currently using a default password. System access is restricted until updated."
+                    : `Your password expires in ${passwordDaysRemaining} day${passwordDaysRemaining === 1 ? "" : "s"}. Update it to keep uninterrupted access.`}
                 </p>
               </div>
             </div>

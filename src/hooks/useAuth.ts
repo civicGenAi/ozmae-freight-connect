@@ -72,25 +72,37 @@ export function useAuth() {
   const isLeads = roles.includes("Leads");
   const isFinance = roles.includes("Finance");
 
-  const passwordAgeDays = user?.password_updated_at 
+  // Password policy: passwords are valid for EXPIRY days, and we start gently
+  // reminding the user only inside the final REMINDER-day window before expiry.
+  const PASSWORD_EXPIRY_DAYS = 90;
+  const PASSWORD_REMINDER_DAYS = 14;
+
+  const passwordAgeDays = user?.password_updated_at
     ? Math.floor((new Date().getTime() - new Date(user.password_updated_at).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
   const isUsingDefaultPassword = user?.is_using_default_password ?? false;
-  const mustChangePassword = passwordAgeDays > 7 || isUsingDefaultPassword;
-  const shouldShowPasswordReminder = (passwordAgeDays > 0 && passwordAgeDays <= 7) && !isUsingDefaultPassword;
+  // Days left before the password actually expires (never negative for display).
+  const passwordDaysRemaining = Math.max(0, PASSWORD_EXPIRY_DAYS - passwordAgeDays);
 
-  return { 
-    user, 
-    roles, 
-    loading, 
-    hasRole, 
-    isAdmin, 
-    isOperations, 
-    isSales, 
+  const mustChangePassword = passwordAgeDays > PASSWORD_EXPIRY_DAYS || isUsingDefaultPassword;
+  const shouldShowPasswordReminder =
+    !isUsingDefaultPassword &&
+    passwordAgeDays >= PASSWORD_EXPIRY_DAYS - PASSWORD_REMINDER_DAYS &&
+    passwordAgeDays <= PASSWORD_EXPIRY_DAYS;
+
+  return {
+    user,
+    roles,
+    loading,
+    hasRole,
+    isAdmin,
+    isOperations,
+    isSales,
     isLeads,
     isFinance,
     passwordAgeDays,
+    passwordDaysRemaining,
     isUsingDefaultPassword,
     mustChangePassword,
     shouldShowPasswordReminder
