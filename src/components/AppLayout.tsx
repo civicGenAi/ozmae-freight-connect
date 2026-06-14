@@ -6,8 +6,10 @@ import {
   CreditCard, FolderOpen, Settings, Building2, UserCog, Bell,
   ClipboardList, Receipt, Menu, X, LogOut, AlertTriangle,
   Activity, Phone, CheckSquare, TrendingDown, ChevronDown, 
-  ChevronRight, PanelLeft, PanelLeftClose, BarChart3, Calculator
+  ChevronRight, PanelLeft, PanelLeftClose, BarChart3, Calculator,
+  Sun, Moon, Monitor, Check
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Tooltip,
@@ -282,6 +284,7 @@ function SidebarNav({
 export default function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -405,28 +408,41 @@ export default function AppLayout({ children }: { children: ReactNode }) {
              <div className="h-6 w-[1px] bg-border/40 mx-1 hidden md:block" />
             
             <DropdownMenu>
-              <DropdownMenuTrigger className="outline-none">
-                <Avatar className="h-8 w-8 cursor-pointer ring-offset-2 ring-accent/20 hover:ring-2 transition-all">
-                  <AvatarImage src={profile?.avatar_url} />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
+              <DropdownMenuTrigger className="outline-none rounded-full">
+                <Avatar className="h-10 w-10 cursor-pointer ring-2 ring-accent/20 ring-offset-2 ring-offset-background hover:ring-accent/50 transition-all">
+                  <AvatarImage src={profile?.avatar_url} className="object-cover" />
+                  <AvatarFallback className="bg-accent text-accent-foreground text-xs font-black">
                     {profile ? getInitials(profile.full_name) : "??"}
                   </AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{profile?.full_name}</p>
-                    <p className="text-xs leading-none text-muted-foreground truncate max-w-[200px]">{profile?.email}</p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/settings/profile")}>
-                  <UserCog className="mr-2 h-4 w-4" />
+              <DropdownMenuContent align="end" className="w-52 rounded-2xl p-2 shadow-xl">
+                <DropdownMenuItem onClick={() => navigate("/settings/profile")} className="rounded-xl cursor-pointer gap-2 font-medium">
+                  <UserCog className="h-4 w-4" />
                   <span>My Account</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowLogoutDialog(true)} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
+
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[9px] uppercase tracking-widest text-muted-foreground font-black px-2 py-1">Theme</DropdownMenuLabel>
+                {([
+                  { key: "light", label: "Light", Icon: Sun },
+                  { key: "dark", label: "Dark", Icon: Moon },
+                  { key: "system", label: "System", Icon: Monitor },
+                ] as const).map((opt) => (
+                  <DropdownMenuItem
+                    key={opt.key}
+                    onSelect={(e) => { e.preventDefault(); setTheme(opt.key); }}
+                    className="rounded-xl cursor-pointer gap-2 font-medium"
+                  >
+                    <opt.Icon className="h-4 w-4" />
+                    <span className="flex-1">{opt.label}</span>
+                    {theme === opt.key && <Check className="h-3.5 w-3.5 text-accent" />}
+                  </DropdownMenuItem>
+                ))}
+
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowLogoutDialog(true)} className="rounded-xl cursor-pointer gap-2 font-medium text-destructive focus:bg-destructive/10 focus:text-destructive">
+                  <LogOut className="h-4 w-4" />
                   <span>Log out</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
