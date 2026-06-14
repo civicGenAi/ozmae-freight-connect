@@ -268,21 +268,41 @@ export default function JobOrders() {
 
   const [suggestedAmount, setSuggestedAmount] = useState<string | null>(null);
 
-  // Combined searchable options for the Business Entity picker
-  const entityOptions = React.useMemo(() => [
-    ...(dataNeeded?.customers || []),
-    ...(dataNeeded?.prospects || []),
-  ], [dataNeeded]);
+  // Combined searchable options for the Business Entity picker. Each option gets
+  // a hint showing how many quotes it has + the latest cost, so duplicate-named
+  // businesses are easy to tell apart and you can see the cost up front.
+  const entityOptions = React.useMemo(() => {
+    if (!dataNeeded) return [] as any[];
+    const quotes = dataNeeded.quotations || [];
+    const hintFor = (id: string) => {
+      const qs = quotes.filter((q: any) => q.customer_id === id || q.lead_id === id);
+      if (qs.length === 0) return "no quotes";
+      const latest = qs[0]; // quotations are ordered newest-first
+      return `${qs.length} quote${qs.length > 1 ? "s" : ""} · ${formatCurrency(Number(latest.total_amount_usd) || 0)}`;
+    };
+    const customers = (dataNeeded.customers || []).map((c: any) => ({ ...c, hint: hintFor(c.value) }));
+    const prospects = (dataNeeded.prospects || []).map((p: any) => ({ ...p, hint: hintFor(p.value) }));
+    return [...customers, ...prospects];
+  }, [dataNeeded]);
 
   // All quotations belonging to the currently selected business entity.
   // A single business can have several quotes — we surface ALL of them so the
   // user can pick the right one instead of silently using only one.
   const entityQuotes = React.useMemo(() => {
     if (!selectedEntityId || !dataNeeded) return [] as any[];
-    return dataNeeded.quotations.filter((q: any) =>
-      q.customer_id === selectedEntityId || q.lead_id === selectedEntityId
-    );
-  }, [selectedEntityId, dataNeeded]);
+    // Duplicate customer records (same name, different id) split a business's
+    // quotes between them. Gather every entity id that shares the selected
+    // name so either record surfaces ALL of that business's quotes.
+    const selected = entityOptions.find((o: any) => o.value === selectedEntityId);
+    const baseName = (selected?.label || "").toString().trim().toLowerCase();
+    const ids = new Set<string>([selectedEntityId]);
+    if (baseName) {
+      entityOptions.forEach((o: any) => {
+        if ((o.label || "").toString().trim().toLowerCase() === baseName) ids.add(o.value);
+      });
+    }
+    return dataNeeded.quotations.filter((q: any) => ids.has(q.customer_id) || ids.has(q.lead_id));
+  }, [selectedEntityId, dataNeeded, entityOptions]);
 
   // When the entity changes, default to a sensible quote (accepted > most recent)
   // but keep the user's choice if it's still valid for this entity.
@@ -654,13 +674,14 @@ export default function JobOrders() {
         finalVehicleId = newVeh.id;
       }
 
-      // 4. Identify Quotation Link — honour the quote the user explicitly chose,
-      // falling back to accepted > most recent for this entity.
+      // 4. Identify Quotation Link — honour the quote the user explicitly chose
+      // (resolved globally by id so it works even across duplicate customer
+      // records), falling back to accepted > most recent for this entity.
       const candidateQuotes = dataNeeded?.quotations.filter((q: any) =>
         q.customer_id === finalCustomerId || q.lead_id === selectedEntityId
       ) || [];
       const targetQuote =
-        candidateQuotes.find((q: any) => q.id === values.quotationId) ||
+        dataNeeded?.quotations.find((q: any) => q.id === values.quotationId) ||
         candidateQuotes.find((q: any) => q.status === 'accepted') ||
         candidateQuotes[0];
 
