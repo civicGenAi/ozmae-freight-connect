@@ -190,7 +190,10 @@ not break existing flows** — change one area at a time.
   skeletons instead of plain "Loading…" text.
 - **Job Costing combine:** tick multiple jobs → "Combine" opens a joint
   profit/loss view (per-job breakdown + combined totals + verdict),
-  non-destructive. Works for one client or across clients.
+  non-destructive. Works for one client or across clients. Optionally **save a
+  combination** (named) → `job_groups` table (migration
+  `20260614170000_job_groups.sql`); saved combos show as chips above the table
+  and reopen the combined view. Additive only — never alters individual jobs.
 - **Sidebar:** System Status removed (lives in My Account → Status tab).
 - **My Account:** compact header that changes per active tab; navy replaced with
   brand accent everywhere. Security audit log is a light card capped at 10 with
