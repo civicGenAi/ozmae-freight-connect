@@ -182,6 +182,12 @@ not break existing flows** — change one area at a time.
   duplicate-named options select together); supports an optional `hint`.
 - **My Account:** visual-only modern refresh (hero header, tab bar, profile card).
 
+- **Merge duplicate customers:** `MergeDuplicatesDialog.tsx` + "Merge Duplicates"
+  button on `crm/Customers.tsx`. Calls the `merge_customers(p_primary, p_dupes)`
+  RPC (migration `20260614160000_merge_customers.sql`, SECURITY DEFINER) which
+  reassigns all child records then deletes the dupes. **Run the migration in
+  Supabase.**
+
 ## CRM assessment (open)
 
 CRM works (Customers/Interactions/Tasks/Health/Lost Deals) and is wired to
