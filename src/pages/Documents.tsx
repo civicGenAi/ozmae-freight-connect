@@ -1,4 +1,4 @@
-import { useState, useRef, Fragment } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,9 @@ import {
   CheckCircle2,
   DollarSign,
   Eye,
-  X
+  X,
+  Search,
+  UploadCloud
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +39,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { pdf } from "@react-pdf/renderer";
 import { PickupPDF } from "@/components/PickupPDF";
 import { DeliveryNotePDF } from "@/components/DeliveryNotePDF";
@@ -59,30 +62,62 @@ export default function Documents() {
   const [previewDoc, setPreviewDoc] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [documentToDelete, setDocumentToDelete] = useState<any>(null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [uploadTarget, setUploadTarget] = useState<{ jobId: string; type: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const queryClient = useQueryClient();
 
+  // debounce the search so we don't refetch on every keystroke
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search.trim()); setCurrentPage(1); }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const { data: jobGroupsData, isLoading } = useQuery({
-    queryKey: ["document_groups", currentPage],
+    queryKey: ["document_groups", currentPage, debouncedSearch, typeFilter],
     queryFn: async () => {
       const from = (currentPage - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      const { data: jobs, error: jobsError, count } = await supabase
+      // When filtering by document type, restrict to jobs that have such a doc.
+      let typeJobIds: string[] | null = null;
+      if (typeFilter !== "all") {
+        const { data: typeDocs } = await supabase.from("documents").select("job_order_id").eq("document_type", typeFilter);
+        typeJobIds = Array.from(new Set((typeDocs || []).map((d: any) => d.job_order_id))).filter(Boolean) as string[];
+        if (typeJobIds.length === 0) return { jobs: [], totalCount: 0 };
+      }
+
+      let query = supabase
         .from("job_orders")
-        .select("id, quotation_id, customer:customers(company_name), origin, destination", { count: "exact" })
-        .order("created_at", { ascending: false })
-        .range(from, to);
-      
+        .select("id, job_number, quotation_id, customer:customers(company_name), origin, destination", { count: "exact" })
+        .order("created_at", { ascending: false });
+
+      if (typeJobIds) query = query.in("id", typeJobIds);
+
+      if (debouncedSearch) {
+        const s = debouncedSearch;
+        const { data: custs } = await supabase.from("customers").select("id").ilike("company_name", `%${s}%`);
+        const custIds = (custs || []).map((c: any) => c.id);
+        const orParts = [`job_number.ilike.%${s}%`, `origin.ilike.%${s}%`, `destination.ilike.%${s}%`];
+        if (custIds.length) orParts.push(`customer_id.in.(${custIds.join(",")})`);
+        query = query.or(orParts.join(","));
+      }
+
+      const { data: jobs, error: jobsError, count } = await query.range(from, to);
       if (jobsError) throw jobsError;
 
+      const jobIds = (jobs || []).map((j: any) => j.id);
       const { data: docs, error: docsError } = await supabase
         .from("documents")
-        .select("id, job_order_id, file_name, file_path, document_type, created_at");
-      
+        .select("id, job_order_id, file_name, file_path, document_type, created_at")
+        .in("job_order_id", jobIds.length ? jobIds : ["00000000-0000-0000-0000-000000000000"]);
+
       if (docsError) throw docsError;
 
-      const mappedJobs = jobs.map((job: any) => ({
+      const mappedJobs = (jobs || []).map((job: any) => ({
         ...job,
         docs: docs.filter(d => d.job_order_id === job.id),
         lastUpdated: docs.filter(d => d.job_order_id === job.id).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.created_at,
@@ -134,6 +169,53 @@ export default function Documents() {
     }
   };
 
+  const triggerUpload = (jobId: string, type: string) => {
+    setUploadTarget({ jobId, type });
+    // let state settle, then open the picker
+    setTimeout(() => fileInputRef.current?.click(), 0);
+  };
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!uploadTarget) throw new Error("No upload target");
+      const { jobId, type } = uploadTarget;
+      const { data: { user } } = await supabase.auth.getUser();
+      const ext = file.name.split(".").pop() || "bin";
+      const path = `job-${jobId}/${type}-${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage.from("logistic-files").upload(path, file, { upsert: false });
+      if (upErr) throw upErr;
+
+      const { data, error } = await supabase.from("documents").insert([{
+        job_order_id: jobId,
+        document_type: type,
+        file_name: file.name,
+        file_path: path,
+        file_size_bytes: file.size,
+        mime_type: file.type,
+        uploaded_by: user?.id || null,
+      }]).select();
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Upload not saved (no rows). Check the documents RLS insert policy in Supabase.");
+      return data[0];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["document_groups"] });
+      setUploadTarget(null);
+      toast.success("Document uploaded");
+    },
+    onError: (err: any) => {
+      setUploadTarget(null);
+      toast.error(err?.message || "Upload failed");
+    },
+  });
+
+  const onFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (file) uploadMutation.mutate(file);
+  };
+
   const deleteMutation = useMutation({
     mutationFn: async (doc: any) => {
       // 1. Delete from DB
@@ -157,10 +239,26 @@ export default function Documents() {
   return (
     <div className="space-y-6">
       <PageHeader title="Document Vault">
-         <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest bg-muted/30 px-3 py-1.5 rounded-full border border-dashed">
+         <div className="hidden lg:flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest bg-muted/30 px-3 py-1.5 rounded-full border border-dashed">
           <HardDrive className="h-3 w-3 text-accent" /> Secure Cloud Storage
         </div>
       </PageHeader>
+
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search job ref, customer or route..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setCurrentPage(1); }}>
+          <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="All document types" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All document types</SelectItem>
+            {docTypes.map((dt) => <SelectItem key={dt.key} value={dt.key}>{dt.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <input ref={fileInputRef} type="file" className="hidden" onChange={onFilePicked} accept="application/pdf,image/*" />
 
       <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
         <Table>
@@ -242,17 +340,19 @@ export default function Documents() {
                           {activeJobCategories.map((dt) => {
                             const doc = job.docs?.find((d: any) => d.document_type === dt.key);
                             
+                            const isUploadingHere = uploadMutation.isPending && uploadTarget?.jobId === job.id && uploadTarget?.type === dt.key;
                             return (
                               <div
                                 key={dt.key}
+                                onClick={() => !doc && !isUploadingHere && triggerUpload(job.id, dt.key)}
                                 className={cn(
                                   "relative group flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all h-[180px]",
-                                  doc ? "bg-card border-success/20 shadow-sm" : "bg-card border-dashed border-muted-foreground/10 hover:border-accent/30"
+                                  doc ? "bg-card border-success/20 shadow-sm" : "bg-card border-dashed border-muted-foreground/10 hover:border-accent/30 cursor-pointer"
                                 )}
                               >
                                 {doc ? (
                                   <div className="absolute top-3 right-3 flex gap-1 z-10">
-                                    <button 
+                                    <button
                                       onClick={() => handlePreview(doc)}
                                       disabled={requestingAccess === doc.id}
                                       className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-accent transition-colors disabled:opacity-50"
@@ -260,7 +360,7 @@ export default function Documents() {
                                     >
                                        {requestingAccess === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
                                     </button>
-                                    <button 
+                                    <button
                                       onClick={() => handleDownload(doc)}
                                       disabled={requestingAccess === doc.id}
                                       className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-accent transition-colors disabled:opacity-50"
@@ -268,23 +368,31 @@ export default function Documents() {
                                     >
                                        <ExternalLink className="h-3 w-3" />
                                     </button>
+                                    <button onClick={() => triggerUpload(job.id, dt.key)} className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-accent transition-colors" title="Replace / upload new">
+                                       <UploadCloud className="h-3 w-3" />
+                                    </button>
                                     <button onClick={() => setDocumentToDelete(doc)} className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-destructive transition-colors" title="Remove">
                                        <Trash2 className="h-3 w-3" />
                                     </button>
                                   </div>
                                 ) : null}
-                                
+
                                 <div className={cn(
                                   "h-14 w-14 rounded-2xl flex items-center justify-center mb-3 shadow-inner transition-transform group-hover:scale-110",
                                   doc ? "bg-success/10 text-success" : "bg-muted/50 text-muted-foreground"
                                 )}>
-                                  {doc ? <CheckCircle2 className="h-7 w-7" /> : <dt.icon className="h-7 w-7" />}
+                                  {isUploadingHere ? <Loader2 className="h-7 w-7 animate-spin" /> : doc ? <CheckCircle2 className="h-7 w-7" /> : <dt.icon className="h-7 w-7" />}
                                 </div>
-                                
+
                                 <span className={cn(
                                   "text-[10px] font-black uppercase tracking-widest text-center",
                                   doc ? "text-foreground" : "text-muted-foreground"
                                 )}>{dt.label}</span>
+                                {!doc && !isUploadingHere && (
+                                  <span className="text-[8px] font-bold uppercase tracking-widest text-accent/70 mt-1 flex items-center gap-1">
+                                    <UploadCloud className="h-2.5 w-2.5" /> Click to upload
+                                  </span>
+                                )}
                               </div>
                             );
                           })}

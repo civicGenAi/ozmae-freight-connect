@@ -13,37 +13,27 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Search, Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Wallet, ArrowRight } from "lucide-react";
+import { Search, Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Wallet, ArrowRight, Clock, CheckCircle2 } from "lucide-react";
 
 const fmt = (n: number) => `$${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num = (v: any) => Number(v) || 0;
 
-const COST_CATEGORIES = [
-  "trucking",
-  "fuel",
-  "customs_clearing",
-  "port_terminal",
-  "handling",
-  "documentation",
-  "insurance",
-  "demurrage",
-  "agent_fee",
-  "labour",
-  "other",
-];
-const catLabel = (c: string) => c.replace(/_/g, " ");
+const COST_CATEGORIES = ["trucking", "fuel", "customs_clearing", "port_terminal", "handling", "documentation", "insurance", "demurrage", "agent_fee", "labour", "other"];
+const CHARGE_CATEGORIES = ["freight", "handling", "documentation", "storage", "insurance", "customs", "demurrage", "other"];
+const catLabel = (c: string) => (c || "").replace(/_/g, " ");
 
-// revenue for a job: prefer the linked quotation, fall back to job_orders.total_amount
-const jobRevenue = (job: any) => num(job?.quotation?.total_amount_usd) || num(job?.total_amount);
+// base revenue for a job: prefer the linked quotation, fall back to job total
+const jobBaseRevenue = (job: any) => num(job?.quotation?.total_amount_usd) || num(job?.total_amount);
 
 export default function JobCosting() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [costToDelete, setCostToDelete] = useState<string | null>(null);
+  const [chargeToDelete, setChargeToDelete] = useState<string | null>(null);
 
-  // new cost form state
-  const [form, setForm] = useState({ category: "trucking", description: "", amount: "", payee: "", incurred_on: new Date().toISOString().split("T")[0] });
+  const [costForm, setCostForm] = useState({ category: "trucking", description: "", amount: "", payee: "", incurred_on: new Date().toISOString().split("T")[0] });
+  const [chargeForm, setChargeForm] = useState({ category: "freight", description: "", amount: "", incurred_on: new Date().toISOString().split("T")[0] });
 
   const { data: jobs, isLoading } = useQuery({
     queryKey: ["job_costing_jobs"],
@@ -57,11 +47,19 @@ export default function JobCosting() {
     },
   });
 
-  // all cost lines (to aggregate per job in the list)
   const { data: allCosts } = useQuery({
     queryKey: ["all_job_costs"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("job_costs").select("job_order_id, amount_usd");
+      const { data, error } = await supabase.from("job_costs").select("job_order_id, amount_usd, payment_status");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: allCharges } = useQuery({
+    queryKey: ["all_job_charges"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("job_charges").select("job_order_id, amount_usd");
       if (error) throw error;
       return data || [];
     },
@@ -69,22 +67,37 @@ export default function JobCosting() {
 
   const costByJob = useMemo(() => {
     const map: Record<string, number> = {};
-    (allCosts || []).forEach((c: any) => {
-      map[c.job_order_id] = (map[c.job_order_id] || 0) + num(c.amount_usd);
-    });
+    (allCosts || []).forEach((c: any) => { map[c.job_order_id] = (map[c.job_order_id] || 0) + num(c.amount_usd); });
     return map;
   }, [allCosts]);
 
-  // cost lines for the open job
+  const chargeByJob = useMemo(() => {
+    const map: Record<string, number> = {};
+    (allCharges || []).forEach((c: any) => { map[c.job_order_id] = (map[c.job_order_id] || 0) + num(c.amount_usd); });
+    return map;
+  }, [allCharges]);
+
+  const payablesOwedTotal = useMemo(
+    () => (allCosts || []).filter((c: any) => (c.payment_status || "owed") === "owed").reduce((a: number, c: any) => a + num(c.amount_usd), 0),
+    [allCosts]
+  );
+
+  // detail queries for the open job
   const { data: jobCosts } = useQuery({
     queryKey: ["job_costs", selectedJob?.id],
     enabled: !!selectedJob?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("job_costs")
-        .select("*")
-        .eq("job_order_id", selectedJob.id)
-        .order("incurred_on", { ascending: false });
+      const { data, error } = await supabase.from("job_costs").select("*").eq("job_order_id", selectedJob.id).order("incurred_on", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: jobCharges } = useQuery({
+    queryKey: ["job_charges", selectedJob?.id],
+    enabled: !!selectedJob?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("job_charges").select("*").eq("job_order_id", selectedJob.id).order("incurred_on", { ascending: false });
       if (error) throw error;
       return data || [];
     },
@@ -92,7 +105,7 @@ export default function JobCosting() {
 
   const rows = useMemo(() => {
     const list = (jobs || []).map((j: any) => {
-      const revenue = jobRevenue(j);
+      const revenue = jobBaseRevenue(j) + (chargeByJob[j.id] || 0);
       const cost = costByJob[j.id] || 0;
       const profit = revenue - cost;
       const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
@@ -105,61 +118,82 @@ export default function JobCosting() {
       (j.job_number || j.id).toString().toLowerCase().includes(q) ||
       `${j.origin} ${j.destination}`.toLowerCase().includes(q)
     );
-  }, [jobs, costByJob, search]);
+  }, [jobs, costByJob, chargeByJob, search]);
 
-  const totals = useMemo(() => {
-    return rows.reduce(
-      (acc: any, r: any) => ({ revenue: acc.revenue + r.revenue, cost: acc.cost + r.cost, profit: acc.profit + r.profit }),
-      { revenue: 0, cost: 0, profit: 0 }
-    );
-  }, [rows]);
+  const totals = useMemo(
+    () => rows.reduce((acc: any, r: any) => ({ revenue: acc.revenue + r.revenue, cost: acc.cost + r.cost, profit: acc.profit + r.profit }), { revenue: 0, cost: 0, profit: 0 }),
+    [rows]
+  );
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["job_costs", selectedJob?.id] });
+    queryClient.invalidateQueries({ queryKey: ["job_charges", selectedJob?.id] });
+    queryClient.invalidateQueries({ queryKey: ["all_job_costs"] });
+    queryClient.invalidateQueries({ queryKey: ["all_job_charges"] });
+  };
 
   const addCost = useMutation({
     mutationFn: async () => {
-      const amount = parseFloat(form.amount);
+      const amount = parseFloat(costForm.amount);
       if (!amount || amount <= 0) throw new Error("Enter a cost amount greater than 0");
       const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from("job_costs")
-        .insert([{
-          job_order_id: selectedJob.id,
-          category: form.category,
-          description: form.description || null,
-          amount_usd: amount,
-          payee: form.payee || null,
-          incurred_on: form.incurred_on,
-          created_by: user?.id || null,
-        }])
-        .select();
+      const { data, error } = await supabase.from("job_costs").insert([{
+        job_order_id: selectedJob.id, category: costForm.category, description: costForm.description || null,
+        amount_usd: amount, payee: costForm.payee || null, incurred_on: costForm.incurred_on, payment_status: "owed", created_by: user?.id || null,
+      }]).select();
       if (error) throw error;
       if (!data || data.length === 0) throw new Error("Cost was not saved (no rows). Check the job_costs RLS policy in Supabase.");
       return data[0];
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["job_costs", selectedJob?.id] });
-      queryClient.invalidateQueries({ queryKey: ["all_job_costs"] });
-      setForm({ category: form.category, description: "", amount: "", payee: "", incurred_on: new Date().toISOString().split("T")[0] });
-      toast.success("Cost added");
-    },
+    onSuccess: () => { invalidateAll(); setCostForm({ category: costForm.category, description: "", amount: "", payee: "", incurred_on: new Date().toISOString().split("T")[0] }); toast.success("Cost added"); },
     onError: (err: any) => toast.error(err?.message || "Failed to add cost"),
   });
 
-  const deleteCost = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("job_costs").delete().eq("id", id);
+  const toggleCostPaid = useMutation({
+    mutationFn: async (cost: any) => {
+      const next = (cost.payment_status || "owed") === "paid" ? "owed" : "paid";
+      const { error } = await supabase.from("job_costs").update({ payment_status: next, paid_on: next === "paid" ? new Date().toISOString().split("T")[0] : null }).eq("id", cost.id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["job_costs", selectedJob?.id] });
-      queryClient.invalidateQueries({ queryKey: ["all_job_costs"] });
-      setCostToDelete(null);
-      toast.success("Cost removed");
-    },
+    onSuccess: () => { invalidateAll(); },
+    onError: (err: any) => toast.error(err?.message || "Failed to update payment status"),
+  });
+
+  const deleteCost = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from("job_costs").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => { invalidateAll(); setCostToDelete(null); toast.success("Cost removed"); },
     onError: (err: any) => toast.error(err?.message || "Failed to remove cost"),
   });
 
-  const openRevenue = selectedJob ? jobRevenue(selectedJob) : 0;
+  const addCharge = useMutation({
+    mutationFn: async () => {
+      const amount = parseFloat(chargeForm.amount);
+      if (!amount || amount <= 0) throw new Error("Enter a charge amount greater than 0");
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("job_charges").insert([{
+        job_order_id: selectedJob.id, category: chargeForm.category, description: chargeForm.description || null,
+        amount_usd: amount, incurred_on: chargeForm.incurred_on, created_by: user?.id || null,
+      }]).select();
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Charge was not saved (no rows). Check the job_charges RLS policy in Supabase.");
+      return data[0];
+    },
+    onSuccess: () => { invalidateAll(); setChargeForm({ category: chargeForm.category, description: "", amount: "", incurred_on: new Date().toISOString().split("T")[0] }); toast.success("Billable charge added"); },
+    onError: (err: any) => toast.error(err?.message || "Failed to add charge"),
+  });
+
+  const deleteCharge = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from("job_charges").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => { invalidateAll(); setChargeToDelete(null); toast.success("Charge removed"); },
+    onError: (err: any) => toast.error(err?.message || "Failed to remove charge"),
+  });
+
+  // open-job P&L
+  const baseRev = selectedJob ? jobBaseRevenue(selectedJob) : 0;
+  const extraRev = (jobCharges || []).reduce((a: number, c: any) => a + num(c.amount_usd), 0);
+  const openRevenue = baseRev + extraRev;
   const openCostTotal = (jobCosts || []).reduce((a: number, c: any) => a + num(c.amount_usd), 0);
+  const openOwed = (jobCosts || []).filter((c: any) => (c.payment_status || "owed") === "owed").reduce((a: number, c: any) => a + num(c.amount_usd), 0);
   const openProfit = openRevenue - openCostTotal;
   const openMargin = openRevenue > 0 ? (openProfit / openRevenue) * 100 : 0;
 
@@ -168,24 +202,22 @@ export default function JobCosting() {
       <PageHeader title="Job Costing & Profitability" />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl border shadow-sm p-5">
-          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-            <DollarSign className="h-4 w-4 text-blue-500" /> Total Revenue
-          </div>
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground"><DollarSign className="h-4 w-4 text-blue-500" /> Total Revenue</div>
           <p className="text-2xl font-black mt-2 tabular-nums">{fmt(totals.revenue)}</p>
         </div>
         <div className="bg-white rounded-2xl border shadow-sm p-5">
-          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-            <Wallet className="h-4 w-4 text-amber-500" /> Total Cost
-          </div>
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground"><Wallet className="h-4 w-4 text-amber-500" /> Total Cost</div>
           <p className="text-2xl font-black mt-2 tabular-nums">{fmt(totals.cost)}</p>
         </div>
         <div className={cn("rounded-2xl border shadow-sm p-5 text-white", totals.profit >= 0 ? "bg-emerald-600" : "bg-rose-600")}>
-          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/70">
-            {totals.profit >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />} Net {totals.profit >= 0 ? "Profit" : "Loss"}
-          </div>
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white/70">{totals.profit >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />} Net {totals.profit >= 0 ? "Profit" : "Loss"}</div>
           <p className="text-2xl font-black mt-2 tabular-nums">{fmt(totals.profit)}</p>
+        </div>
+        <div className="bg-white rounded-2xl border shadow-sm p-5">
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground"><Clock className="h-4 w-4 text-rose-500" /> Payables Owed</div>
+          <p className="text-2xl font-black mt-2 tabular-nums text-rose-600">{fmt(payablesOwedTotal)}</p>
         </div>
       </div>
 
@@ -210,9 +242,7 @@ export default function JobCosting() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={8}><div className="h-10 bg-muted/50 animate-pulse rounded" /></TableCell></TableRow>
-              ))
+              Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={8}><div className="h-10 bg-muted/50 animate-pulse rounded" /></TableCell></TableRow>))
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No job orders found.</TableCell></TableRow>
             ) : rows.map((j: any) => (
@@ -231,18 +261,13 @@ export default function JobCosting() {
         </Table>
       </div>
 
-      {/* Detail drawer */}
       <Sheet open={!!selectedJob} onOpenChange={(o) => !o && setSelectedJob(null)}>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
           {selectedJob && (
             <>
               <SheetHeader>
-                <SheetTitle className="uppercase tracking-tight">
-                  Job {(selectedJob.job_number || selectedJob.id).toString().split("-")[0]}
-                </SheetTitle>
-                <SheetDescription>
-                  {selectedJob.customer?.company_name} · {selectedJob.origin} → {selectedJob.destination}
-                </SheetDescription>
+                <SheetTitle className="uppercase tracking-tight">Job {(selectedJob.job_number || selectedJob.id).toString().split("-")[0]}</SheetTitle>
+                <SheetDescription>{selectedJob.customer?.company_name} · {selectedJob.origin} → {selectedJob.destination}</SheetDescription>
               </SheetHeader>
 
               {/* P&L summary */}
@@ -250,84 +275,110 @@ export default function JobCosting() {
                 <div className="bg-blue-50 rounded-xl p-3">
                   <p className="text-[9px] font-black uppercase tracking-widest text-blue-600">Revenue</p>
                   <p className="text-base font-black tabular-nums mt-1">{fmt(openRevenue)}</p>
+                  <p className="text-[9px] text-muted-foreground mt-0.5">{fmt(baseRev)} + {fmt(extraRev)} extra</p>
                 </div>
                 <div className="bg-amber-50 rounded-xl p-3">
                   <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">Cost</p>
                   <p className="text-base font-black tabular-nums mt-1">{fmt(openCostTotal)}</p>
+                  <p className="text-[9px] text-rose-600 mt-0.5">{fmt(openOwed)} owed</p>
                 </div>
                 <div className={cn("rounded-xl p-3", openProfit >= 0 ? "bg-emerald-50" : "bg-rose-50")}>
                   <p className={cn("text-[9px] font-black uppercase tracking-widest", openProfit >= 0 ? "text-emerald-600" : "text-rose-600")}>{openProfit >= 0 ? "Profit" : "Loss"}</p>
                   <p className="text-base font-black tabular-nums mt-1">{fmt(openProfit)}</p>
-                  <p className={cn("text-[9px] font-bold", openProfit >= 0 ? "text-emerald-600" : "text-rose-600")}>{openRevenue > 0 ? `${openMargin.toFixed(1)}% margin` : ""}</p>
+                  <p className={cn("text-[9px] font-bold mt-0.5", openProfit >= 0 ? "text-emerald-600" : "text-rose-600")}>{openRevenue > 0 ? `${openMargin.toFixed(1)}% margin` : ""}</p>
                 </div>
               </div>
 
-              {/* Cost lines */}
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Cost Line Items</h4>
-              <div className="border rounded-xl overflow-hidden mb-6">
+              {/* Extra billable charges */}
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Extra Billable Charges</h4>
+              <div className="border rounded-xl overflow-hidden mb-4">
                 <Table>
-                  <TableHeader className="bg-muted/50">
-                    <TableRow>
-                      <TableHead className="text-[9px] uppercase">Category</TableHead>
-                      <TableHead className="text-[9px] uppercase">Details</TableHead>
-                      <TableHead className="text-[9px] uppercase text-right">Amount</TableHead>
-                      <TableHead className="w-8"></TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <TableHeader className="bg-muted/50"><TableRow><TableHead className="text-[9px] uppercase">Category</TableHead><TableHead className="text-[9px] uppercase">Details</TableHead><TableHead className="text-[9px] uppercase text-right">Amount</TableHead><TableHead className="w-8"></TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {(jobCosts || []).length === 0 ? (
-                      <TableRow><TableCell colSpan={4} className="text-center py-6 text-xs text-muted-foreground">No costs recorded yet.</TableCell></TableRow>
-                    ) : (jobCosts || []).map((c: any) => (
+                    {(jobCharges || []).length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-5 text-xs text-muted-foreground">No extra charges. Revenue uses the quote only.</TableCell></TableRow>
+                    ) : (jobCharges || []).map((c: any) => (
                       <TableRow key={c.id}>
                         <TableCell className="text-[11px] font-bold uppercase">{catLabel(c.category)}</TableCell>
-                        <TableCell className="text-[11px]">
-                          <span>{c.description || "—"}</span>
-                          <span className="block text-[9px] text-muted-foreground">
-                            {c.payee ? `${c.payee} · ` : ""}{c.incurred_on ? format(new Date(c.incurred_on), "MMM d, yyyy") : ""}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-xs font-bold text-amber-600">{fmt(num(c.amount_usd))}</TableCell>
-                        <TableCell>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-500" onClick={() => setCostToDelete(c.id)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </TableCell>
+                        <TableCell className="text-[11px]"><span>{c.description || "—"}</span><span className="block text-[9px] text-muted-foreground">{c.incurred_on ? format(new Date(c.incurred_on), "MMM d, yyyy") : ""}</span></TableCell>
+                        <TableCell className="text-right tabular-nums text-xs font-bold text-emerald-600">{fmt(num(c.amount_usd))}</TableCell>
+                        <TableCell><Button size="icon" variant="ghost" className="h-7 w-7 text-rose-500" onClick={() => setChargeToDelete(c.id)}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                <Select value={chargeForm.category} onValueChange={(v) => setChargeForm({ ...chargeForm, category: v })}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>{CHARGE_CATEGORIES.map((c) => <SelectItem key={c} value={c} className="capitalize">{catLabel(c)}</SelectItem>)}</SelectContent>
+                </Select>
+                <Input type="number" step="0.01" min="0" value={chargeForm.amount} onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })} placeholder="Amount" className="h-9 text-xs" />
+                <Input value={chargeForm.description} onChange={(e) => setChargeForm({ ...chargeForm, description: e.target.value })} placeholder="Description" className="h-9 text-xs col-span-2" />
+                <Button onClick={() => addCharge.mutate()} disabled={addCharge.isPending} variant="outline" className="col-span-2 h-9 gap-2 text-[10px] font-black uppercase tracking-widest border-emerald-500/40 text-emerald-700 hover:bg-emerald-50">
+                  <Plus className="h-3.5 w-3.5" /> {addCharge.isPending ? "Saving..." : "Add Billable Charge"}
+                </Button>
+              </div>
+
+              {/* Cost lines */}
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Cost Line Items</h4>
+              <div className="border rounded-xl overflow-hidden mb-4">
+                <Table>
+                  <TableHeader className="bg-muted/50"><TableRow><TableHead className="text-[9px] uppercase">Category</TableHead><TableHead className="text-[9px] uppercase">Details</TableHead><TableHead className="text-[9px] uppercase">Payable</TableHead><TableHead className="text-[9px] uppercase text-right">Amount</TableHead><TableHead className="w-8"></TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {(jobCosts || []).length === 0 ? (
+                      <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-muted-foreground">No costs recorded yet.</TableCell></TableRow>
+                    ) : (jobCosts || []).map((c: any) => {
+                      const paid = (c.payment_status || "owed") === "paid";
+                      return (
+                        <TableRow key={c.id}>
+                          <TableCell className="text-[11px] font-bold uppercase">{catLabel(c.category)}</TableCell>
+                          <TableCell className="text-[11px]"><span>{c.description || "—"}</span><span className="block text-[9px] text-muted-foreground">{c.payee ? `${c.payee} · ` : ""}{c.incurred_on ? format(new Date(c.incurred_on), "MMM d, yyyy") : ""}</span></TableCell>
+                          <TableCell>
+                            <button
+                              onClick={() => toggleCostPaid.mutate(c)}
+                              className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-colors", paid ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-rose-100 text-rose-700 hover:bg-rose-200")}
+                              title="Click to toggle paid / owed"
+                            >
+                              {paid ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />} {paid ? "Paid" : "Owed"}
+                            </button>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-xs font-bold text-amber-600">{fmt(num(c.amount_usd))}</TableCell>
+                          <TableCell><Button size="icon" variant="ghost" className="h-7 w-7 text-rose-500" onClick={() => setCostToDelete(c.id)}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
 
               {/* Add cost form */}
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">Add a Cost</h4>
               <div className="space-y-3 bg-muted/20 border rounded-xl p-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-[10px] uppercase font-bold">Category</Label>
-                    <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+                    <Select value={costForm.category} onValueChange={(v) => setCostForm({ ...costForm, category: v })}>
                       <SelectTrigger className="h-10 mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {COST_CATEGORIES.map((c) => <SelectItem key={c} value={c} className="capitalize">{catLabel(c)}</SelectItem>)}
-                      </SelectContent>
+                      <SelectContent>{COST_CATEGORIES.map((c) => <SelectItem key={c} value={c} className="capitalize">{catLabel(c)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
                     <Label className="text-[10px] uppercase font-bold">Amount (USD)</Label>
-                    <Input type="number" step="0.01" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0.00" className="h-10 mt-1" />
+                    <Input type="number" step="0.01" min="0" value={costForm.amount} onChange={(e) => setCostForm({ ...costForm, amount: e.target.value })} placeholder="0.00" className="h-10 mt-1" />
                   </div>
                 </div>
                 <div>
                   <Label className="text-[10px] uppercase font-bold">Description</Label>
-                  <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="e.g. Local trucking Mombasa port to yard" className="h-10 mt-1" />
+                  <Input value={costForm.description} onChange={(e) => setCostForm({ ...costForm, description: e.target.value })} placeholder="e.g. Local trucking Mombasa port to yard" className="h-10 mt-1" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-[10px] uppercase font-bold">Supplier / Payee</Label>
-                    <Input value={form.payee} onChange={(e) => setForm({ ...form, payee: e.target.value })} placeholder="Optional" className="h-10 mt-1" />
+                    <Input value={costForm.payee} onChange={(e) => setCostForm({ ...costForm, payee: e.target.value })} placeholder="Optional" className="h-10 mt-1" />
                   </div>
                   <div>
                     <Label className="text-[10px] uppercase font-bold">Date Incurred</Label>
-                    <Input type="date" value={form.incurred_on} onChange={(e) => setForm({ ...form, incurred_on: e.target.value })} className="h-10 mt-1" />
+                    <Input type="date" value={costForm.incurred_on} onChange={(e) => setCostForm({ ...costForm, incurred_on: e.target.value })} className="h-10 mt-1" />
                   </div>
                 </div>
                 <Button onClick={() => addCost.mutate()} disabled={addCost.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground gap-2 h-11 font-black uppercase text-[11px] tracking-widest">
@@ -339,14 +390,8 @@ export default function JobCosting() {
         </SheetContent>
       </Sheet>
 
-      <DeleteConfirmModal
-        isOpen={!!costToDelete}
-        onClose={() => setCostToDelete(null)}
-        onConfirm={() => costToDelete && deleteCost.mutate(costToDelete)}
-        isDeleting={deleteCost.isPending}
-        title="Remove this cost?"
-        description="This cost line will be permanently deleted and the job's profit/loss recalculated."
-      />
+      <DeleteConfirmModal isOpen={!!costToDelete} onClose={() => setCostToDelete(null)} onConfirm={() => costToDelete && deleteCost.mutate(costToDelete)} isDeleting={deleteCost.isPending} title="Remove this cost?" description="This cost line will be permanently deleted and the job's profit/loss recalculated." />
+      <DeleteConfirmModal isOpen={!!chargeToDelete} onClose={() => setChargeToDelete(null)} onConfirm={() => chargeToDelete && deleteCharge.mutate(chargeToDelete)} isDeleting={deleteCharge.isPending} title="Remove this charge?" description="This billable charge will be permanently deleted and revenue recalculated." />
     </div>
   );
 }
