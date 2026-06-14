@@ -54,7 +54,7 @@ export function HybridSelect({
           aria-expanded={open}
           className={cn("w-full justify-between font-normal", className)}
         >
-          {selectedOption ? selectedOption.label : value || placeholder}
+          <span className="truncate text-left">{selectedOption ? selectedOption.label : value || placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -83,10 +83,13 @@ export function HybridSelect({
             )}
           </CommandEmpty>
           <CommandGroup className="max-h-60 overflow-y-auto">
-            {options.map((option) => (
+            {options.map((option, idx) => (
               <CommandItem
-                key={option.value}
-                value={option.label}
+                // value MUST be unique — using just the label collides when two
+                // options share a name (e.g. duplicate customers), which makes
+                // cmdk highlight/select both. Append the unique value + index.
+                key={`${option.value}-${idx}`}
+                value={`${option.label} ${option.value} ${idx}`}
                 onSelect={() => {
                   onChange(option.value, false);
                   setOpen(false);
@@ -96,11 +99,16 @@ export function HybridSelect({
               >
                 <Check
                   className={cn(
-                    "mr-2 h-4 w-4",
+                    "mr-2 h-4 w-4 shrink-0",
                     value === option.value ? "opacity-100" : "opacity-0"
                   )}
                 />
-                {option.label}
+                <span className="truncate">{option.label}</span>
+                {option.hint && (
+                  <span className="ml-auto pl-2 text-[10px] font-bold uppercase tracking-tight text-muted-foreground whitespace-nowrap">
+                    {option.hint}
+                  </span>
+                )}
               </CommandItem>
             ))}
           </CommandGroup>
