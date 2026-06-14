@@ -9,7 +9,7 @@ import {
    User, Shield, Laptop, Building2, KeyRound,
    CheckCircle2, AlertCircle, LogOut, Clock,
    Globe, Mail, Phone, MapPin, Save, X, Edit2, Copy, ChevronDown,
-   Lock, ShieldCheck, ShieldAlert
+   Lock, ShieldCheck, ShieldAlert, Activity, Bell
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -17,6 +17,8 @@ import { Progress } from "@/components/ui/progress";
 import { FileUpload } from "@/components/FileUpload";
 import { CompanyResources } from "@/components/CompanyResources";
 import { PinGate } from "@/components/PinGate";
+import { SystemStatusPanel } from "@/components/SystemStatusPanel";
+import { NotificationsPanel } from "@/components/NotificationsPanel";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
@@ -67,17 +69,23 @@ export default function MyAccount() {
          </div>
 
          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-            <TabsList className="grid grid-cols-2 md:grid-cols-4 h-12 bg-muted/50 p-1 rounded-2xl border shadow-sm w-full">
-               <TabsTrigger value="profile" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+            <TabsList className="grid grid-cols-3 md:grid-cols-6 h-auto md:h-12 bg-muted/50 p-1 rounded-2xl border shadow-sm w-full gap-1">
+               <TabsTrigger value="profile" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
                   <User className="h-3.5 w-3.5" /> Profile
                </TabsTrigger>
-               <TabsTrigger value="security" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+               <TabsTrigger value="security" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
                   <Shield className="h-3.5 w-3.5" /> Security
                </TabsTrigger>
-               <TabsTrigger value="sessions" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+               <TabsTrigger value="notifications" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+                  <Bell className="h-3.5 w-3.5" /> Alerts
+               </TabsTrigger>
+               <TabsTrigger value="sessions" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
                   <Laptop className="h-3.5 w-3.5" /> Sessions
                </TabsTrigger>
-               <TabsTrigger value="company" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+               <TabsTrigger value="status" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+                  <Activity className="h-3.5 w-3.5" /> Status
+               </TabsTrigger>
+               <TabsTrigger value="company" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
                   <Building2 className="h-3.5 w-3.5" /> Company
                </TabsTrigger>
             </TabsList>
@@ -90,8 +98,16 @@ export default function MyAccount() {
                <SecurityTab profile={profile} logs={securityLogs} />
             </TabsContent>
 
+            <TabsContent value="notifications" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+               <NotificationsPanel />
+            </TabsContent>
+
             <TabsContent value="sessions" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                <SessionsTab />
+            </TabsContent>
+
+            <TabsContent value="status" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+               <SystemStatusPanel />
             </TabsContent>
 
             <TabsContent value="company" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">

@@ -45,6 +45,7 @@ import { parseUnitQuantity, cleanAmount, getQuoteTotal } from "@/lib/quotationUt
 import { useWatch } from "react-hook-form";
 import { TransportModeSelector, TransportModeBadge, TransportModeGroupHeader, type TransportMode } from "@/components/TransportModeSelector";
 import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
+import { Pagination } from "@/components/Pagination";
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -52,6 +53,8 @@ const formatCurrency = (amount: number) =>
 const tabs = ["All", "Draft", "Awaiting Review", "Under Revision", "Approved", "Sent", "Accepted", "Declined", "Expired"];
 
 const validityOptions = Array.from({ length: 94 }, (_, i) => `${i + 7} Days`);
+
+const PAGE_SIZE = 20;
 
 const quoteSchema = z.object({
   lead_id: z.string().optional(),
@@ -540,6 +543,12 @@ export default function Quotations() {
     q.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Client-side pagination over the filtered list (search still spans everything)
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, activeTab]);
+  const totalFiltered = filtered?.length || 0;
+  const pagedFiltered = (filtered || []).slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   const handleDownloadPDF = async (quote: any) => {
     try {
       const blob = await pdf(
@@ -573,13 +582,13 @@ export default function Quotations() {
 
   const groupedQuotes = React.useMemo(() => {
     const groups: Record<string, any[]> = { air: [], sea: [], road: [], none: [] };
-    (filtered || []).forEach((q: any) => {
+    pagedFiltered.forEach((q: any) => {
       const key = q.transport_mode || "none";
       groups[key] = groups[key] || [];
       groups[key].push(q);
     });
     return groups;
-  }, [filtered]);
+  }, [pagedFiltered]);
 
   return (
     <div className="space-y-6">
@@ -750,6 +759,16 @@ export default function Quotations() {
             );
           })
         ))}
+
+        {!isLoading && totalFiltered > PAGE_SIZE && (
+          <Pagination
+            currentPage={currentPage}
+            totalCount={totalFiltered}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
+            className="bg-card border rounded-lg shadow-sm"
+          />
+        )}
       </div>
 
       <Sheet open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
