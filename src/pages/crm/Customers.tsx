@@ -4,9 +4,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Phone, MessageSquare, Plus, ActivitySquare, AlertCircle } from "lucide-react";
+import { Search, Phone, MessageSquare, Plus, ActivitySquare, AlertCircle, Merge } from "lucide-react";
 import { useCustomerHealth } from "@/hooks/useCrm";
 import { LogInteractionDrawer } from "@/components/LogInteractionDrawer";
+import { MergeDuplicatesDialog } from "@/components/MergeDuplicatesDialog";
 import { cn } from "@/lib/utils";
 
 const tabs = ["All", "Prospect", "Excellent", "Good", "At Risk", "Inactive", "Lost"];
@@ -32,6 +33,7 @@ export default function Customers() {
   const [activeTab, setActiveTab] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [interactionDrawerOpen, setInteractionDrawerOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>();
   const [selectedLeadId, setSelectedLeadId] = useState<string | undefined>();
   
@@ -63,6 +65,9 @@ export default function Customers() {
   return (
     <div className="space-y-6">
       <PageHeader title="Customers Portfolio">
+        <Button variant="outline" onClick={() => setMergeOpen(true)} className="gap-2">
+          <Merge className="h-4 w-4" /> Merge Duplicates
+        </Button>
         <Button onClick={() => navigate("/settings/company")} className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2">
           <Plus className="h-4 w-4" /> Add Customer
         </Button>
@@ -177,12 +182,14 @@ export default function Customers() {
         </Table>
       </div>
 
-      <LogInteractionDrawer 
-        open={interactionDrawerOpen} 
-        onOpenChange={setInteractionDrawerOpen} 
+      <LogInteractionDrawer
+        open={interactionDrawerOpen}
+        onOpenChange={setInteractionDrawerOpen}
         customerId={selectedCustomerId}
         leadId={selectedLeadId}
       />
+
+      <MergeDuplicatesDialog open={mergeOpen} onOpenChange={setMergeOpen} />
     </div>
   );
 }
