@@ -102,7 +102,9 @@ export default function InteractionsLog() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">Loading interactions...</TableCell></TableRow>
+              Array.from({ length: 6 }).map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={7}><div className="h-10 bg-muted/50 animate-pulse rounded" /></TableCell></TableRow>
+              ))
             ) : filtered?.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">No interactions logged yet.</TableCell></TableRow>
             ) : filtered?.map((interaction) => {

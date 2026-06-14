@@ -26,7 +26,16 @@ export default function CustomerHealth() {
   const { data: healthData, isLoading } = useCustomerHealth();
 
   if (isLoading) {
-    return <div className="p-12 text-center animate-pulse font-bold text-muted-foreground">Loading Health Metrics...</div>;
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 bg-muted/50 animate-pulse rounded-2xl" />)}
+        </div>
+        <div className="bg-card border rounded-2xl p-4 space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-12 bg-muted/40 animate-pulse rounded-xl" />)}
+        </div>
+      </div>
+    );
   }
 
   const all = Array.isArray(healthData) ? healthData : [];

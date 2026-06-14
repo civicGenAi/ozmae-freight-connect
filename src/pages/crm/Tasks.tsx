@@ -120,7 +120,18 @@ export default function Tasks() {
       </div>
 
       {isLoading ? (
-        <div className="p-12 text-center animate-pulse text-muted-foreground font-bold">Loading tasks queue...</div>
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 bg-card border rounded-2xl p-4">
+              <div className="h-10 w-10 rounded-xl bg-muted/60 animate-pulse" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-1/3 bg-muted/60 animate-pulse rounded" />
+                <div className="h-2.5 w-1/2 bg-muted/40 animate-pulse rounded" />
+              </div>
+              <div className="h-8 w-20 bg-muted/50 animate-pulse rounded-lg" />
+            </div>
+          ))}
+        </div>
       ) : tasks?.length === 0 ? (
         <div className="text-center py-20 bg-card border border-dashed rounded-3xl">
           <CheckCircle className="h-12 w-12 text-emerald-500/30 mx-auto mb-4" />
