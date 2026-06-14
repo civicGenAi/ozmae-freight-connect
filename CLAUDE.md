@@ -141,11 +141,15 @@ not break existing flows** — change one area at a time.
    — it keys by `quote.id`.)
 6. **Admin vault** — TODO. Decision made: **reuse the 4-digit `PinGate.tsx`** to
    gate sensitive features after login (even for admins).
-7. **Job costing & central job file (new module)** — per job: capture all real
-   costs / extra charges / payables to compute true cost and profit/loss; a
-   single place holding everything for a job from inception → delivery
-   (including document filing) under a serial number, so a physical file isn't
-   needed. Build phase-by-phase without disturbing existing concepts.
+7. **Job costing & central job file (new module)** — IN PROGRESS.
+   - Phase 1 DONE: top-level **Job Costing** page (`src/pages/JobCosting.tsx`,
+     route `/job-costing`, Finance nav). Per-job cost line items
+     (`job_costs` table, migration `20260614130000_job_costs.sql`) → true cost,
+     profit/loss & margin; revenue derived from linked quotation or
+     `job_orders.total_amount`. **Run the migration in Supabase to use it.**
+   - Phase 2+ (TODO): extra billable charges (revenue side), payables status
+     (paid vs owed per cost), and per-job document filing under a serial number
+     to replace the physical file.
 
 ## Git workflow
 

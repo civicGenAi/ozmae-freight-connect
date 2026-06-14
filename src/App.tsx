@@ -15,6 +15,7 @@ import Fleet from "@/pages/Fleet";
 import Tracking from "@/pages/Tracking";
 import Invoices from "@/pages/Invoices";
 import Payments from "@/pages/Payments";
+import JobCosting from "@/pages/JobCosting";
 import Documents from "@/pages/Documents";
 import CompanyProfile from "@/pages/CompanyProfile";
 import UsersRoles from "@/pages/UsersRoles";
@@ -144,6 +145,12 @@ const App = () => (
               <AppLayout><Payments /></AppLayout>
             </AuthGuard>
           } path="/payments" />
+
+          <Route element={
+            <AuthGuard>
+              <AppLayout><JobCosting /></AppLayout>
+            </AuthGuard>
+          } path="/job-costing" />
           
           <Route element={
             <AuthGuard>
