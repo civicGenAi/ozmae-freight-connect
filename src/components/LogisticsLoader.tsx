@@ -1,86 +1,35 @@
-import React from "react";
-import { motion } from "framer-motion";
-import { Ship, Truck, Globe, Zap } from "lucide-react";
+import { Truck } from "lucide-react";
 
-export const LogisticsLoader = ({ message = "Initializing Ozmae System..." }: { message?: string }) => {
+/**
+ * Lightweight, clean app loader.
+ * Minimal DOM + pure-CSS animation (no heavy motion graphs) so it stays fast.
+ */
+export const LogisticsLoader = ({ message = "Loading..." }: { message?: string }) => {
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950 overflow-hidden">
-      {/* Background Decorative Elements */}
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent/20 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-[120px] animate-pulse delay-700" />
-      </div>
-
-      <div className="relative flex flex-col items-center">
-        {/* Central Core */}
-        <div className="relative mb-12">
-          <motion.div
-            animate={{ 
-              rotate: 360,
-              scale: [1, 1.1, 1],
-            }}
-            transition={{ 
-              rotate: { duration: 20, repeat: Infinity, ease: "linear" },
-              scale: { duration: 4, repeat: Infinity, ease: "easeInOut" }
-            }}
-            className="h-32 w-32 rounded-full border border-accent/30 flex items-center justify-center bg-slate-900/50 backdrop-blur-xl shadow-2xl shadow-accent/20"
-          >
-            <Globe className="h-16 w-16 text-accent animate-pulse" />
-          </motion.div>
-
-          {/* Orbiting Elements */}
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-x-[-40px] inset-y-[-40px]"
-          >
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 p-2 bg-slate-800 rounded-lg border border-accent/40 shadow-lg">
-              <Ship className="h-5 w-5 text-accent" />
-            </div>
-          </motion.div>
-
-          <motion.div
-            animate={{ rotate: -360 }}
-            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-x-[-65px] inset-y-[-65px]"
-          >
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 p-2 bg-slate-800 rounded-lg border border-indigo-400/40 shadow-lg">
-              <Truck className="h-5 w-5 text-indigo-400" />
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Text and Progress */}
-        <div className="text-center space-y-4">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex items-center gap-3 justify-center"
-          >
-            <Zap className="h-4 w-4 text-accent animate-bounce" />
-            <h2 className="text-xl font-black text-white uppercase tracking-[0.2em]">{message}</h2>
-          </motion.div>
-          
-          <div className="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden relative border border-white/5">
-            <motion.div
-              initial={{ left: "-100%" }}
-              animate={{ left: "100%" }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-accent to-transparent"
-            />
-          </div>
-          
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-2"
-          >
-            Synchronizing Global Nodes...
-          </motion.p>
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-6 bg-white">
+      {/* Brand mark with a quiet pulse */}
+      <div className="relative flex items-center justify-center">
+        <div className="absolute h-16 w-16 rounded-2xl bg-accent/10 animate-ping" />
+        <div className="relative h-14 w-14 rounded-2xl bg-accent flex items-center justify-center shadow-lg shadow-accent/20">
+          <Truck className="h-7 w-7 text-accent-foreground" />
         </div>
       </div>
+
+      {/* Slim progress track */}
+      <div className="h-1 w-40 overflow-hidden rounded-full bg-muted">
+        <div className="h-full w-1/3 rounded-full bg-accent animate-[loader-slide_1.1s_ease-in-out_infinite]" />
+      </div>
+
+      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+        {message}
+      </p>
+
+      <style>{`
+        @keyframes loader-slide {
+          0%   { transform: translateX(-150%); }
+          100% { transform: translateX(420%); }
+        }
+      `}</style>
     </div>
   );
 };

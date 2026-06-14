@@ -1,0 +1,162 @@
+# CLAUDE.md
+
+Guidance for Claude (and any new session/account) working in this repository.
+Read this first so you don't start from scratch.
+
+## What this is
+
+**Ozmae Freight Connect** — a web app for a freight / logistics company
+(East Africa corridor). It manages the full commercial pipeline:
+
+`Leads → Quotations/Proformas → Job Orders → Tracking → Invoices → Payments`,
+plus a CRM layer (customers, interactions, tasks, customer health, lost deals),
+fleet (vehicles/drivers), rate cards, documents, reporting, and user/role admin.
+
+It is a single-page app talking directly to **Supabase** (Postgres + Auth +
+Storage + Edge Functions). There is no separate backend server.
+
+## Tech stack
+
+- **Build/dev:** Vite + React 18 + TypeScript
+- **UI:** shadcn/ui (Radix primitives) in `src/components/ui`, Tailwind CSS,
+  `lucide-react` icons, `framer-motion` for animation
+- **Data:** `@supabase/supabase-js` + `@tanstack/react-query` (all server state)
+- **Forms:** `react-hook-form` + `zod`
+- **Charts:** `recharts`
+- **PDF:** `@react-pdf/renderer` (quotation/invoice/delivery/pickup docs)
+- **Toasts:** `sonner` (primary) — `toast.success/error/info` from `"sonner"`
+- **Routing:** `react-router-dom` v6
+- Package manager: npm (a `bun.lock` also exists; npm is fine).
+
+## Commands
+
+```bash
+npm install            # node_modules is NOT committed; install first
+npm run dev            # Vite dev server
+npm run build          # production build (tsc + vite build)
+npm run lint           # eslint
+npm test               # vitest run
+```
+
+Build needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see
+`src/lib/supabase.ts`). Missing env only warns; the build still completes but
+the app can't talk to the DB at runtime.
+
+## Architecture / where things live
+
+- `src/App.tsx` — all routes. Every authenticated page is wrapped in
+  `<AuthGuard><AppLayout>…</AppLayout></AuthGuard>`. Public: `/login`,
+  `/reset-password`, `/track`, `/track/:code`.
+- `src/components/AppLayout.tsx` — shell: sidebar nav, header, the
+  **password-update banner**, and the redirect-to-reset enforcement.
+- `src/components/AuthGuard.tsx` — gates authenticated routes; shows
+  `LogisticsLoader` while auth resolves.
+- `src/hooks/useAuth.ts` — **central auth/roles hook.** Loads the profile +
+  `user_roles`, exposes `isAdmin/isSales/isOperations/isFinance/isLeads`,
+  `hasRole()`, and the password-age flags (`mustChangePassword`,
+  `shouldShowPasswordReminder`, `passwordAgeDays`, `isUsingDefaultPassword`).
+- `src/hooks/useCrm.ts` — react-query hooks for CRM (interactions, tasks,
+  customer health, decline reasons, customer timeline, custom locations).
+- `src/lib/supabase.ts` — the single Supabase client.
+- `src/lib/quotationUtils.ts`, `src/lib/utils.ts` — helpers (`cn`, etc.).
+- `src/types/index.ts` — shared TS types. Note many DB rows are typed loosely
+  with `[key: string]: any`, so the compiler won't catch field-name typos.
+- `src/pages/**` — one file per screen. The big ones:
+  `Dashboard.tsx`, `JobOrders.tsx` (~1.7k lines), `Quotations.tsx` (~1.3k),
+  `Leads.tsx`, `Invoices.tsx`, `Payments.tsx`, plus `src/pages/crm/*`.
+- `src/components/*PDF.tsx` — react-pdf document templates.
+- `supabase/` — `schema.sql` (canonical schema), `migrations/*` (incremental,
+  timestamp-prefixed), `functions/` (edge functions, e.g. `manage-user`).
+
+## Data model (high level)
+
+Core tables (`supabase/schema.sql` + migrations): `profiles`, `user_roles`,
+`customers`, `leads`, `quotations` (+ `quotation_items`), `vehicles`,
+`drivers`, `job_orders` (+ `job_status_timeline`), `invoices`, `payments`,
+`documents`, `notifications`, `security_logs`, `rate_card`, `company_profile`,
+and CRM tables (`customer_interactions`, `crm_tasks`, `customer_health`,
+`decline_reasons`, `custom_locations`).
+
+Pipeline links: `leads.customer_id → customers`; `quotations.lead_id`,
+`quotations.customer_id`; `job_orders.quotation_id`, `job_orders.customer_id`;
+`invoices.job_order_id`; `payments.invoice_id`.
+
+Job status enum (see `schema.sql` + extra stages used in `JobOrders.tsx`):
+`planning, awaiting_deposit, deposit_confirmed, dispatched, picked_up,
+in_transit, at_destination, delivered, closed, cancelled` (the page also
+references `approved/on_hold/in_progress/completed`).
+
+DB notes:
+- Numbers auto-generate via Postgres sequences + triggers
+  (`lead/quote/job/invoice/payment_number_seq`).
+- A trigger logs job status changes into `job_status_timeline`.
+- **RLS is enabled on every table.** Read policies are mostly
+  "authenticated can read"; some writes are role-restricted. If a query
+  returns nothing unexpectedly, suspect RLS before the frontend.
+- `job_orders.total_amount` and `profiles.password_updated_at /
+  is_using_default_password` come from migrations, not the base `schema.sql`.
+
+## Conventions
+
+- **Brand colors:** accent orange `#F26B2A` (Tailwind `accent`, HSL
+  `24 78% 57%`), dark navy `#0f1d35`. Heavy use of `uppercase`,
+  `font-black`, `tracking-widest`, rounded-2xl/3xl cards.
+- Server state goes through react-query; mutate then
+  `queryClient.invalidateQueries({ queryKey: [...] })`. Keep query keys
+  consistent (e.g. `["job_orders"]`, `["quotations"]`, `["dashboard_stats"]`).
+- Always show user feedback via `sonner` toasts; **a success toast must live in
+  `onSuccess`, and every mutation should have an `onError`** (see Known issues).
+- Prefer the existing shadcn components. For searchable pickers use
+  `CreatableCombobox` / `HybridSelect` rather than the plain `Select`.
+
+## Known issues / roadmap (as of this writing)
+
+These are open items the owner asked for. Treat as a phased backlog and **do
+not break existing flows** — change one area at a time.
+
+1. **Loader** — wants a lighter, cleaner `LogisticsLoader`. (Done: simplified.)
+2. **Password policy logic** — `useAuth.ts` forced a password change after only
+   7 days and nagged "expires soon" from day 1. Fixed to sane thresholds
+   (`PASSWORD_EXPIRY_DAYS` / `PASSWORD_REMINDER_DAYS`); banner copy in
+   `AppLayout.tsx` now shows days remaining.
+3. **Dashboard** — most role dashboards (`*DashboardMockup` in `Dashboard.tsx`)
+   render **hardcoded mock numbers**. Needs a real, clean, graph-driven central
+   overview where every figure is backed by a query.
+4. **Job Orders cards/status** —
+   - Stat cards (`stageCounts`) count *all* jobs, not the filtered view.
+   - Status-change mutation (`updateStageMutation`) has no `onError`, and the
+     open drawer's `selectedJob` state isn't refreshed after invalidation, so a
+     change can show a success toast while the visible status looks unchanged.
+     Verify each stat card matches its create-form definition.
+5. **Quotations / "business entry"** — the customer picker is a plain `Select`
+   with no search (must scroll). Needs a searchable combobox. Also investigate
+   the reported bug where two different quotes for the same customer only show
+   one (rendering keys by `quote.id` look correct — check the create flow /
+   customer find-or-create / any name-keyed dedup).
+6. **Admin vault** — sensitive features should require a second password/PIN
+   *after* login, even for admins. `PinGate.tsx` exists (4-digit SHA-256 PIN)
+   as a starting point.
+7. **Job costing & central job file (new module)** — per job: capture all real
+   costs / extra charges / payables to compute true cost and profit/loss; a
+   single place holding everything for a job from inception → delivery
+   (including document filing) under a serial number, so a physical file isn't
+   needed. Build phase-by-phase without disturbing existing concepts.
+
+## Git workflow
+
+- Active development branch: **`claude/bold-davinci-9hjgaw`**. Develop and push
+  there; never push elsewhere without explicit permission.
+- Push with `git push -u origin <branch>`. Commit only when asked; do not open
+  PRs unless explicitly requested.
+- Do not put model identifiers in commit messages or code.
+
+## Gotchas
+
+- Loose typing (`any`) means the TS compiler won't catch DB field typos — be
+  careful with column names; cross-check `supabase/schema.sql` + migrations.
+- The dashboard mixes real queries with mock data — don't assume a number on
+  screen is live.
+- There are several loose scripts at repo root (`patch_leads.js`,
+  `drop_constraint.*`, `get_columns.js`, etc.) — one-off DB utilities, not part
+  of the app build.
+</content>
