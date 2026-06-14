@@ -132,7 +132,7 @@ export function FileUpload({ onUpload, accept = "image/*", maxSizeMB = 5, label,
            <Button 
              variant="ghost" 
              size="icon" 
-             className="absolute top-2 right-2 h-6 w-6 rounded-full bg-white/80 border shadow-sm hover:bg-destructive hover:text-white transition-colors"
+             className="absolute top-2 right-2 h-6 w-6 rounded-full bg-card/80 border shadow-sm hover:bg-destructive hover:text-white transition-colors"
              onClick={(e) => {
                e.stopPropagation();
                clear();

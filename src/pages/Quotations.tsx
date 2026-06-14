@@ -794,7 +794,7 @@ export default function Quotations() {
                     size="sm"
                     variant="ghost"
                     onClick={discardDraft}
-                    className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
+                    className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-foreground/5"
                   >
                     Discard
                   </Button>
@@ -1111,7 +1111,7 @@ export default function Quotations() {
                               <span className="text-[10px] font-black">{comment.user?.full_name}</span>
                               <span className="text-[8px] text-muted-foreground">{format(new Date(comment.created_at), "MMM d, HH:mm")}</span>
                             </div>
-                            <p className="text-[11px] text-foreground leading-relaxed bg-white p-2 rounded-lg border shadow-sm">{comment.comment}</p>
+                            <p className="text-[11px] text-foreground leading-relaxed bg-card p-2 rounded-lg border shadow-sm">{comment.comment}</p>
                           </div>
                         </div>
                       ))
@@ -1121,7 +1121,7 @@ export default function Quotations() {
                   <div className="flex gap-2 pt-2 border-t border-muted-foreground/10">
                     <Input
                       placeholder="Add a comment..."
-                      className="h-9 text-[11px] bg-white"
+                      className="h-9 text-[11px] bg-card"
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && commentText && addCommentMutation.mutate({ quotation_id: selectedQuote.id, comment: commentText })}

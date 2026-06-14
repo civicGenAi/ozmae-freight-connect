@@ -154,7 +154,7 @@ function SidebarNav({
   })).filter(section => section.items.length > 0);
 
   return (
-    <div className="flex flex-col h-full bg-primary text-primary-foreground/80 overflow-hidden">
+    <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground/80 overflow-hidden">
       {/* Logo */}
       <div className={cn(
         "px-5 py-5 flex items-center border-b border-sidebar-border h-14 overflow-hidden shrink-0",
@@ -196,11 +196,11 @@ function SidebarNav({
                   onClick={() => toggleGroup(section.label)}
                   className="w-full flex items-center justify-between px-3 mb-1 group"
                 >
-                  <p className="text-[10px] font-black tracking-widest text-primary-foreground/30 uppercase group-hover:text-primary-foreground/50 transition-colors">
+                  <p className="text-[10px] font-black tracking-widest text-sidebar-foreground/30 uppercase group-hover:text-sidebar-foreground/50 transition-colors">
                     {section.label}
                   </p>
                   <motion.div animate={{ rotate: isOpen ? 0 : -90 }}>
-                    <ChevronDown className="h-3 w-3 text-primary-foreground/20" />
+                    <ChevronDown className="h-3 w-3 text-sidebar-foreground/20" />
                   </motion.div>
                 </button>
               )}
@@ -225,7 +225,7 @@ function SidebarNav({
                             "flex items-center gap-3 px-3 py-2 text-sm rounded-xl transition-all duration-200 group relative",
                             isActive
                               ? "bg-accent text-accent-foreground font-bold shadow-lg shadow-accent/20"
-                              : "hover:bg-white/5 text-primary-foreground/60 hover:text-white"
+                              : "hover:bg-white/5 text-sidebar-foreground/60 hover:text-white"
                           )}
                         >
                           <item.icon className={cn("h-4 w-4 shrink-0 transition-transform group-hover:scale-110", isActive && "text-accent-foreground")} />
@@ -253,7 +253,7 @@ function SidebarNav({
                             <TooltipTrigger asChild>
                               {content}
                             </TooltipTrigger>
-                            <TooltipContent side="right" className="bg-[#0f1d35] border-white/10 text-white font-bold text-[10px] uppercase tracking-widest">
+                            <TooltipContent side="right" className="bg-sidebar border-sidebar-border text-sidebar-foreground font-bold text-[10px] uppercase tracking-widest">
                               {item.title}
                             </TooltipContent>
                           </Tooltip>
@@ -272,7 +272,7 @@ function SidebarNav({
       {/* Settings Footer */}
       {!isCollapsed && (
         <div className="p-4 border-t border-white/5 bg-black/10">
-           <div className="flex items-center gap-3 px-3 py-2 text-[10px] font-black text-primary-foreground/40 uppercase tracking-widest">
+           <div className="flex items-center gap-3 px-3 py-2 text-[10px] font-black text-sidebar-foreground/40 uppercase tracking-widest">
               <Settings className="h-3 w-3" /> System Status: Online
            </div>
         </div>
@@ -351,12 +351,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F8F9FA]">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop Sidebar */}
-      <motion.aside 
+      <motion.aside
         initial={false}
         animate={{ width: isCollapsed ? 76 : 240 }}
-        className="hidden md:flex shrink-0 flex-col border-r border-sidebar-border bg-primary z-40 transition-all duration-300 ease-in-out"
+        className="hidden md:flex shrink-0 flex-col border-r border-sidebar-border bg-sidebar z-40 transition-all duration-300 ease-in-out"
       >
         <SidebarNav 
           isCollapsed={isCollapsed} 
@@ -370,7 +370,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <aside className="relative w-60 h-full overflow-y-auto bg-primary">
+          <aside className="relative w-60 h-full overflow-y-auto bg-sidebar">
             <SidebarNav onClose={() => setMobileOpen(false)} roles={roles} isCollapsed={false} openGroups={openGroups} toggleGroup={toggleGroup} />
           </aside>
         </div>
@@ -379,7 +379,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="h-14 bg-white border-b flex items-center justify-between px-4 md:px-6 shrink-0 z-30">
+        <header className="h-14 bg-card border-b flex items-center justify-between px-4 md:px-6 shrink-0 z-30">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileOpen(true)} className="md:hidden p-2 hover:bg-muted rounded-xl transition-colors">
               <Menu className="h-5 w-5 text-foreground" />
@@ -483,7 +483,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         )}
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#F8F9FA]">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-background">
           {children}
         </main>
       </div>

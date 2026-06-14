@@ -96,7 +96,7 @@ export function TransportModeSelector({
                 className={cn(
                   "flex items-center gap-2 px-6 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all",
                   movement === m.value
-                    ? "bg-white text-accent shadow-sm"
+                    ? "bg-card text-accent shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -178,7 +178,7 @@ export function TransportModeGroupHeader({
       <span className="text-xl leading-none">{icon}</span>
       <div className="flex-1 flex items-center gap-2 text-left">
         <span className={cn("text-xs font-black uppercase tracking-widest", color)}>{label}</span>
-        <span className="text-[9px] font-bold bg-white/60 border rounded-full px-2 py-0.5 text-muted-foreground">
+        <span className="text-[9px] font-bold bg-card/60 border rounded-full px-2 py-0.5 text-muted-foreground">
           {count} {count === 1 ? "record" : "records"}
         </span>
       </div>

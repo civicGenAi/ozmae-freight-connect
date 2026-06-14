@@ -130,7 +130,7 @@ export default function InteractionsLog() {
                       </p>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
+                      <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                         <TypeIcon className="h-4 w-4 text-accent" />
                         {typeLabel}
                       </div>
@@ -145,7 +145,7 @@ export default function InteractionsLog() {
                         {interaction.logger?.avatar_url ? (
                           <img src={interaction.logger.avatar_url} alt="" className="w-5 h-5 rounded-full" />
                         ) : (
-                          <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold">
+                          <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-bold">
                             {interaction.logger?.full_name?.charAt(0) || '?'}
                           </div>
                         )}
@@ -159,7 +159,7 @@ export default function InteractionsLog() {
                         <div className="p-6 ml-8 max-w-4xl space-y-4">
                           <div className="space-y-2">
                             <h4 className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Interaction Summary</h4>
-                            <p className="text-sm leading-relaxed text-foreground bg-white p-4 rounded-xl border border-dashed shadow-sm">
+                            <p className="text-sm leading-relaxed text-foreground bg-card p-4 rounded-xl border border-dashed shadow-sm">
                               {interaction.summary}
                             </p>
                           </div>
@@ -169,7 +169,7 @@ export default function InteractionsLog() {
                               <div className="mt-0.5"><Clock className="h-4 w-4 text-amber-600" /></div>
                               <div>
                                 <h4 className="text-[10px] uppercase font-black tracking-widest text-amber-800 mb-1">Next Action Required</h4>
-                                <p className="text-sm font-semibold text-slate-900">{interaction.next_action}</p>
+                                <p className="text-sm font-semibold text-foreground">{interaction.next_action}</p>
                                 <p className="text-xs text-amber-700 mt-1">Due: {interaction.next_action_date ? new Date(interaction.next_action_date).toLocaleDateString() : 'Unscheduled'}</p>
                               </div>
                             </div>
@@ -177,7 +177,7 @@ export default function InteractionsLog() {
 
                           <div className="flex gap-2">
                             {(interaction.lead || interaction.quotation || interaction.job_order) && (
-                              <div className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-slate-100 rounded text-slate-600 flex items-center gap-2">
+                              <div className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-muted rounded text-muted-foreground flex items-center gap-2">
                                 Linked context: 
                                 {interaction.lead && <span className="text-blue-600 cursor-pointer">{interaction.lead.lead_number || 'Lead ' + interaction.lead.id.split('-')[0]}</span>}
                                 {interaction.quotation && <span className="text-purple-600 cursor-pointer">{interaction.quotation.quote_number || 'Quote ' + interaction.quotation.id.split('-')[0]}</span>}
@@ -185,7 +185,7 @@ export default function InteractionsLog() {
                               </div>
                             )}
                             {interaction.duration_minutes && (
-                              <div className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-slate-100 rounded text-slate-600">
+                              <div className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-muted rounded text-muted-foreground">
                                 Duration: {interaction.duration_minutes} min
                               </div>
                             )}

@@ -156,7 +156,7 @@ export function CargoItemsTable({ control, name, className }: CargoItemsTablePro
                   />
                   <button 
                     onClick={() => removeColumn(idx)}
-                    className="absolute -top-1 -right-1 p-0.5 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded bg-white shadow-sm border"
+                    className="absolute -top-1 -right-1 p-0.5 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-50 rounded bg-card shadow-sm border"
                   >
                     <X className="h-2.5 w-2.5" />
                   </button>

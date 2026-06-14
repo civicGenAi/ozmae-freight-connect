@@ -888,7 +888,7 @@ export default function JobOrders() {
                     size="sm"
                     variant="ghost"
                     onClick={discardDraft}
-                    className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
+                    className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-foreground/5"
                   >
                     Discard
                   </Button>
@@ -1455,7 +1455,7 @@ export default function JobOrders() {
                   "bg-muted/30 p-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center transition-all",
                   canManageDocs ? "border-accent/40" : "opacity-60 grayscale border-muted cursor-not-allowed"
                 )}>
-                  <div className="h-12 w-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-4">
+                  <div className="h-12 w-12 bg-card rounded-full shadow-sm flex items-center justify-center mb-4">
                     {canManageDocs ? <Upload className="h-6 w-6 text-accent" /> : <Lock className="h-6 w-6 text-muted-foreground" />}
                   </div>
                   <h4 className="text-xs font-black uppercase tracking-widest">Document Repository</h4>
@@ -1668,10 +1668,10 @@ export default function JobOrders() {
                     progressReports?.map((report: any, idx: number) => (
                       <div key={report.id} className="relative group animate-in fade-in slide-in-from-left-2" style={{ animationDelay: `${idx * 50}ms` }}>
                         <div className={cn(
-                          "absolute -left-[27px] top-1.5 h-3.5 w-3.5 rounded-full border-2 border-white shadow-sm ring-4 ring-white z-10",
+                          "absolute -left-[27px] top-1.5 h-3.5 w-3.5 rounded-full border-2 border-card shadow-sm ring-4 ring-card z-10",
                           idx === 0 ? "bg-accent animate-pulse" : "bg-muted-foreground/30"
                         )} />
-                        <div className="bg-white p-4 rounded-xl border shadow-sm group-hover:border-accent/30 transition-all">
+                        <div className="bg-card p-4 rounded-xl border shadow-sm group-hover:border-accent/30 transition-all">
                           <div className="flex justify-between items-start mb-2">
                             <div className="flex items-center gap-2">
                               <StatusBadge status={report.status} />
@@ -1723,7 +1723,7 @@ export default function JobOrders() {
           
           <div className="flex flex-1 overflow-hidden">
             {/* Editor Sidebar */}
-            <div className="w-1/3 border-r overflow-y-auto p-6 space-y-4 bg-slate-50/50 custom-scrollbar">
+            <div className="w-1/3 border-r overflow-y-auto p-6 space-y-4 bg-muted/30 custom-scrollbar">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Delivered By</Label>

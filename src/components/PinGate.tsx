@@ -73,10 +73,10 @@ export function PinGate({ open, onOpenChange, onSuccess, pinHash }: PinGateProps
 
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) setPin(""); onOpenChange(val); }}>
-      <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl bg-white">
+      <DialogContent className="sm:max-w-[360px] p-0 overflow-hidden border-none shadow-2xl rounded-3xl bg-card">
         <div className={cn(
           "h-32 flex flex-col items-center justify-center transition-colors duration-500 relative overflow-hidden",
-          success ? "bg-emerald-500" : error ? "bg-rose-500" : "bg-slate-900"
+          success ? "bg-emerald-500" : error ? "bg-rose-500" : "bg-sidebar"
         )}>
           {/* Decorative background elements */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
@@ -95,10 +95,10 @@ export function PinGate({ open, onOpenChange, onSuccess, pinHash }: PinGateProps
 
         <div className="p-8 space-y-6">
           <div className="text-center space-y-2">
-            <DialogTitle className="text-xl font-black uppercase tracking-tight text-slate-900">
+            <DialogTitle className="text-xl font-black uppercase tracking-tight text-foreground">
               {success ? "Access Granted" : "Security Lock"}
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 font-medium leading-relaxed">
+            <DialogDescription className="text-xs text-muted-foreground font-medium leading-relaxed">
               {success ? "Verification successful. Redirecting..." : "Please enter the 4-digit company security PIN to continue."}
             </DialogDescription>
           </div>
@@ -112,7 +112,7 @@ export function PinGate({ open, onOpenChange, onSuccess, pinHash }: PinGateProps
                   key={i}
                   className={cn(
                     "w-12 h-16 rounded-2xl border-2 flex items-center justify-center text-2xl font-black transition-all duration-300",
-                    pin[i] ? "border-slate-900 bg-slate-50 text-slate-900 shadow-md" : "border-slate-100 bg-white text-slate-200",
+                    pin[i] ? "border-foreground/70 bg-muted text-foreground shadow-md" : "border-border bg-card text-muted-foreground",
                     error && "border-rose-500 text-rose-500",
                     success && "border-emerald-500 text-emerald-500"
                   )}
@@ -142,7 +142,7 @@ export function PinGate({ open, onOpenChange, onSuccess, pinHash }: PinGateProps
           <Button 
             variant="ghost" 
             onClick={() => onOpenChange(false)}
-            className="w-full text-[10px] font-black uppercase text-slate-400 hover:text-slate-900 hover:bg-slate-50"
+            className="w-full text-[10px] font-black uppercase text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             Cancel and Return
           </Button>

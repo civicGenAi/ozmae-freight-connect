@@ -493,8 +493,8 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
                   )
                ) : (
                   <div className="rounded-2xl border overflow-hidden animate-in fade-in zoom-in-95">
-                     <div className="bg-white p-6 flex flex-col items-center gap-4 border-b">
-                        <p className="text-xs font-bold text-slate-700 text-center">Scan with Google Authenticator, Authy, or any TOTP app</p>
+                     <div className="bg-card p-6 flex flex-col items-center gap-4 border-b">
+                        <p className="text-xs font-bold text-foreground text-center">Scan with Google Authenticator, Authy, or any TOTP app</p>
                         <div className="p-3 bg-white rounded-xl shadow-md ring-1 ring-slate-200">
                            <QRCodeSVG
                               value={mfaTotpUri}
@@ -505,10 +505,10 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
                               includeMargin={false}
                            />
                         </div>
-                        <p className="text-[10px] text-slate-500 text-center">Point your authenticator app camera at this code</p>
+                        <p className="text-[10px] text-muted-foreground text-center">Point your authenticator app camera at this code</p>
                      </div>
 
-                     <div className="bg-slate-50 p-4 space-y-2">
+                     <div className="bg-muted/30 p-4 space-y-2">
                         <button
                            type="button"
                            onClick={() => setShowManualKey(!showManualKey)}
@@ -518,20 +518,20 @@ function SecurityTab({ profile, logs }: { profile: any, logs: any[] }) {
                            Can't scan? Enter key manually
                         </button>
                         {showManualKey && (
-                           <div className="flex items-center gap-2 p-2 bg-white border rounded-lg">
-                              <code className="text-xs font-mono flex-1 break-all text-slate-700 select-all">{mfaSecret}</code>
+                           <div className="flex items-center gap-2 p-2 bg-card border rounded-lg">
+                              <code className="text-xs font-mono flex-1 break-all text-foreground select-all">{mfaSecret}</code>
                               <button
                                  type="button"
                                  onClick={() => { navigator.clipboard.writeText(mfaSecret || ''); toast.success('Key copied!'); }}
-                                 className="shrink-0 p-1.5 rounded hover:bg-slate-100"
+                                 className="shrink-0 p-1.5 rounded hover:bg-muted"
                               >
-                                 <Copy className="h-3.5 w-3.5 text-slate-500" />
+                                 <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                               </button>
                            </div>
                         )}
                      </div>
 
-                     <div className="p-4 space-y-3 bg-white">
+                     <div className="p-4 space-y-3 bg-card">
                         <Label className="text-[10px] font-black uppercase text-center block text-muted-foreground">Enter the 6-digit code from your app to confirm</Label>
                         <Input
                            value={verificationCode}
@@ -736,7 +736,7 @@ function CompanyTab({ company, profile }: { company: any, profile: any }) {
                </div>
                <div>
                   <h3 className="text-xl font-black uppercase tracking-tighter">{company?.company_name || "Ozmae Freight"}</h3>
-                  <p className="text-xs font-bold text-slate-400">Enterprise Logistics Profile</p>
+                  <p className="text-xs font-bold text-white/70">Enterprise Logistics Profile</p>
                </div>
             </div>
             {!editing ? (
@@ -754,8 +754,8 @@ function CompanyTab({ company, profile }: { company: any, profile: any }) {
          </div>
 
          {isAdmin && (
-            <div className="p-8 border-b bg-slate-50/50">
-               <CompanyResources 
+            <div className="p-8 border-b bg-muted/30">
+               <CompanyResources
                  isAdmin={isAdmin} 
                  pinEnabled={company?.resource_pin_enabled} 
                  pinHash={company?.resource_pin_hash} 
@@ -844,7 +844,7 @@ function CompanyTab({ company, profile }: { company: any, profile: any }) {
             <div className="p-8 border-t space-y-8">
                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                   <div className="space-y-1">
-                     <h4 className="text-xs font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
+                     <h4 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-2">
                         <Lock className="h-4 w-4 text-accent" /> Enhanced Resource Security
                      </h4>
                      <p className="text-[10px] text-muted-foreground font-medium">When enabled, a 4-digit security PIN is required to access sensitive resources even for admins.</p>
@@ -852,7 +852,7 @@ function CompanyTab({ company, profile }: { company: any, profile: any }) {
                   <div className="flex items-center gap-3">
                      <div className={cn(
                         "h-10 px-4 rounded-xl flex items-center gap-3 text-[10px] font-black uppercase tracking-widest border-2 transition-all",
-                        company?.resource_pin_enabled ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-slate-50 border-slate-100 text-slate-400"
+                        company?.resource_pin_enabled ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-muted border-border text-muted-foreground"
                      )}>
                         {company?.resource_pin_enabled ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
                         PIN Protection: {company?.resource_pin_enabled ? "ON" : "OFF"}
@@ -893,14 +893,14 @@ function CompanyTab({ company, profile }: { company: any, profile: any }) {
                </div>
 
                {company?.resource_pin_enabled && (
-                  <div className="bg-white border-2 border-slate-100 p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-2 duration-300">
+                  <div className="bg-card border-2 border-border p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-2 duration-300">
                      <div className="flex items-center gap-4">
                         <div className="h-12 w-12 rounded-2xl bg-accent/10 flex items-center justify-center">
                            <KeyRound className="h-6 w-6 text-accent" />
                         </div>
                         <div>
-                           <p className="text-xs font-black uppercase text-slate-900">Security PIN Configuration</p>
-                           <p className="text-[10px] text-slate-500 font-medium">Updating this PIN will invalidate the old one immediately.</p>
+                           <p className="text-xs font-black uppercase text-foreground">Security PIN Configuration</p>
+                           <p className="text-[10px] text-muted-foreground font-medium">Updating this PIN will invalidate the old one immediately.</p>
                         </div>
                      </div>
 

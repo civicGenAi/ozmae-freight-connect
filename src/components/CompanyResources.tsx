@@ -229,19 +229,19 @@ export function CompanyResources({ pinEnabled, pinHash, isAdmin }: CompanyResour
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/50 p-6 rounded-3xl border border-white shadow-sm backdrop-blur-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card/50 p-6 rounded-3xl border border-border shadow-sm backdrop-blur-sm">
         <div className="space-y-1">
-          <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 flex items-center gap-3">
+          <h3 className="text-xl font-black uppercase tracking-tight text-foreground flex items-center gap-3">
             <FileBox className="h-5 w-5 text-accent" /> Company Resources
           </h3>
-          <p className="text-xs text-slate-500 font-medium leading-relaxed">
+          <p className="text-xs text-muted-foreground font-medium leading-relaxed">
             Secure documents, internal forms, and corporate resources protected by {pinEnabled ? "Active PIN Layer" : "Role Access"}.
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Button disabled={isUploading} className="h-10 bg-slate-900 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest px-6 rounded-xl gap-2 shadow-lg shadow-slate-200">
+            <Button disabled={isUploading} className="h-10 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] tracking-widest px-6 rounded-xl gap-2 shadow-lg shadow-primary/20">
               <Plus className="h-3 w-3" />
               Upload Resource
             </Button>
@@ -259,33 +259,33 @@ export function CompanyResources({ pinEnabled, pinHash, isAdmin }: CompanyResour
         <div className="md:col-span-1 space-y-4">
            <div className="bg-card rounded-2xl border p-4 space-y-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                <Input 
-                  placeholder="Search files..." 
-                  value={search} 
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                <Input
+                  placeholder="Search files..."
+                  value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="pl-9 h-10 text-[10px] font-bold tracking-tight rounded-xl bg-slate-50 border-none"
+                  className="pl-9 h-10 text-[10px] font-bold tracking-tight rounded-xl bg-muted border-none"
                 />
               </div>
 
               <div className="space-y-1">
-                <p className="text-[9px] font-black uppercase text-slate-400 px-3 mb-2 tracking-widest">Filter by Category</p>
-                <button 
+                <p className="text-[9px] font-black uppercase text-muted-foreground px-3 mb-2 tracking-widest">Filter by Category</p>
+                <button
                   onClick={() => setCategory("All")}
                   className={cn(
                     "w-full text-left px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider",
-                    category === "All" ? "bg-slate-900 text-white shadow-md shadow-slate-200" : "text-slate-600 hover:bg-slate-50"
+                    category === "All" ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "text-muted-foreground hover:bg-muted"
                   )}
                 >
                   All Resources
                 </button>
                 {CATEGORIES.map(c => (
-                  <button 
+                  <button
                     key={c}
                     onClick={() => setCategory(c)}
                     className={cn(
                       "w-full text-left px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider",
-                      category === c ? "bg-slate-900 text-white shadow-md shadow-slate-200" : "text-slate-600 hover:bg-slate-50"
+                      category === c ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "text-muted-foreground hover:bg-muted"
                     )}
                   >
                     {c}
@@ -298,22 +298,22 @@ export function CompanyResources({ pinEnabled, pinHash, isAdmin }: CompanyResour
         <div className="md:col-span-3">
           {isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-               {[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted/40 rounded-3xl animate-pulse border border-white" />)}
+               {[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted/40 rounded-3xl animate-pulse border border-border" />)}
             </div>
           ) : filteredResources?.length === 0 ? (
-            <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-12 text-center flex flex-col items-center gap-4">
-               <div className="h-16 w-16 bg-slate-50 rounded-2xl flex items-center justify-center">
-                  <FileText className="h-8 w-8 text-slate-300" />
+            <div className="bg-card rounded-3xl border-2 border-dashed border-border p-12 text-center flex flex-col items-center gap-4">
+               <div className="h-16 w-16 bg-muted rounded-2xl flex items-center justify-center">
+                  <FileText className="h-8 w-8 text-muted-foreground" />
                </div>
                <div className="space-y-1">
-                  <p className="text-sm font-black uppercase text-slate-900">No resources found</p>
-                  <p className="text-[10px] text-slate-400 font-bold">Try adjusting your search or upload a new file.</p>
+                  <p className="text-sm font-black uppercase text-foreground">No resources found</p>
+                  <p className="text-[10px] text-muted-foreground font-bold">Try adjusting your search or upload a new file.</p>
                </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredResources?.map(r => (
-                <div key={r.id} className="group bg-white rounded-3xl border border-slate-100 p-5 hover:border-accent hover:shadow-xl hover:shadow-slate-200 transition-all duration-300 relative">
+                <div key={r.id} className="group bg-card rounded-3xl border border-border p-5 hover:border-accent hover:shadow-xl hover:shadow-black/5 transition-all duration-300 relative">
                   <div className="flex items-start justify-between">
                     <div className={cn(
                       "h-12 w-12 rounded-2xl flex items-center justify-center transition-colors",
@@ -353,19 +353,19 @@ export function CompanyResources({ pinEnabled, pinHash, isAdmin }: CompanyResour
                   </div>
 
                   <div className="mt-4 space-y-1">
-                    <p className="text-xs font-black uppercase text-slate-800 truncate" title={r.name}>{r.name}</p>
+                    <p className="text-xs font-black uppercase text-foreground truncate" title={r.name}>{r.name}</p>
                     <div className="flex items-center gap-2">
-                       <Badge variant="secondary" className="px-2 py-0 h-4 text-[8px] font-black tracking-widest uppercase bg-slate-50 text-slate-400 border-none">{r.category}</Badge>
-                       <span className="text-[8px] font-bold text-slate-400 capitalize">{(r.size_bytes / 1024 / 1024).toFixed(2)} MB</span>
+                       <Badge variant="secondary" className="px-2 py-0 h-4 text-[8px] font-black tracking-widest uppercase bg-muted text-muted-foreground border-none">{r.category}</Badge>
+                       <span className="text-[8px] font-bold text-muted-foreground capitalize">{(r.size_bytes / 1024 / 1024).toFixed(2)} MB</span>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t pt-4 border-slate-50">
-                    <div className="flex items-center gap-2 text-[8px] font-black uppercase tracking-widest text-slate-400">
+                  <div className="mt-4 flex items-center justify-between border-t pt-4 border-border">
+                    <div className="flex items-center gap-2 text-[8px] font-black uppercase tracking-widest text-muted-foreground">
                        <ShieldCheck className={cn("h-3 w-3", pinEnabled ? "text-emerald-500" : "text-amber-500")} />
                        {pinEnabled ? "Secured" : "Unprotected"}
                     </div>
-                    <p className="text-[8px] font-bold text-slate-300">{new Date(r.created_at).toLocaleDateString()}</p>
+                    <p className="text-[8px] font-bold text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</p>
                   </div>
                 </div>
               ))}
@@ -376,31 +376,31 @@ export function CompanyResources({ pinEnabled, pinHash, isAdmin }: CompanyResour
 
       <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
         <DialogContent className="sm:max-w-[90vw] md:max-w-4xl h-[85vh] rounded-3xl p-0 overflow-hidden border-none shadow-2xl flex flex-col">
-          <DialogHeader className="bg-slate-900 px-8 py-5 text-white shrink-0">
+          <DialogHeader className="bg-primary px-8 py-5 text-primary-foreground shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
+                <div className="h-10 w-10 rounded-xl bg-primary-foreground/10 flex items-center justify-center border border-primary-foreground/20">
                   <FileText className="h-5 w-5 text-accent" />
                 </div>
                 <div className="text-left">
                   <DialogTitle className="text-lg font-black uppercase tracking-tight">{previewResource?.name}</DialogTitle>
-                  <DialogDescription className="text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                  <DialogDescription className="text-primary-foreground/60 text-[10px] font-black uppercase tracking-widest">
                     {previewResource?.category} • Vault Secure View
                   </DialogDescription>
                 </div>
               </div>
               <div className="flex gap-2">
-                 <Button 
-                   variant="ghost" 
+                 <Button
+                   variant="ghost"
                    onClick={() => handleDownload(previewResource)}
-                   className="h-10 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10"
+                   className="h-10 text-[10px] font-black uppercase tracking-widest text-primary-foreground hover:bg-primary-foreground/10"
                  >
                    <Download className="h-4 w-4 mr-2" /> Download
                  </Button>
-                 <Button 
-                   variant="ghost" 
+                 <Button
+                   variant="ghost"
                    onClick={() => setPreviewDialogOpen(false)}
-                   className="h-10 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10"
+                   className="h-10 text-[10px] font-black uppercase tracking-widest text-primary-foreground hover:bg-primary-foreground/10"
                  >
                    <X className="h-4 w-4" />
                  </Button>
@@ -408,42 +408,42 @@ export function CompanyResources({ pinEnabled, pinHash, isAdmin }: CompanyResour
             </div>
           </DialogHeader>
 
-          <div className="flex-1 bg-slate-100 overflow-hidden relative">
+          <div className="flex-1 bg-muted overflow-hidden relative">
              {isPreviewLoading ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-50">
+                <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-50">
                    <div className="flex flex-col items-center gap-3">
                       <Loader2 className="h-10 w-10 text-accent animate-spin" />
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Generating Secure Access...</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Generating Secure Access...</p>
                    </div>
                 </div>
              ) : (
                 <div className="h-full w-full p-4">
                   {previewResource?.content_type?.includes('pdf') ? (
-                    <iframe 
-                      src={`${signedUrl}#toolbar=0`} 
+                    <iframe
+                      src={`${signedUrl}#toolbar=0`}
                       className="w-full h-full rounded-2xl border-none shadow-inner"
                       title={previewResource?.name}
                     />
                   ) : previewResource?.content_type?.includes('image') ? (
-                    <div className="h-full w-full flex items-center justify-center overflow-auto bg-white rounded-2xl p-4 shadow-inner">
-                      <img 
-                        src={signedUrl} 
-                        alt={previewResource?.name} 
-                        className="max-w-full max-h-full object-contain shadow-xl rounded-lg" 
+                    <div className="h-full w-full flex items-center justify-center overflow-auto bg-muted rounded-2xl p-4 shadow-inner">
+                      <img
+                        src={signedUrl}
+                        alt={previewResource?.name}
+                        className="max-w-full max-h-full object-contain shadow-xl rounded-lg"
                       />
                     </div>
                   ) : (
-                    <div className="h-full w-full flex flex-col items-center justify-center bg-white rounded-2xl gap-6">
-                       <div className="h-24 w-24 rounded-3xl bg-slate-50 flex items-center justify-center border-2 border-dashed">
-                          <FileBox className="h-12 w-12 text-slate-300" />
+                    <div className="h-full w-full flex flex-col items-center justify-center bg-muted rounded-2xl gap-6">
+                       <div className="h-24 w-24 rounded-3xl bg-background flex items-center justify-center border-2 border-dashed">
+                          <FileBox className="h-12 w-12 text-muted-foreground" />
                        </div>
                        <div className="text-center space-y-2">
-                          <p className="text-sm font-black uppercase text-slate-900">Preview Not Available</p>
-                          <p className="text-xs text-slate-500 max-w-sm">This file format ({previewResource?.content_type}) cannot be previewed in the secure vault.</p>
+                          <p className="text-sm font-black uppercase text-foreground">Preview Not Available</p>
+                          <p className="text-xs text-muted-foreground max-w-sm">This file format ({previewResource?.content_type}) cannot be previewed in the secure vault.</p>
                        </div>
-                       <Button 
+                       <Button
                          onClick={() => handleDownload(previewResource)}
-                         className="bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] h-12 px-8 rounded-xl"
+                         className="bg-primary text-primary-foreground font-black uppercase tracking-widest text-[10px] h-12 px-8 rounded-xl"
                        >
                          Download to View Local
                        </Button>
@@ -467,14 +467,14 @@ export function CompanyResources({ pinEnabled, pinHash, isAdmin }: CompanyResour
 
       <Dialog open={uploadDialogOpen} onOpenChange={(open) => !isUploading && setUploadDialogOpen(open)}>
         <DialogContent className="sm:max-w-[425px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="bg-slate-900 p-8 text-white">
+          <DialogHeader className="bg-primary p-8 text-primary-foreground">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center border border-white/20">
+              <div className="h-12 w-12 rounded-2xl bg-primary-foreground/10 flex items-center justify-center border border-primary-foreground/20">
                 <Plus className="h-6 w-6 text-accent" />
               </div>
               <div className="text-left">
                 <DialogTitle className="text-xl font-black uppercase tracking-tight">New Resource</DialogTitle>
-                <DialogDescription className="text-slate-400 text-xs font-medium">Verify categorization before adding to vault.</DialogDescription>
+                <DialogDescription className="text-primary-foreground/60 text-xs font-medium">Verify categorization before adding to vault.</DialogDescription>
               </div>
             </div>
           </DialogHeader>
@@ -482,24 +482,24 @@ export function CompanyResources({ pinEnabled, pinHash, isAdmin }: CompanyResour
           <div className="p-8 space-y-6">
             <div className="space-y-4">
                <div className="space-y-2">
-                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Document Name</Label>
-                 <Input 
+                 <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Document Name</Label>
+                 <Input
                    disabled={isUploading}
-                   value={resourceName} 
+                   value={resourceName}
                    onChange={e => setResourceName(e.target.value)}
-                   className="h-12 rounded-xl bg-slate-50 border-none font-bold"
+                   className="h-12 rounded-xl bg-muted border-none font-bold"
                    placeholder="e.g. Q1 Operations Report"
                  />
                </div>
 
                <div className="space-y-2">
-                 <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Resource Category</Label>
-                 <Select 
+                 <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Resource Category</Label>
+                 <Select
                    disabled={isUploading}
-                   value={resourceCategory} 
+                   value={resourceCategory}
                    onValueChange={setResourceCategory}
                  >
-                   <SelectTrigger className="h-12 rounded-xl bg-slate-50 border-none font-bold">
+                   <SelectTrigger className="h-12 rounded-xl bg-muted border-none font-bold">
                      <SelectValue placeholder="Select Category" />
                    </SelectTrigger>
                    <SelectContent className="rounded-xl border-none shadow-xl">
@@ -517,15 +517,15 @@ export function CompanyResources({ pinEnabled, pinHash, isAdmin }: CompanyResour
                     <span>Uploading to Storage</span>
                     <span>{Math.round(uploadProgress)}%</span>
                  </div>
-                 <Progress value={uploadProgress} className="h-2 bg-slate-100" />
+                 <Progress value={uploadProgress} className="h-2 bg-muted" />
                </div>
             )}
 
             <DialogFooter className="pt-2 sm:justify-start gap-2">
-               <Button 
-                 disabled={isUploading} 
+               <Button
+                 disabled={isUploading}
                  onClick={handleStartUpload}
-                 className="flex-1 h-12 bg-slate-900 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest rounded-xl shadow-lg shadow-slate-200"
+                 className="flex-1 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] tracking-widest rounded-xl shadow-lg shadow-primary/20"
                >
                  {isUploading ? "Processing..." : "Complete Upload"}
                </Button>

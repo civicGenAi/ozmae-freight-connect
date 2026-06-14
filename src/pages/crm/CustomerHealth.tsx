@@ -84,7 +84,7 @@ export default function CustomerHealth() {
 
       <div className="bg-card rounded-2xl border p-6 shadow-sm">
         <h3 className="text-xs font-black uppercase tracking-widest mb-4">Health Distribution</h3>
-        <div className="h-4 flex rounded-full overflow-hidden w-full bg-slate-100">
+        <div className="h-4 flex rounded-full overflow-hidden w-full bg-muted">
           <div style={{ width: `${(counts.excellent / total) * 100}%` }} className="bg-emerald-500 h-full" title="Excellent" />
           <div style={{ width: `${(counts.good / total) * 100}%` }} className="bg-blue-500 h-full" title="Good" />
           <div style={{ width: `${(counts.at_risk / total) * 100}%` }} className="bg-amber-500 h-full" title="At Risk" />
@@ -100,7 +100,7 @@ export default function CustomerHealth() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-rose-100 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-2xl border border-rose-100 shadow-sm overflow-hidden">
         <div className="px-6 py-5 border-b bg-rose-50/30 flex items-center gap-2">
           <AlertTriangle className="h-5 w-5 text-rose-500" />
           <h3 className="font-black text-rose-900 text-sm tracking-tight">Accounts Requiring Attention</h3>
@@ -110,7 +110,7 @@ export default function CustomerHealth() {
           <div className="p-12 text-center text-emerald-600 font-bold">No accounts currently at risk. Great job!</div>
         ) : (
           <Table>
-            <TableHeader className="bg-slate-50">
+            <TableHeader className="bg-muted/30">
               <TableRow>
                 <TableHead>Customer</TableHead>
                 <TableHead>Health Score</TableHead>
@@ -122,7 +122,7 @@ export default function CustomerHealth() {
             </TableHeader>
             <TableBody>
               {atRisk.map(h => (
-                <TableRow key={h.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/crm/customers/${h.customer_id}`)}>
+                <TableRow key={h.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => navigate(`/crm/customers/${h.customer_id}`)}>
                   <TableCell className="font-bold text-sm">{h.customer?.company_name}</TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1 items-start">

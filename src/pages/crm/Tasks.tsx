@@ -37,7 +37,7 @@ export default function Tasks() {
     };
     
     return (
-      <div className="bg-white border p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between group">
+      <div className="bg-card border p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between group">
         <div>
           <div className="flex justify-between items-start mb-3">
             <span className={cn("px-2 py-0.5 rounded text-[9px] uppercase font-black tracking-widest text-white shadow-sm", pColor[task.priority] || pColor.low)}>
@@ -48,7 +48,7 @@ export default function Tasks() {
                 {task.assignee.avatar_url ? (
                   <img src={task.assignee.avatar_url} className="w-5 h-5 rounded-full" alt="" />
                 ) : (
-                  <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-600">
+                  <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[8px] font-bold text-muted-foreground">
                     {task.assignee.full_name?.charAt(0)}
                   </div>
                 )}
@@ -56,7 +56,7 @@ export default function Tasks() {
             )}
           </div>
           
-          <h4 className="font-bold text-slate-900 mb-1 leading-snug">{task.title}</h4>
+          <h4 className="font-bold text-foreground mb-1 leading-snug">{task.title}</h4>
           <Link to={`/crm/customers/${task.customer_id}`} className="text-xs text-accent font-semibold hover:underline block mb-4">
             {task.customer?.company_name}
           </Link>
@@ -143,7 +143,7 @@ export default function Tasks() {
           <Section title="Overdue" items={overdue} colorClass="bg-rose-50/50 border-rose-100/50 text-rose-900" icon={AlertTriangle} />
           <Section title="Due Today" items={dueToday} colorClass="bg-amber-50/30 border-amber-100 text-amber-900" icon={Clock} />
           <Section title="Upcoming (7 Days)" items={upcoming} colorClass="bg-blue-50/30 border-blue-100 text-blue-900" icon={Calendar} />
-          <Section title="Later" items={later} colorClass="bg-slate-50 border-slate-200 text-slate-800" icon={Calendar} />
+          <Section title="Later" items={later} colorClass="bg-muted/30 border-border text-foreground" icon={Calendar} />
         </div>
       )}
     </div>

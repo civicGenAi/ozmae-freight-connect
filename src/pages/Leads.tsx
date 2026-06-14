@@ -913,7 +913,7 @@ export default function Leads() {
                       disabled={(selectedLead.status === 'converted' && !isAdmin) || !canEditLeads}
                     >
                       <SelectTrigger className={cn(
-                        "h-10 px-4 font-bold text-xs rounded-xl border-slate-200 bg-white shadow-sm",
+                        "h-10 px-4 font-bold text-xs rounded-xl border-border bg-card shadow-sm",
                         selectedLead.status === 'converted' && "border-emerald-100 bg-emerald-50/30 text-emerald-700"
                       )}>
                         <SelectValue />
@@ -1044,7 +1044,7 @@ function LeadFormSheet({
                   size="sm" 
                   variant="ghost" 
                   onClick={onDiscard}
-                  className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
+                  className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-foreground/5"
                 >
                   Discard
                 </Button>
@@ -1275,7 +1275,7 @@ function LeadFormSheet({
                         <Input 
                           placeholder="Carrier name..."
                           {...form.register("logistics_carrier")}
-                          className="h-9 text-xs bg-white font-medium focus-visible:ring-accent"
+                          className="h-9 text-xs bg-card font-medium focus-visible:ring-accent"
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -1283,7 +1283,7 @@ function LeadFormSheet({
                         <Input 
                           placeholder="e.g. 25-30 Days"
                           {...form.register("logistics_transit")}
-                          className="h-9 text-xs bg-white font-medium focus-visible:ring-accent"
+                          className="h-9 text-xs bg-card font-medium focus-visible:ring-accent"
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -1291,7 +1291,7 @@ function LeadFormSheet({
                         <Input 
                           placeholder="e.g. 14 Days"
                           {...form.register("logistics_extra")}
-                          className="h-9 text-xs bg-white font-medium focus-visible:ring-accent"
+                          className="h-9 text-xs bg-card font-medium focus-visible:ring-accent"
                         />
                       </div>
                     </div>

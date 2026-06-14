@@ -355,7 +355,7 @@ export default function Documents() {
                                     <button
                                       onClick={() => handlePreview(doc)}
                                       disabled={requestingAccess === doc.id}
-                                      className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-accent transition-colors disabled:opacity-50"
+                                      className="p-1.5 rounded-lg bg-card border shadow-sm hover:text-accent transition-colors disabled:opacity-50"
                                       title="Preview Document"
                                     >
                                        {requestingAccess === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
@@ -363,15 +363,15 @@ export default function Documents() {
                                     <button
                                       onClick={() => handleDownload(doc)}
                                       disabled={requestingAccess === doc.id}
-                                      className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-accent transition-colors disabled:opacity-50"
+                                      className="p-1.5 rounded-lg bg-card border shadow-sm hover:text-accent transition-colors disabled:opacity-50"
                                       title="Download/External"
                                     >
                                        <ExternalLink className="h-3 w-3" />
                                     </button>
-                                    <button onClick={() => triggerUpload(job.id, dt.key)} className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-accent transition-colors" title="Replace / upload new">
+                                    <button onClick={() => triggerUpload(job.id, dt.key)} className="p-1.5 rounded-lg bg-card border shadow-sm hover:text-accent transition-colors" title="Replace / upload new">
                                        <UploadCloud className="h-3 w-3" />
                                     </button>
-                                    <button onClick={() => setDocumentToDelete(doc)} className="p-1.5 rounded-lg bg-white border shadow-sm hover:text-destructive transition-colors" title="Remove">
+                                    <button onClick={() => setDocumentToDelete(doc)} className="p-1.5 rounded-lg bg-card border shadow-sm hover:text-destructive transition-colors" title="Remove">
                                        <Trash2 className="h-3 w-3" />
                                     </button>
                                   </div>
