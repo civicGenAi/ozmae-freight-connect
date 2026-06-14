@@ -16,6 +16,7 @@ import Tracking from "@/pages/Tracking";
 import Invoices from "@/pages/Invoices";
 import Payments from "@/pages/Payments";
 import JobCosting from "@/pages/JobCosting";
+import { VaultGuard } from "@/components/VaultGuard";
 import Documents from "@/pages/Documents";
 import CompanyProfile from "@/pages/CompanyProfile";
 import UsersRoles from "@/pages/UsersRoles";
@@ -148,7 +149,9 @@ const App = () => (
 
           <Route element={
             <AuthGuard>
-              <AppLayout><JobCosting /></AppLayout>
+              <AppLayout>
+                <VaultGuard title="Job Costing Vault"><JobCosting /></VaultGuard>
+              </AppLayout>
             </AuthGuard>
           } path="/job-costing" />
           
