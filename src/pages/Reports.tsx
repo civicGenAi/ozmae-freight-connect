@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
-  Download, TrendingUp, TrendingDown, DollarSign, Truck, Briefcase, Target, Wallet, Percent, MapPin,
+  Download, TrendingUp, TrendingDown, DollarSign, Truck, Briefcase, Target, Wallet, Percent, MapPin, Clock, User, XCircle,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend,
@@ -32,12 +32,14 @@ export default function Reports() {
   const { data, isLoading } = useQuery({
     queryKey: ["reports_data"],
     queryFn: async () => {
-      const [payments, jobs, costs, quotes, vehicles] = await Promise.all([
+      const [payments, jobs, costs, quotes, vehicles, leads, declineReasons] = await Promise.all([
         supabase.from("payments").select("amount_usd, payment_date, status"),
-        supabase.from("job_orders").select("id, total_amount, created_at, status, origin, destination, customer:customers(company_name)"),
+        supabase.from("job_orders").select("id, total_amount, created_at, status, origin, destination, quotation_id, customer:customers(company_name)"),
         supabase.from("job_costs").select("amount_usd, incurred_on"),
-        supabase.from("quotations").select("status"),
+        supabase.from("quotations").select("id, status, origin, destination, lead_id, created_at, customer:customers(company_name), creator:profiles!quotations_created_by_fkey(full_name)"),
         supabase.from("vehicles").select("status"),
+        supabase.from("leads").select("id, created_at, status"),
+        supabase.from("decline_reasons").select("reason_category, created_at, deal_value_usd"),
       ]);
       return {
         payments: payments.data || [],
@@ -45,6 +47,8 @@ export default function Reports() {
         costs: costs.data || [],
         quotes: quotes.data || [],
         vehicles: vehicles.data || [],
+        leads: leads.data || [],
+        declineReasons: declineReasons.data || [],
       };
     },
   });
@@ -116,6 +120,98 @@ export default function Reports() {
     });
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
   }, [data]);
+
+  // Win rate broken down by route / customer / salesperson, from decided quotes (accepted vs declined).
+  const winRateBreakdowns = useMemo(() => {
+    if (!data) return { byRoute: [], byCustomer: [], bySalesperson: [] };
+    const decided = (data.quotes || []).filter((q: any) => ["accepted", "declined"].includes(q.status));
+
+    const groupBy = (keyFn: (q: any) => string) => {
+      const map: Record<string, { won: number; total: number }> = {};
+      decided.forEach((q: any) => {
+        const key = keyFn(q) || "Unknown";
+        if (!map[key]) map[key] = { won: 0, total: 0 };
+        map[key].total += 1;
+        if (q.status === "accepted") map[key].won += 1;
+      });
+      return Object.entries(map)
+        .map(([name, v]) => ({ name, winRate: v.total > 0 ? (v.won / v.total) * 100 : 0, total: v.total, won: v.won }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 6);
+    };
+
+    return {
+      byRoute: groupBy((q: any) => (q.origin && q.destination) ? `${q.origin.split(",")[0]} → ${q.destination.split(",")[0]}` : "Unknown"),
+      byCustomer: groupBy((q: any) => q.customer?.company_name || "Unknown"),
+      bySalesperson: groupBy((q: any) => q.creator?.full_name || "Unassigned"),
+    };
+  }, [data]);
+
+  // Average time (days) from lead created → first quote, and from quote created → first job.
+  const conversionTimes = useMemo(() => {
+    if (!data) return { leadToQuote: null as number | null, leadToQuoteCount: 0, quoteToJob: null as number | null, quoteToJobCount: 0 };
+
+    const earliestByKey = (rows: any[], keyField: string) => {
+      const map: Record<string, string> = {};
+      rows.forEach((r: any) => {
+        const key = r[keyField];
+        if (!key || !r.created_at) return;
+        if (!map[key] || r.created_at < map[key]) map[key] = r.created_at;
+      });
+      return map;
+    };
+
+    const avg = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+    const dayDiff = (a: string, b: string) => (parseISO(b).getTime() - parseISO(a).getTime()) / 86400000;
+
+    const quotesByLead = earliestByKey(data.quotes || [], "lead_id");
+    const leadDiffs: number[] = [];
+    (data.leads || []).forEach((l: any) => {
+      const qc = quotesByLead[l.id];
+      if (qc && l.created_at) {
+        const days = dayDiff(l.created_at, qc);
+        if (days >= 0) leadDiffs.push(days);
+      }
+    });
+
+    const jobsByQuote = earliestByKey(data.jobs || [], "quotation_id");
+    const quoteDiffs: number[] = [];
+    (data.quotes || []).forEach((q: any) => {
+      const jc = jobsByQuote[q.id];
+      if (jc && q.created_at) {
+        const days = dayDiff(q.created_at, jc);
+        if (days >= 0) quoteDiffs.push(days);
+      }
+    });
+
+    return {
+      leadToQuote: avg(leadDiffs),
+      leadToQuoteCount: leadDiffs.length,
+      quoteToJob: avg(quoteDiffs),
+      quoteToJobCount: quoteDiffs.length,
+    };
+  }, [data]);
+
+  // Lost-deal trends (decline reasons logged within the selected period).
+  const lostDealTrends = useMemo(() => {
+    if (!data) return { byCategory: [] as { name: string; count: number; value: number }[], totalLostValue: 0, count: 0 };
+    const inRange = (data.declineReasons || []).filter((d: any) => within(d.created_at));
+    const map: Record<string, { count: number; value: number }> = {};
+    inRange.forEach((d: any) => {
+      const key = (d.reason_category || "other").replace(/_/g, " ");
+      if (!map[key]) map[key] = { count: 0, value: 0 };
+      map[key].count += 1;
+      map[key].value += num(d.deal_value_usd);
+    });
+    const byCategory = Object.entries(map)
+      .map(([name, v]) => ({ name, count: v.count, value: v.value }))
+      .sort((a, b) => b.count - a.count);
+    return {
+      byCategory,
+      totalLostValue: inRange.reduce((a: number, d: any) => a + num(d.deal_value_usd), 0),
+      count: inRange.length,
+    };
+  }, [data, range]);
 
   const fleet = useMemo(() => {
     const labelMap: Record<string, string> = { available: "Standby", on_job: "Active", maintenance: "Maintenance", retired: "Retired" };
@@ -249,6 +345,89 @@ export default function Reports() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Quote-to-Revenue Analytics */}
+      <div className="space-y-6">
+        <h2 className="font-black text-xs uppercase tracking-widest text-foreground flex items-center gap-2">
+          <Target className="h-4 w-4 text-accent" /> Quote-to-Revenue Analytics
+        </h2>
+
+        {/* Time to convert */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-card rounded-2xl border shadow-sm p-5 flex items-center gap-4">
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center"><Clock className="h-5 w-5" /></div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Avg. Lead → Quote</p>
+              <p className="text-xl font-black tabular-nums">{conversionTimes.leadToQuote != null ? `${conversionTimes.leadToQuote.toFixed(1)} days` : "—"}</p>
+              <p className="text-[9px] font-bold text-muted-foreground/70">{conversionTimes.leadToQuoteCount} conversions</p>
+            </div>
+          </div>
+          <div className="bg-card rounded-2xl border shadow-sm p-5 flex items-center gap-4">
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-purple-50 text-purple-500 flex items-center justify-center"><Clock className="h-5 w-5" /></div>
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Avg. Quote → Job</p>
+              <p className="text-xl font-black tabular-nums">{conversionTimes.quoteToJob != null ? `${conversionTimes.quoteToJob.toFixed(1)} days` : "—"}</p>
+              <p className="text-[9px] font-bold text-muted-foreground/70">{conversionTimes.quoteToJobCount} conversions</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Win rate breakdowns */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {([
+            { title: "By Route", icon: MapPin, rows: winRateBreakdowns.byRoute },
+            { title: "By Customer", icon: DollarSign, rows: winRateBreakdowns.byCustomer },
+            { title: "By Salesperson", icon: User, rows: winRateBreakdowns.bySalesperson },
+          ] as const).map((col) => (
+            <div key={col.title} className="bg-card rounded-2xl border shadow-sm p-5">
+              <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2"><col.icon className="h-3.5 w-3.5" /> Win Rate {col.title}</h3>
+              <div className="space-y-3">
+                {col.rows.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-6 text-center">No decided quotes yet</p>
+                ) : col.rows.map((r) => (
+                  <div key={r.name}>
+                    <div className="flex justify-between text-[10px] font-bold uppercase mb-1">
+                      <span className="truncate max-w-[140px]">{r.name}</span>
+                      <span className="tabular-nums">{r.winRate.toFixed(0)}% ({r.won}/{r.total})</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max(4, r.winRate)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Lost deal trends */}
+        <div className="bg-card rounded-2xl border shadow-sm p-5">
+          <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2"><XCircle className="h-3.5 w-3.5 text-rose-500" /> Lost Deal Trends</h3>
+          {lostDealTrends.byCategory.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">No declined deals logged in this period</p>
+          ) : (
+            <div className="space-y-3">
+              {lostDealTrends.byCategory.map((c) => {
+                const max = lostDealTrends.byCategory[0].count || 1;
+                return (
+                  <div key={c.name}>
+                    <div className="flex justify-between text-[10px] font-bold uppercase mb-1">
+                      <span className="truncate max-w-[220px]">{c.name}</span>
+                      <span className="tabular-nums">{c.count} · {fmt(c.value)}</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-rose-500" style={{ width: `${Math.max(4, (c.count / max) * 100)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-[10px] font-bold text-muted-foreground pt-2">
+                Total: {lostDealTrends.count} lost deal{lostDealTrends.count === 1 ? "" : "s"} · {fmt(lostDealTrends.totalLostValue)} in lost pipeline value
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

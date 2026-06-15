@@ -2,9 +2,10 @@ import { useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, Truck, User, Phone, Tag, Shield, Trash2, Plus } from "lucide-react";
+import { Search, Truck, User, Phone, Tag, Shield, Trash2, Plus, CalendarCheck, Wrench, Fuel } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -14,8 +15,12 @@ import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import { Upload, FileSpreadsheet } from "lucide-react";
 import { DeleteConfirmModal } from "@/components/ui/delete-confirm-modal";
+import { FleetSchedule } from "@/components/fleet/FleetSchedule";
+import { FleetMaintenance } from "@/components/fleet/FleetMaintenance";
+import { FleetFuelLog } from "@/components/fleet/FleetFuelLog";
 
 export default function Fleet() {
+  const [activeTab, setActiveTab] = useState("fleet");
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [driverSearch, setDriverSearch] = useState("");
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
@@ -226,10 +231,9 @@ export default function Fleet() {
   };
 
   return (
-    <div className="space-y-12">
-      {/* Vehicles Section */}
-      <div className="space-y-6">
-        <PageHeader title="Fleet & Drivers">
+    <div className="space-y-8">
+      <PageHeader title="Fleet & Resources">
+        {activeTab === "fleet" && (
           <div className="flex flex-wrap items-center gap-4">
             {/* Vehicle Controls */}
             <div className="flex flex-col items-end gap-1">
@@ -269,9 +273,29 @@ export default function Fleet() {
               </button>
             </div>
           </div>
-        </PageHeader>
+        )}
+      </PageHeader>
 
-        <div className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 h-auto md:h-12 bg-muted/50 p-1 rounded-2xl border shadow-sm w-full gap-1">
+          <TabsTrigger value="fleet" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+            <Truck className="h-3.5 w-3.5" /> Fleet
+          </TabsTrigger>
+          <TabsTrigger value="schedule" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+            <CalendarCheck className="h-3.5 w-3.5" /> Schedule
+          </TabsTrigger>
+          <TabsTrigger value="maintenance" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+            <Wrench className="h-3.5 w-3.5" /> Maintenance
+          </TabsTrigger>
+          <TabsTrigger value="fuel" className="rounded-xl font-bold uppercase text-[10px] tracking-widest gap-2 py-2 data-[state=active]:text-accent data-[state=active]:shadow-sm">
+            <Fuel className="h-3.5 w-3.5" /> Fuel & Trip Costs
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="fleet" className="space-y-12">
+          {/* Vehicles Section */}
+          <div className="space-y-6">
+            <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-accent" />
@@ -428,6 +452,20 @@ export default function Fleet() {
           </Table>
         </div>
       </div>
+        </TabsContent>
+
+        <TabsContent value="schedule">
+          <FleetSchedule />
+        </TabsContent>
+
+        <TabsContent value="maintenance">
+          <FleetMaintenance />
+        </TabsContent>
+
+        <TabsContent value="fuel">
+          <FleetFuelLog />
+        </TabsContent>
+      </Tabs>
 
       {/* Add Vehicle Dialog */}
       <Dialog open={isVehicleModalOpen} onOpenChange={setIsVehicleModalOpen}>

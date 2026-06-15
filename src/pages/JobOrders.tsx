@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Search, MapPin, Truck, User, Calendar, DollarSign, Clock, CheckCircle2, ChevronRight, Trash2, Info, Pencil, FileText, Upload, History, UserPlus, MessageSquare, Send, ShieldCheck, ImagePlus, Lock, Unlock, Loader2, Smartphone } from "lucide-react";
+import { Plus, Search, MapPin, Truck, User, Calendar, DollarSign, Clock, CheckCircle2, ChevronRight, Trash2, Info, Pencil, FileText, Upload, History, UserPlus, MessageSquare, Send, ShieldCheck, ImagePlus, Lock, Unlock, Loader2, Smartphone, Locate, Flag } from "lucide-react";
 import imageCompression from 'browser-image-compression';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useFormDraft } from "@/hooks/useFormDraft";
+import { ShipmentMap } from "@/components/ShipmentMap";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Form,
@@ -77,6 +78,15 @@ const stages = [
   "on_hold",
   "in_progress",
   "completed"
+] as const;
+
+const CHECKPOINT_TYPES = [
+  { value: "border_crossing", label: "Border Crossing" },
+  { value: "customs", label: "Customs" },
+  { value: "port", label: "Port / Terminal" },
+  { value: "weigh_station", label: "Weigh Station" },
+  { value: "warehouse", label: "Warehouse" },
+  { value: "other", label: "Other" },
 ] as const;
 
 const jobSchema = z.object({
@@ -153,6 +163,11 @@ export default function JobOrders() {
   const [currentPage, setCurrentPage] = useState(1);
   const [progressText, setProgressText] = useState("");
   const [newStatus, setNewStatus] = useState<string | null>(null);
+  const [progressLocation, setProgressLocation] = useState("");
+  const [progressCoords, setProgressCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [isCheckpoint, setIsCheckpoint] = useState(false);
+  const [checkpointType, setCheckpointType] = useState<string>(CHECKPOINT_TYPES[0].value);
+  const [notifySms, setNotifySms] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -522,13 +537,21 @@ export default function JobOrders() {
   };
 
   const addProgressMutation = useMutation({
-    mutationFn: async ({ job_id, text, status }: { job_id: string, text: string, status?: string }) => {
+    mutationFn: async ({ job_id, text, status, location, lat, lng, isCheckpoint, checkpointType }: {
+      job_id: string; text: string; status?: string; location?: string;
+      lat?: number | null; lng?: number | null; isCheckpoint?: boolean; checkpointType?: string;
+    }) => {
       const { data: { user } } = await supabase.auth.getUser();
       const updateData: any = {
         job_order_id: job_id,
         update_text: text,
         reported_by: user?.id,
-        status: status || selectedJob?.status
+        status: status || selectedJob?.status,
+        location: location || null,
+        lat: lat ?? null,
+        lng: lng ?? null,
+        is_checkpoint: !!isCheckpoint,
+        checkpoint_type: isCheckpoint ? checkpointType : null,
       };
 
       const { error } = await supabase.from("job_progress_reports").insert([updateData]);
@@ -543,10 +566,29 @@ export default function JobOrders() {
       queryClient.invalidateQueries({ queryKey: ["job_orders"] });
       setProgressText("");
       setNewStatus(null);
+      setProgressLocation("");
+      setProgressCoords(null);
+      setIsCheckpoint(false);
       toast.success("Progress report added successfully");
     },
     onError: (err: any) => toast.error(err.message),
   });
+
+  const captureGpsLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported on this device");
+      return;
+    }
+    toast.info("Capturing GPS location...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setProgressCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        toast.success("GPS location captured");
+      },
+      () => toast.error("Unable to retrieve location. Check browser permissions."),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const { data: templates } = useQuery({
     queryKey: ["operation_templates"],
@@ -1614,39 +1656,110 @@ export default function JobOrders() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <Input placeholder="Location (Optional)" className="h-10 text-[11px]" />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder="Location (Optional)"
+                          className="h-10 text-[11px]"
+                          value={progressLocation}
+                          onChange={(e) => setProgressLocation(e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className={cn("h-10 w-10 shrink-0", progressCoords && "border-accent text-accent")}
+                          onClick={captureGpsLocation}
+                          title="Capture GPS location"
+                        >
+                          <Locate className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
+
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="rounded border-muted text-accent focus:ring-accent"
+                          checked={isCheckpoint}
+                          onChange={(e) => setIsCheckpoint(e.target.checked)}
+                        />
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                          <Flag className="h-3 w-3" /> Mark as Border/Checkpoint
+                        </span>
+                      </label>
+                      {isCheckpoint && (
+                        <Select value={checkpointType} onValueChange={setCheckpointType}>
+                          <SelectTrigger className="h-8 w-44 text-[10px] font-bold">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CHECKPOINT_TYPES.map(ct => (
+                              <SelectItem key={ct.value} value={ct.value} className="text-[11px] font-medium">{ct.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {progressCoords && (
+                        <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-1">
+                          <Locate className="h-3 w-3" /> {progressCoords.lat.toFixed(4)}, {progressCoords.lng.toFixed(4)} captured
+                        </span>
+                      )}
+                    </div>
+
                     <Textarea
                       placeholder="Describe the current milestone or situation..."
                       className="min-h-[80px] text-[11px] bg-muted/20"
                       value={progressText}
                       onChange={(e) => setProgressText(e.target.value)}
                     />
-                    <div className="flex items-center justify-between py-2 border-t border-muted/50">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="wa-notify"
-                          className="rounded border-muted text-accent focus:ring-accent"
-                          checked={notifyWhatsApp}
-                          onChange={(e) => setNotifyWhatsApp(e.target.checked)}
-                        />
-                        <label htmlFor="wa-notify" className="text-[10px] font-bold text-muted-foreground uppercase cursor-pointer">
-                          Notify Client via WhatsApp
-                        </label>
-                      </div>
-                      {notifyWhatsApp && (
-                        <div className="flex items-center gap-1 text-[8px] font-black text-accent uppercase tracking-tighter animate-pulse">
-                          <MessageSquare className="h-3 w-3" /> API Bridge Ready
+                    <div className="py-2 border-t border-muted/50 space-y-2">
+                      <p className="text-[9px] font-black text-muted-foreground/70 uppercase tracking-widest">Customer Notification Channels</p>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="wa-notify"
+                            className="rounded border-muted text-accent focus:ring-accent"
+                            checked={notifyWhatsApp}
+                            onChange={(e) => setNotifyWhatsApp(e.target.checked)}
+                          />
+                          <label htmlFor="wa-notify" className="text-[10px] font-bold text-muted-foreground uppercase cursor-pointer flex items-center gap-1">
+                            <MessageSquare className="h-3 w-3" /> WhatsApp
+                          </label>
+                          <span className="text-[8px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Coming Soon</span>
                         </div>
-                      )}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="sms-notify"
+                            className="rounded border-muted text-accent focus:ring-accent"
+                            checked={notifySms}
+                            onChange={(e) => setNotifySms(e.target.checked)}
+                          />
+                          <label htmlFor="sms-notify" className="text-[10px] font-bold text-muted-foreground uppercase cursor-pointer flex items-center gap-1">
+                            <Smartphone className="h-3 w-3" /> SMS
+                          </label>
+                          <span className="text-[8px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Coming Soon</span>
+                        </div>
+                      </div>
                     </div>
                     <Button
                       className="w-full bg-accent hover:bg-accent/90 text-accent-foreground h-11 text-[10px] font-black uppercase tracking-widest gap-2"
                       onClick={() => {
-                        addProgressMutation.mutate({ job_id: selectedJob.id, text: progressText, status: newStatus || undefined });
-                        if (notifyWhatsApp) {
-                          toast.info("WhatsApp Trigger: Status update notification queued (Integrations coming soon)");
+                        addProgressMutation.mutate({
+                          job_id: selectedJob.id,
+                          text: progressText,
+                          status: newStatus || undefined,
+                          location: progressLocation || undefined,
+                          lat: progressCoords?.lat,
+                          lng: progressCoords?.lng,
+                          isCheckpoint,
+                          checkpointType,
+                        });
+                        const channels = [notifyWhatsApp && "WhatsApp", notifySms && "SMS"].filter(Boolean).join(" & ");
+                        if (channels) {
+                          toast.info(`${channels} notification queued — integration coming soon (placeholder only)`);
                         }
                       }}
                       disabled={!progressText || addProgressMutation.isPending}
@@ -1656,6 +1769,17 @@ export default function JobOrders() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Live Map */}
+                {progressReports && progressReports.some((r: any) => typeof r.lat === 'number' && typeof r.lng === 'number') && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-accent" />
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Live Location</h4>
+                    </div>
+                    <ShipmentMap points={progressReports} height={260} />
+                  </div>
+                )}
 
                 {/* Timeline */}
                 <div className="relative pl-6 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-muted/50">
@@ -1673,9 +1797,20 @@ export default function JobOrders() {
                         )} />
                         <div className="bg-card p-4 rounded-xl border shadow-sm group-hover:border-accent/30 transition-all">
                           <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <StatusBadge status={report.status} />
-                              <span className="text-[8px] font-black uppercase tracking-tighter text-muted-foreground/60">Stage Milestone</span>
+                              {report.is_checkpoint ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-[#0f1d35]/5 text-[#0f1d35] dark:bg-white/10 dark:text-white px-2 py-0.5 text-[8px] font-black uppercase tracking-widest">
+                                  <Flag className="h-2.5 w-2.5" /> {String(report.checkpoint_type || "checkpoint").replace(/_/g, ' ')}
+                                </span>
+                              ) : (
+                                <span className="text-[8px] font-black uppercase tracking-tighter text-muted-foreground/60">Stage Milestone</span>
+                              )}
+                              {typeof report.lat === 'number' && typeof report.lng === 'number' && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest">
+                                  <Locate className="h-2.5 w-2.5" /> GPS
+                                </span>
+                              )}
                             </div>
                             <span className="text-[9px] font-bold text-muted-foreground">{format(new Date(report.created_at), "MMM d, HH:mm")}</span>
                           </div>

@@ -1,9 +1,11 @@
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
-import { CheckCircle, Circle, Loader, Package, MapPin, ChevronRight, Clock, Truck } from "lucide-react";
+import { CheckCircle, Circle, Loader, Package, MapPin, ChevronRight, Clock, Truck, Map as MapIcon, Flag } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { ShipmentMap } from "@/components/ShipmentMap";
 
 const stages = [
   "planning",
@@ -19,6 +21,8 @@ const stages = [
 ] as const;
 
 export default function Tracking() {
+  const [expandedMapJobId, setExpandedMapJobId] = useState<string | null>(null);
+
   const { data: trackingJobs, isLoading } = useQuery({
     queryKey: ["tracking_jobs"],
     queryFn: async () => {
@@ -35,6 +39,32 @@ export default function Tracking() {
       return data;
     },
   });
+
+  const jobIds = useMemo(() => (trackingJobs || []).map((j: any) => j.id), [trackingJobs]);
+
+  const { data: progressReports } = useQuery({
+    queryKey: ["tracking_progress_reports", jobIds],
+    queryFn: async () => {
+      if (jobIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("job_progress_reports")
+        .select("*")
+        .in("job_order_id", jobIds)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: jobIds.length > 0,
+  });
+
+  const reportsByJob = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    (progressReports || []).forEach((r: any) => {
+      if (!map[r.job_order_id]) map[r.job_order_id] = [];
+      map[r.job_order_id].push(r);
+    });
+    return map;
+  }, [progressReports]);
 
   return (
     <div className="space-y-8">
@@ -163,6 +193,35 @@ export default function Tracking() {
                     </div>
                 </div>
             </div>
+
+            {/* Live Location / Checkpoints */}
+            {(() => {
+              const jobReports = reportsByJob[job.id] || [];
+              const latest = jobReports[0];
+              const hasGps = jobReports.some((r: any) => typeof r.lat === 'number' && typeof r.lng === 'number');
+              if (jobReports.length === 0) return null;
+              return (
+                <div className="mt-4 pt-4 border-t space-y-3">
+                  {latest?.location && (
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                      {latest.is_checkpoint ? <Flag className="h-3 w-3 text-accent shrink-0" /> : <MapPin className="h-3 w-3 text-accent shrink-0" />}
+                      Last known location: <span className="text-foreground normal-case">{latest.location}</span>
+                    </div>
+                  )}
+                  {hasGps && (
+                    <>
+                      <button
+                        onClick={() => setExpandedMapJobId(expandedMapJobId === job.id ? null : job.id)}
+                        className="flex items-center gap-1.5 text-[10px] font-black text-accent uppercase tracking-widest hover:underline"
+                      >
+                        <MapIcon className="h-3 w-3" /> {expandedMapJobId === job.id ? "Hide" : "Show"} Live Map
+                      </button>
+                      {expandedMapJobId === job.id && <ShipmentMap points={jobReports} height={220} />}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ))}
       </div>
