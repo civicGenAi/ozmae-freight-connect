@@ -5,9 +5,9 @@ import {
   LayoutDashboard, Users, FileText, DollarSign, Truck, MapPin,
   CreditCard, FolderOpen, Settings, Building2, UserCog, Bell,
   ClipboardList, Receipt, Menu, X, LogOut, AlertTriangle,
-  Activity, Phone, CheckSquare, TrendingDown, ChevronDown, 
+  Activity, Phone, CheckSquare, TrendingDown, ChevronDown,
   ChevronRight, PanelLeft, PanelLeftClose, BarChart3, Calculator,
-  Sun, Moon, Monitor, Check
+  Sun, Moon, Monitor, Check, Hourglass, Wrench
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
@@ -86,6 +86,7 @@ const navSections: NavSection[] = [
     items: [
       { title: "Invoices", path: "/invoices", icon: Receipt },
       { title: "Payments", path: "/payments", icon: CreditCard },
+      { title: "Receivables Aging", path: "/receivables-aging", icon: Hourglass },
       { title: "Job Costing", path: "/job-costing", icon: Calculator, roles: ["Admin", "Finance"] },
     ],
   },

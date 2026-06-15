@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer, Clock, CheckCircle2, MessageSquare, CornerUpLeft, CheckCircle, Send, Copy } from "lucide-react";
+import { Plus, Eye, Search, ArrowRight, Trash2, Mail, Download, Pencil, Phone, Info, Printer, Clock, CheckCircle2, MessageSquare, CornerUpLeft, CheckCircle, Send, Copy, Lightbulb } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -146,6 +146,8 @@ export default function Quotations() {
 
   const watchedItems = useWatch({ control: form.control, name: "cargo_items" });
   const watchedMainUnit = useWatch({ control: form.control, name: "main_unit" });
+  const watchedOrigin = useWatch({ control: form.control, name: "origin" });
+  const watchedDestination = useWatch({ control: form.control, name: "destination" });
 
   useEffect(() => {
     if (watchedItems && watchedMainUnit) {
@@ -280,6 +282,35 @@ export default function Quotations() {
     if (leads) leads.forEach((l: any) => { if (l.cif_value_usd && l.cif_value_usd !== "TBA") unique.add(l.cif_value_usd) });
     return ["TBA", ...Array.from(unique)];
   }, [leads]);
+
+  // Smart rate suggestions: active rate-card entries matching the selected route.
+  const { data: rateCardActive } = useQuery({
+    queryKey: ["rate_card_active"],
+    enabled: isNewModalOpen,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("rate_card")
+        .select("id, origin, destination, vehicle_type, base_rate_usd, per_km_rate_usd")
+        .eq("is_active", true);
+      if (error) return [];
+      return data;
+    },
+  });
+
+  const rateSuggestions = useMemo(() => {
+    if (!rateCardActive?.length || !watchedOrigin || !watchedDestination) return [];
+    const norm = (s: string) => (s || "").toLowerCase().split(",")[0].trim();
+    const o = norm(watchedOrigin);
+    const d = norm(watchedDestination);
+    if (!o || !d) return [];
+    return rateCardActive.filter((r: any) => {
+      const ro = norm(r.origin);
+      const rd = norm(r.destination);
+      const originMatch = !!ro && (ro.includes(o) || o.includes(ro));
+      const destMatch = !!rd && (rd.includes(d) || d.includes(rd));
+      return originMatch && destMatch;
+    }).slice(0, 6);
+  }, [rateCardActive, watchedOrigin, watchedDestination]);
 
   const createQuoteMutation = useMutation({
     mutationFn: async (values: QuoteFormValues) => {
@@ -903,6 +934,28 @@ export default function Quotations() {
                   )}
                 />
               </div>
+
+              {rateSuggestions.length > 0 && (
+                <div className="p-3 bg-accent/5 border border-accent/20 rounded-xl space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-accent flex items-center gap-1.5">
+                    <Lightbulb className="h-3.5 w-3.5" /> Rate Card Suggestions for this Route
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {rateSuggestions.map((r: any) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => form.setValue("amount", r.base_rate_usd.toFixed(2) as any, { shouldDirty: true })}
+                        className="text-[10px] font-bold bg-card border border-accent/20 hover:border-accent hover:bg-accent/10 px-2.5 py-1.5 rounded-lg transition-colors"
+                      >
+                        {(r.vehicle_type || "").replace(/_/g, " ")} · {formatCurrency(r.base_rate_usd)}
+                        {r.per_km_rate_usd > 0 && <span className="text-muted-foreground"> +{formatCurrency(r.per_km_rate_usd)}/km</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-muted-foreground">Click a suggestion to apply it to the Quote Amount.</p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">Cargo Specification</Label>

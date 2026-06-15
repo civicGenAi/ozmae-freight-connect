@@ -14,6 +14,8 @@ import {
   MapPin,
   ChevronRight,
   CheckCircle,
+  AlertTriangle,
+  Wrench,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -38,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { useCrmTasks } from "@/hooks/useCrm";
 import { useAuth, UserRole } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
+import { format } from "date-fns";
 
 const formatCurrency = (amount: number) =>
   `$${(amount || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -67,6 +70,15 @@ const FLEET_COLORS: Record<string, string> = {
   on_job: "#3b82f6",
   maintenance: "#f59e0b",
   retired: "#94a3b8",
+};
+
+// Icon per alert/health-signal type shown in the "Alerts & Health Signals" panel.
+const ALERT_ICONS: Record<string, any> = {
+  stuck_job: Truck,
+  expiring_quote: FileText,
+  vehicle_maintenance: Wrench,
+  driver_license: Shield,
+  overdue_invoice: Receipt,
 };
 
 const num = (v: any) => Number(v) || 0;
@@ -239,6 +251,112 @@ export default function Dashboard() {
         .limit(6);
       if (error) return [];
       return data;
+    },
+  });
+
+  // ---- Alerts & health signals: stuck jobs, expiring quotes, fleet/document
+  // expiries, overdue invoices. Additive — read-only, doesn't touch other queries.
+  const { data: alerts, isLoading: alertsLoading } = useQuery({
+    queryKey: ["dashboard_alerts"],
+    enabled,
+    queryFn: async () => {
+      const todayStr = dayKey(new Date());
+      const stuckCutoff = new Date();
+      stuckCutoff.setDate(stuckCutoff.getDate() - 2);
+      const soon = new Date();
+      soon.setDate(soon.getDate() + 7);
+      const soonStr = dayKey(soon);
+      const maintSoon = new Date();
+      maintSoon.setDate(maintSoon.getDate() + 30);
+      const maintSoonStr = dayKey(maintSoon);
+
+      const [stuckRes, quotesRes, maintRes, driversRes, invoicesRes] = await Promise.all([
+        supabase
+          .from("job_orders")
+          .select("id, job_number, status, updated_at, customer:customers(company_name)")
+          .in("status", ["dispatched", "picked_up", "in_transit", "at_destination"])
+          .lt("updated_at", stuckCutoff.toISOString()),
+        supabase
+          .from("quotations")
+          .select("id, quote_number, valid_until, customer:customers(company_name)")
+          .eq("status", "sent")
+          .lte("valid_until", soonStr),
+        supabase
+          .from("vehicle_maintenance")
+          .select("id, title, due_date, record_type, vehicle:vehicles(plate_number)")
+          .not("due_date", "is", null)
+          .lte("due_date", maintSoonStr),
+        supabase
+          .from("drivers")
+          .select("id, full_name, license_expiry")
+          .not("license_expiry", "is", null)
+          .lte("license_expiry", maintSoonStr),
+        supabase
+          .from("invoices")
+          .select("id, invoice_number, deposit_status, balance_status, deposit_amount_usd, balance_amount_usd, customer:customers(company_name)")
+          .or("deposit_status.eq.overdue,balance_status.eq.overdue"),
+      ]);
+
+      type Alert = { type: string; severity: "warning" | "critical"; title: string; subtitle: string; link: string };
+      const list: Alert[] = [];
+
+      (stuckRes.data || []).forEach((j: any) => {
+        list.push({
+          type: "stuck_job",
+          severity: "warning",
+          title: `${j.job_number || `#${(j.id || "").split("-")[0]}`} stuck in "${(j.status || "").replace(/_/g, " ")}"`,
+          subtitle: `${j.customer?.company_name || "Unknown customer"} · no update since ${format(new Date(j.updated_at), "MMM d, HH:mm")}`,
+          link: "/tracking",
+        });
+      });
+
+      (quotesRes.data || []).forEach((q: any) => {
+        const expired = q.valid_until < todayStr;
+        list.push({
+          type: "expiring_quote",
+          severity: expired ? "critical" : "warning",
+          title: `Quote ${q.quote_number} ${expired ? "has expired" : "expires soon"}`,
+          subtitle: `${q.customer?.company_name || "—"} · valid until ${format(new Date(q.valid_until), "MMM d, yyyy")}`,
+          link: "/quotations",
+        });
+      });
+
+      (maintRes.data || []).forEach((m: any) => {
+        const overdue = m.due_date < todayStr;
+        list.push({
+          type: "vehicle_maintenance",
+          severity: overdue ? "critical" : "warning",
+          title: `${m.vehicle?.plate_number || "Vehicle"} — ${m.title || (m.record_type || "maintenance").replace(/_/g, " ")}`,
+          subtitle: `${overdue ? "Overdue since" : "Due"} ${format(new Date(m.due_date), "MMM d, yyyy")}`,
+          link: "/fleet",
+        });
+      });
+
+      (driversRes.data || []).forEach((d: any) => {
+        const overdue = d.license_expiry < todayStr;
+        list.push({
+          type: "driver_license",
+          severity: overdue ? "critical" : "warning",
+          title: `${d.full_name} — driver's license ${overdue ? "expired" : "expiring"}`,
+          subtitle: `${overdue ? "Expired" : "Expires"} ${format(new Date(d.license_expiry), "MMM d, yyyy")}`,
+          link: "/fleet",
+        });
+      });
+
+      (invoicesRes.data || []).forEach((inv: any) => {
+        let owed = 0;
+        if ((inv.deposit_status || "") === "overdue") owed += num(inv.deposit_amount_usd);
+        if ((inv.balance_status || "") === "overdue") owed += num(inv.balance_amount_usd);
+        list.push({
+          type: "overdue_invoice",
+          severity: "critical",
+          title: `Invoice ${inv.invoice_number} is overdue`,
+          subtitle: `${inv.customer?.company_name || "—"} · ${formatCurrency(owed)} outstanding`,
+          link: "/receivables-aging",
+        });
+      });
+
+      return list.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "critical" ? -1 : 1));
     },
   });
 
@@ -525,6 +643,58 @@ export default function Dashboard() {
                     <ChevronRight className="h-4 w-4 text-muted-foreground opacity-30 group-hover:opacity-100 group-hover:text-accent" />
                   </motion.div>
                 ))
+              )}
+            </div>
+          </div>
+
+          {/* Alerts & Health Signals */}
+          <div className="bg-card rounded-3xl border shadow-sm p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Alerts & Health Signals
+              </h4>
+              {(alerts?.length || 0) > 0 && (
+                <div className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded">{alerts!.length}</div>
+              )}
+            </div>
+            <div className="space-y-2">
+              {alertsLoading ? (
+                <div className="h-20 animate-pulse bg-muted rounded-2xl" />
+              ) : !alerts || alerts.length === 0 ? (
+                <div className="text-center py-6 bg-muted/30 border border-dashed rounded-2xl">
+                  <CheckCircle className="h-6 w-6 text-emerald-500 mx-auto mb-2 opacity-50" />
+                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">All Systems Healthy</p>
+                </div>
+              ) : (
+                <>
+                  {alerts.slice(0, 6).map((a, i) => {
+                    const Icon = ALERT_ICONS[a.type] || AlertTriangle;
+                    return (
+                      <Link
+                        key={i}
+                        to={a.link}
+                        className="flex items-start gap-3 p-3 rounded-2xl border bg-muted/20 hover:border-accent/40 hover:bg-muted/30 transition-all group"
+                      >
+                        <div className={cn(
+                          "h-8 w-8 shrink-0 rounded-lg flex items-center justify-center",
+                          a.severity === "critical" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+                        )}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-black text-foreground leading-tight">{a.title}</p>
+                          <p className="text-[9px] font-medium text-muted-foreground mt-0.5 truncate">{a.subtitle}</p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:text-accent shrink-0 mt-1" />
+                      </Link>
+                    );
+                  })}
+                  {alerts.length > 6 && (
+                    <p className="text-[9px] font-black text-muted-foreground text-center uppercase tracking-widest pt-1">
+                      +{alerts.length - 6} more
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>

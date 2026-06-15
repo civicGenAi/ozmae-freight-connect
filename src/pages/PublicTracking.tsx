@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Search, MapPin, Truck, ChevronRight, Clock, CheckCircle2, ShieldCheck, Box, Package, User, Smartphone, Loader2, Info } from "lucide-react";
-import { Button } from "@/components/ui/button"; 
+import { Search, MapPin, Truck, ChevronRight, Clock, CheckCircle2, ShieldCheck, Box, Package, User, Smartphone, Loader2, Info, Flag, FileText, Download, Receipt, Map as MapIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { supabase } from "@/lib/supabase";
@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { ShipmentMap } from "@/components/ShipmentMap";
 
 const stages = [
   "planning",
@@ -22,6 +23,29 @@ const stages = [
   "closed"
 ] as const;
 
+const DOCUMENT_LABELS: Record<string, string> = {
+  quotation_pdf: "Quotation",
+  invoice_pdf: "Invoice",
+  pickup_confirmation: "Pickup Confirmation",
+  delivery_note: "Delivery Note",
+  payment_receipt: "Payment Receipt",
+  other: "Document",
+};
+
+const moneyFmt = (val: number | null | undefined) =>
+  `$${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const paymentStatusStyle = (status: string | null | undefined) => {
+  switch (status) {
+    case "paid":
+      return "bg-emerald-50 text-emerald-700 border-emerald-100";
+    case "overdue":
+      return "bg-rose-50 text-rose-600 border-rose-100";
+    default:
+      return "bg-amber-50 text-amber-700 border-amber-100";
+  }
+};
+
 export default function PublicTracking() {
   const [accessCode, setAccessCode] = useState("");
   const [validatedCode, setValidatedCode] = useState<string | null>(null);
@@ -31,32 +55,18 @@ export default function PublicTracking() {
     queryKey: ["public_job", validatedCode],
     queryFn: async () => {
       if (!validatedCode) return null;
-      
-      // We search by the short ID (first segment of UUID)
-      const { data, error } = await supabase
-        .from("job_orders")
-        .select(`
-          *,
-          customer:customers(company_name),
-          vehicle:vehicles(plate_number),
-          driver:drivers(full_name)
-        `)
-        .ilike('id', `${validatedCode}%`)
-        .single();
 
-      if (error) {
+      // Server-side curated lookup (works for anonymous visitors) — returns
+      // job details, the live timeline/checkpoints, and a linked
+      // quotation/invoice/document summary in one call.
+      const { data, error } = await supabase.rpc("get_public_tracking", { p_code: validatedCode });
+
+      if (error || !data) {
         setError("Invalid access code or shipment not found.");
-        throw error;
+        throw error || new Error("Shipment not found");
       }
-      
-      // Fetch progress reports
-      const { data: reports } = await supabase
-        .from("job_progress_reports")
-        .select("*")
-        .eq("job_order_id", data.id)
-        .order("created_at", { ascending: false });
 
-      return { ...data, reports: reports || [] };
+      return data as any;
     },
     enabled: !!validatedCode,
     retry: false
@@ -75,7 +85,7 @@ export default function PublicTracking() {
   if (!validatedCode || isError) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
@@ -100,8 +110,8 @@ export default function PublicTracking() {
               <form onSubmit={handleValidate} className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Tracking Access Code</label>
-                  <Input 
-                    placeholder="e.g. 8B92D1" 
+                  <Input
+                    placeholder="e.g. 8B92D1"
                     className="h-14 bg-slate-50 border-slate-100 rounded-2xl text-center text-xl font-black uppercase tracking-[0.5em] focus:ring-accent focus:border-accent"
                     value={accessCode}
                     onChange={(e) => setAccessCode(e.target.value)}
@@ -112,7 +122,7 @@ export default function PublicTracking() {
                     {error}
                   </motion.p>
                 )}
-                <button 
+                <button
                   type="submit"
                   className="w-full h-14 bg-accent hover:bg-accent/90 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-accent/20 transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
@@ -122,7 +132,7 @@ export default function PublicTracking() {
               </form>
             </CardContent>
           </Card>
-          
+
           <p className="mt-12 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             Don't have a code? Contact Ozmae Operations support.
           </p>
@@ -131,13 +141,18 @@ export default function PublicTracking() {
     );
   }
 
+  if (!job) return null;
+
+  const mapPoints = (job.reports || []).filter((r: any) => typeof r.lat === "number" && typeof r.lng === "number");
+  const documents: any[] = job.documents || [];
+
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-10 lg:p-20">
       <div className="max-w-6xl mx-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
            <div>
               <div className="flex items-center gap-2 mb-2">
-                 <button 
+                 <button
                     onClick={() => setValidatedCode(null)}
                     className="h-8 w-8 rounded-full bg-white shadow-sm flex items-center justify-center hover:bg-accent hover:text-white transition-all"
                  >
@@ -146,7 +161,7 @@ export default function PublicTracking() {
                  <span className="text-[10px] font-black bg-accent/10 text-accent px-3 py-1 rounded-full uppercase tracking-widest">Live Shipment Data</span>
               </div>
               <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic underline decoration-accent decoration-4 underline-offset-8">
-                {job.customer?.company_name || "Active Shipment"}
+                {job.customer_name || "Active Shipment"}
               </h1>
            </div>
            <div className="bg-white p-4 rounded-2xl shadow-sm border flex items-center gap-4">
@@ -199,6 +214,17 @@ export default function PublicTracking() {
                 </CardContent>
               </Card>
 
+              {/* Live Map */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border space-y-3">
+                 <div className="flex items-center gap-2 text-slate-900">
+                    <div className="h-7 w-7 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+                       <MapIcon className="h-3.5 w-3.5" />
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Live Location</p>
+                 </div>
+                 <ShipmentMap points={mapPoints} height={220} />
+              </div>
+
               {/* Resource Preview */}
               <div className="grid grid-cols-2 gap-4">
                  <div className="bg-white p-5 rounded-2xl shadow-sm border flex items-center gap-3">
@@ -207,7 +233,7 @@ export default function PublicTracking() {
                     </div>
                     <div>
                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">Personnel</p>
-                       <p className="text-xs font-bold text-slate-900">{job.driver?.full_name || "Assigned"}</p>
+                       <p className="text-xs font-bold text-slate-900">{job.driver_name || "Assigned"}</p>
                     </div>
                  </div>
                  <div className="bg-white p-5 rounded-2xl shadow-sm border flex items-center gap-3">
@@ -216,9 +242,93 @@ export default function PublicTracking() {
                     </div>
                     <div>
                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">Vehicle</p>
-                       <p className="text-xs font-mono font-bold text-slate-900">{job.vehicle?.plate_number || "Active"}</p>
+                       <p className="text-xs font-mono font-bold text-slate-900">{job.vehicle_plate || "Active"}</p>
                     </div>
                  </div>
+              </div>
+
+              {/* Account Summary */}
+              {(job.quotation || job.invoice) && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+                   <div className="flex items-center gap-2 text-slate-900">
+                      <div className="h-7 w-7 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+                         <Receipt className="h-3.5 w-3.5" />
+                      </div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Account Summary</p>
+                   </div>
+
+                   {job.quotation && (
+                     <div className="flex justify-between items-center text-xs">
+                        <div>
+                           <p className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Quotation</p>
+                           <p className="font-mono font-bold text-slate-900">{job.quotation.quote_number}</p>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 capitalize">{job.quotation.status}</span>
+                     </div>
+                   )}
+
+                   {job.invoice && (
+                     <div className="space-y-3 pt-3 border-t border-slate-50">
+                        <div className="flex justify-between items-center text-xs">
+                           <p className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Invoice</p>
+                           <p className="font-mono font-bold text-slate-900">{job.invoice.invoice_number}</p>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                           <span className="text-slate-500 font-medium">Total</span>
+                           <span className="font-bold text-slate-900">{moneyFmt(job.invoice.total_amount_usd)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                           <span className="text-slate-500 font-medium">Deposit ({moneyFmt(job.invoice.deposit_amount_usd)})</span>
+                           <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border", paymentStatusStyle(job.invoice.deposit_status))}>
+                              {job.invoice.deposit_status}
+                           </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                           <span className="text-slate-500 font-medium">Balance ({moneyFmt(job.invoice.balance_amount_usd)})</span>
+                           <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border", paymentStatusStyle(job.invoice.balance_status))}>
+                              {job.invoice.balance_status}
+                           </span>
+                        </div>
+                     </div>
+                   )}
+                </div>
+              )}
+
+              {/* Documents */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border space-y-3">
+                 <div className="flex items-center gap-2 text-slate-900">
+                    <div className="h-7 w-7 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+                       <FileText className="h-3.5 w-3.5" />
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Shipment Documents</p>
+                 </div>
+                 {documents.length === 0 ? (
+                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center py-4">No documents available yet</p>
+                 ) : (
+                   <div className="space-y-2">
+                      {documents.map((doc, idx) => {
+                        const url = supabase.storage.from("logistic-files").getPublicUrl(doc.file_path).data.publicUrl;
+                        return (
+                          <a
+                            key={idx}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 hover:bg-accent/10 transition-colors group"
+                          >
+                             <div className="flex items-center gap-2 min-w-0">
+                                <FileText className="h-4 w-4 text-slate-400 group-hover:text-accent shrink-0" />
+                                <div className="min-w-0">
+                                   <p className="text-xs font-bold text-slate-900 truncate">{DOCUMENT_LABELS[doc.document_type] || "Document"}</p>
+                                   <p className="text-[10px] text-slate-400 truncate">{doc.file_name}</p>
+                                </div>
+                             </div>
+                             <Download className="h-3.5 w-3.5 text-slate-300 group-hover:text-accent shrink-0" />
+                          </a>
+                        );
+                      })}
+                   </div>
+                 )}
               </div>
            </div>
 
@@ -245,8 +355,11 @@ export default function PublicTracking() {
                     ) : (
                       job.reports.map((report: any, idx: number) => {
                         const isLatest = idx === 0;
+                        const badgeLabel = report.is_checkpoint
+                          ? `Checkpoint${report.checkpoint_type ? ` · ${String(report.checkpoint_type).replace(/_/g, ' ')}` : ''}`
+                          : (report.status ? String(report.status).replace(/_/g, ' ') : 'Update');
                         return (
-                          <motion.div 
+                          <motion.div
                             key={report.id}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
@@ -255,35 +368,41 @@ export default function PublicTracking() {
                           >
                              {/* Glowing Point */}
                              <div className={cn(
-                               "absolute -left-[45px] top-1.5 h-7 w-7 rounded-full border-4 border-white shadow-lg z-20 transition-all",
+                               "absolute -left-[45px] top-1.5 h-7 w-7 rounded-full border-4 border-white shadow-lg z-20 transition-all flex items-center justify-center",
                                isLatest ? "bg-accent shadow-accent/40 scale-110 ring-4 ring-accent/10" : "bg-slate-200"
                              )}>
                                 {isLatest && <div className="absolute inset-0 bg-accent rounded-full animate-ping opacity-25" />}
+                                {report.is_checkpoint && <Flag className="h-3 w-3 text-white relative z-10" />}
                              </div>
 
                              <div className={cn(
                                 "p-6 rounded-[1.5rem] transition-all",
                                 isLatest ? "bg-slate-900 text-white shadow-2xl shadow-slate-900/20" : "bg-slate-50 border border-slate-100"
                              )}>
-                                <div className="flex justify-between items-start mb-3">
+                                <div className="flex justify-between items-start mb-3 gap-3">
                                    <div className={cn(
-                                      "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
+                                      "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest capitalize",
                                       isLatest ? "bg-accent text-white" : "bg-slate-200 text-slate-500"
                                    )}>
-                                      {report.status.replace(/_/g, ' ')}
+                                      {badgeLabel}
                                    </div>
-                                   <div className="flex items-center gap-1.5 text-[10px] font-bold opacity-60">
+                                   <div className="flex items-center gap-1.5 text-[10px] font-bold opacity-60 shrink-0">
                                       <Clock className="h-3 w-3" />
                                       {format(new Date(report.created_at), "MMM d, HH:mm")}
                                    </div>
                                 </div>
+                                {report.location && (
+                                  <p className={cn("text-[11px] font-bold mb-1 flex items-center gap-1.5", isLatest ? "text-accent" : "text-slate-500")}>
+                                    <MapPin className="h-3 w-3" /> {report.location}
+                                  </p>
+                                )}
                                 <p className={cn(
                                    "text-sm leading-relaxed",
                                    isLatest ? "font-bold text-slate-100" : "text-slate-600 font-medium"
                                 )}>
                                    {report.update_text}
                                 </p>
-                                
+
                                 {isLatest && (
                                    <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2">
                                       <div className="h-2 w-2 rounded-full bg-accent animate-pulse" />

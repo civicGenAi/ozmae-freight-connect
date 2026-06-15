@@ -254,6 +254,87 @@ not break existing flows** — change one area at a time.
   - `npm run build` passes; remaining `npm run lint` errors are pre-existing
     `@typescript-eslint/no-explicit-any` issues, unrelated to this pass.
 
+## Phase 2: Operations, Finance, Intelligence & Fleet (latest)
+
+A second phased rollout, additive only — no existing query, mutation, route,
+or page was removed/renamed. **Migration
+`20260615090000_phase2_operations_finance_fleet.sql` must be applied in
+Supabase** (adds `vehicle_maintenance`, `payment_reminders`,
+`job_progress_reports.lat/lng/is_checkpoint/checkpoint_type`,
+`job_costs.vehicle_id`, and the `get_public_tracking`/`flag_overdue_invoices`
+RPCs).
+
+- **Operations & tracking**
+  - **Live GPS + map tracking**: `ShipmentMap.tsx` (Leaflet/`react-leaflet`,
+    OpenStreetMap tiles) renders the route, current position and checkpoints
+    from a job's `job_progress_reports`. Used in `Tracking.tsx` (internal,
+    "Show Live Map" toggle per job), `JobOrders.tsx` (job drawer, when any
+    report has lat/lng), and `PublicTracking.tsx`.
+  - **Progress updates** (`JobOrders.tsx`) gained: an optional free-text
+    location + "Capture GPS" button (`navigator.geolocation`) that stamps
+    `lat`/`lng`, and a "Mark as Border/Checkpoint" toggle with a checkpoint
+    type picker (border crossing, customs, port/terminal, weigh station,
+    warehouse, other) → `job_progress_reports.is_checkpoint`/`checkpoint_type`.
+    Timeline entries show checkpoint + "GPS" badges when present.
+  - **WhatsApp/SMS notify-on-update**: placeholder only, as directed — the
+    checkboxes queue a toast ("integration coming soon") and make no
+    external API calls.
+  - **Customer self-service portal** (`PublicTracking.tsx`): now backed by
+    `get_public_tracking(p_code)` (SECURITY DEFINER RPC, anon-safe single
+    curated payload) instead of direct table selects. Adds a live map, an
+    "Account Summary" card (linked quotation status + invoice
+    total/deposit/balance with status chips), and a "Shipment Documents"
+    list (links into the `logistic-files` bucket).
+
+- **Finance & billing — Receivables Aging**
+  - New page `ReceivablesAging.tsx` (route `/receivables-aging`, Finance nav
+    item "Receivables Aging"). On load it calls `flag_overdue_invoices()` to
+    flip any `invoices` row whose `deposit_due_date`/`balance_due_date` has
+    passed and is still `pending` to `overdue`.
+  - Buckets outstanding deposit/balance lines into **Current / 0–30 / 30–60 /
+    60–90 / 90+** days overdue, with KPI cards (Total Outstanding, Overdue,
+    Current) and clickable bucket-filter chips.
+  - "Send Reminder" per line logs to the new `payment_reminders` table —
+    `in_app` is a real follow-up log; `email`/`sms`/`whatsapp` insert the
+    intent row then toast "coming soon" (placeholders).
+
+- **Intelligence & automation**
+  - **Dashboard alerts/health signals** (`Dashboard.tsx`): new
+    `["dashboard_alerts"]` query surfaces stuck jobs (active stage,
+    `updated_at` >2 days old), quotes expiring within 7 days, vehicle
+    maintenance due within 30 days, driver licenses expiring within 30 days,
+    and overdue invoices — shown as a severity-sorted "Alerts & Health
+    Signals" card linking to the relevant page.
+  - **Quote-to-revenue analytics** (`Reports.tsx`): new "Quote-to-Revenue
+    Analytics" section — avg. lead→quote and quote→job conversion times,
+    win-rate breakdowns by route/customer/salesperson, and lost-deal trends
+    by `decline_reasons.reason_category` (count + lost pipeline value).
+  - **Smart rate suggestions** (`Quotations.tsx`): the new-quote form matches
+    the selected origin/destination against active `rate_card` entries and
+    shows clickable suggestion chips (vehicle type, base rate, optional
+    per-km rate) that fill the Quote Amount field.
+
+- **Fleet & resources**
+  - `Fleet.tsx` is now tabbed (Fleet / Schedule / Maintenance / Fuel & Trip
+    Costs) via `Tabs`/`TabsList`/`TabsContent`; the existing Vehicles/Drivers
+    tables, dialogs, Excel import and delete flows are unchanged inside the
+    "Fleet" tab (the header's import/add controls only render on that tab).
+  - **Schedule** (`fleet/FleetSchedule.tsx`): vehicle/driver availability
+    snapshot (counts by status) + a date-grouped list of active job orders
+    with inline editable Depart/Arrive date pickers
+    (`job_orders.estimated_departure/estimated_arrival`).
+  - **Maintenance** (`fleet/FleetMaintenance.tsx`): CRUD for
+    `vehicle_maintenance` records (insurance/inspection/service/registration/
+    other, with due/last-done dates and cost) showing
+    Overdue/Due-in-Nd/OK badges; plus a Driver License Expiry table
+    (`drivers.license_number/license_class/license_expiry`) with an inline
+    edit dialog.
+  - **Fuel & Trip Costs** (`fleet/FleetFuelLog.tsx`): logs fuel/trip spend
+    into `job_costs` with `job_order_id` + the new `job_costs.vehicle_id`,
+    sharing the self-learning `["job_cost_categories"]` list with Job Costing
+    (entries also appear in that job's cost breakdown); per-vehicle and grand
+    totals, recent-entries table.
+
 ## CRM assessment (open)
 
 CRM works (Customers/Interactions/Tasks/Health/Lost Deals) and is wired to

@@ -16,6 +16,7 @@ import Fleet from "@/pages/Fleet";
 import Tracking from "@/pages/Tracking";
 import Invoices from "@/pages/Invoices";
 import Payments from "@/pages/Payments";
+import ReceivablesAging from "@/pages/ReceivablesAging";
 import JobCosting from "@/pages/JobCosting";
 import StatusPage from "@/pages/StatusPage";
 import SecurityLogs from "@/pages/SecurityLogs";
@@ -166,6 +167,12 @@ const App = () => (
               <AppLayout><Payments /></AppLayout>
             </AuthGuard>
           } path="/payments" />
+
+          <Route element={
+            <AuthGuard>
+              <AppLayout><ReceivablesAging /></AppLayout>
+            </AuthGuard>
+          } path="/receivables-aging" />
 
           <Route element={
             <AuthGuard>

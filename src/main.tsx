@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import "leaflet/dist/leaflet.css";
 
 // Global console security: Disable all logging in production environments
 if (import.meta.env.PROD) {
