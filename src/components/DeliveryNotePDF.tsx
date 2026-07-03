@@ -182,6 +182,24 @@ const styles = StyleSheet.create({
   }
 });
 
+// Renders multi-line text (textarea input) as one <Text> per line,
+// since react-pdf doesn't wrap on \n inside a single Text.
+const MultiLineText = ({ text, style }: { text?: string | null; style?: any }) => {
+  if (!text) return null;
+  return (
+    <>
+      {String(text)
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== "")
+        .map((line, idx) => (
+          <Text key={idx} style={style}>
+            {line}
+          </Text>
+        ))}
+    </>
+  );
+};
+
 interface DeliveryNoteProps {
   job: any;
   deliveryNoteNumber?: string;
